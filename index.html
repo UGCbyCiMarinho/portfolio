@@ -184,8 +184,8 @@ img, svg { display: block; max-width: 100%; }
   text-transform: none; letter-spacing: 0;
   color: var(--text); white-space: nowrap;
 }
-.brand__first { font-family: "Archivo", sans-serif; font-weight: 800; letter-spacing: -.018em; }
-.brand__last { font-family: "Playfair Display", Georgia, serif; font-style: italic; font-weight: 500; color: var(--red); }
+.brand__first, .brand__last { font-family: "Playfair Display", Georgia, serif; font-style: italic; font-weight: 500; }
+.brand__last { color: var(--red); }
 .footer .brand__mark { font-size: 2rem; }
 .nav__links { display: flex; align-items: center; gap: 1.4rem; margin-left: 1rem; }
 .nav__links a { color: var(--muted); font-size: .92rem; font-weight: 500; transition: color .2s; }
@@ -220,9 +220,9 @@ img, svg { display: block; max-width: 100%; }
 /* ===== HERO ===== */
 .hero {
   position: relative;
-  min-height: 92vh;
+  min-height: 74vh;
   display: flex; align-items: flex-end;
-  padding: 7rem 1.2rem 4rem;
+  padding: 6rem 1.2rem 3rem;
   overflow: hidden;
 }
 /* FOTO DA CAPA: para trocar a imagem, substitua o arquivo img/capa.webp
@@ -252,7 +252,6 @@ img, svg { display: block; max-width: 100%; }
     linear-gradient(90deg, var(--bg) 4%, rgba(239,236,234,.9) 32%, rgba(239,236,234,.42) 58%, rgba(239,236,234,.08) 100%);
 }
 .hero__content { position: relative; z-index: 2; max-width: var(--maxw); width: 100%; margin: 0 auto; }
-.hero__badges { display: flex; flex-wrap: wrap; gap: .55rem; margin-bottom: 1.1rem; }
 .hero__title {
   font-family: "Anton", sans-serif;
   font-weight: 400;
@@ -261,8 +260,13 @@ img, svg { display: block; max-width: 100%; }
   letter-spacing: .01em;
   text-shadow: 0 6px 40px var(--sombra);
 }
-.hero__starring { color: var(--muted); margin: .5rem 0 .9rem; font-size: 1rem; }
-.hero__starring strong { color: var(--text); }
+.hero__starring {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .9rem;
+  color: var(--text); margin: .7rem 0 1rem;
+  font-size: .82rem; font-weight: 500; letter-spacing: .22em; text-transform: uppercase;
+}
+.hero__local { display: inline-flex; align-items: center; gap: .4rem; color: var(--red); }
+.hero__local svg { flex: none; }
 .hero__desc { max-width: 50ch; font-size: 1.1rem; color: var(--text); margin-bottom: 1rem; }
 .hero__stats { font-weight: 700; letter-spacing: .02em; color: var(--text); margin-bottom: 1.6rem; font-size: 1.02rem; }
 .hero__actions { display: flex; flex-wrap: wrap; gap: .8rem; }
@@ -537,7 +541,7 @@ img, svg { display: block; max-width: 100%; }
   .services__grid { grid-template-columns: 1fr; }
   .results__grid { grid-template-columns: 1fr; }
   .poster { width: 160px; }
-  .hero { min-height: 88vh; padding-top: 6rem; }
+  .hero { min-height: 78vh; padding-top: 5rem; }
   /* no celular o véu vem de baixo, para o rosto aparecer inteiro */
   .hero__bg { background-position: 62% center; }
   .hero__vignette {
@@ -604,13 +608,18 @@ img, svg { display: block; max-width: 100%; }
       <div class="hero__bg" aria-hidden="true"></div>
       <div class="hero__vignette" aria-hidden="true"></div>
       <div class="hero__content">
-        <div class="hero__badges">
-          <span class="badge badge--top">TOP 10</span>
-          <span class="badge badge--match" id="matchBadge">98% match</span>
-          <span class="badge badge--ugc">UGC SERIES</span>
-        </div>
         <h1 class="hero__title">CINTIA MARINHO</h1>
-        <p class="hero__starring">Starring: <strong>Ci Marinho</strong> · UGC Creator &amp; Creative Strategist, Toronto - Canada</p>
+        <p class="hero__starring">
+          Mom UGC Creator
+          <span class="hero__local">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+              <path d="M12 2.6a6.6 6.6 0 0 0-6.6 6.6c0 4.8 6.6 12.2 6.6 12.2s6.6-7.4 6.6-12.2A6.6 6.6 0 0 0 12 2.6Z"
+                    fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <circle cx="12" cy="9.1" r="2.4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            Toronto - Canada
+          </span>
+        </p>
         <p class="hero__desc">
           Strategy-led content that looks organic and <strong>sells like an ad</strong>.
           Visual hook, verbal hook, problem, transition, solution, benefit and CTA, in every single video.
