@@ -38,7 +38,7 @@
   --hero-2: rgba(120,84,56,.40);
   --hero-3: #2a1d14; --hero-4: #1b1613; --hero-5: #130e0b;
   --rodape: #14100d;
-  --chip: #f5f0ea;      /* fundo dos chips de marca, claro nos dois tons */
+  --chip: #ffffff;      /* moldura dos logos: branca nos dois tons, para os logos de fundo branco somirem na moldura */
   --faixa: #4a3728;     /* fundo marrom da faixa de marcas */
   --sombra: rgba(0,0,0,.6);
   --radius: 8px;
@@ -220,44 +220,31 @@ img, svg { display: block; max-width: 100%; }
 .hero {
   position: relative;
   min-height: 74vh;
-  display: flex; align-items: flex-end;
-  padding: 6rem 1.2rem 3rem;
+  display: flex; align-items: center;
+  padding: 7rem 1.2rem 3.5rem;
   overflow: hidden;
 }
-/* FOTO DA CAPA: para trocar a imagem, substitua o arquivo img/capa.webp
-   ou aponte outro caminho na linha background-image abaixo. */
-.hero__bg {
-  position: absolute; inset: 0;
-  background-image: url("img/capa.webp?v=2");   /* o ?v=2 força o navegador a buscar a versão nova */
+/* FOTO DA CAPA: ela ocupa a metade direita, em tamanho menor que o arquivo,
+   por isso aparece nítida. Para trocar, substitua img/capa.webp. */
+.hero__foto {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 48%;
+  background-image: url("img/capa.webp?v=3");
   background-size: cover;
-  background-position: 62% 8%;
+  background-position: 62% 14%;
   background-repeat: no-repeat;
 }
-.hero__bg::after {
+.hero__foto::after {
   content: ""; position: absolute; inset: 0;
-  background: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px);
-  mix-blend-mode: overlay;
-}
-/* o véu cobre só o lado do texto. A foto fica limpa, sem película por cima. */
-.hero__vignette {
-  position: absolute; inset: 0;
-  background:
-    linear-gradient(180deg, rgba(27,22,19,0) 88%, var(--bg) 100%),
-    linear-gradient(90deg, var(--bg) 0%, var(--bg) 24%, rgba(27,22,19,.82) 36%, rgba(27,22,19,.3) 48%, rgba(27,22,19,0) 60%);
-}
-:root[data-tema="bege"] .hero__vignette {
-  background:
-    linear-gradient(180deg, rgba(239,236,234,0) 88%, var(--bg) 100%),
-    linear-gradient(90deg, var(--bg) 0%, var(--bg) 24%, rgba(239,236,234,.86) 36%, rgba(239,236,234,.34) 48%, rgba(239,236,234,0) 60%);
+  background: linear-gradient(90deg, var(--bg) 0%, rgba(0,0,0,0) 30%);
 }
 .hero__content { position: relative; z-index: 2; max-width: var(--maxw); width: 100%; margin: 0 auto; }
+.hero__texto { max-width: 54%; }
 .hero__title {
   font-family: "Anton", sans-serif;
   font-weight: 400;
-  font-size: clamp(3rem, 12vw, 7.4rem);
+  font-size: clamp(2.8rem, 6.6vw, 5.4rem);
   text-transform: uppercase;
   letter-spacing: .01em;
-  text-shadow: 0 6px 40px var(--sombra);
 }
 .hero__starring {
   display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .9rem;
@@ -266,32 +253,33 @@ img, svg { display: block; max-width: 100%; }
 }
 .hero__local { display: inline-flex; align-items: center; gap: .4rem; color: var(--red); }
 .hero__local svg { flex: none; }
-.hero__desc { max-width: 50ch; font-size: 1.1rem; color: var(--text); margin-bottom: 1.8rem; }
+.hero__desc { max-width: 46ch; font-size: 1.08rem; color: var(--text); margin-bottom: 1.8rem; }
 .hero__actions { display: flex; flex-wrap: wrap; gap: .8rem; }
 
 /* ===== MARCAS / MARQUEE ===== */
-.brands { background: var(--faixa); padding: 2.4rem 0 2.6rem; }
+.brands { background: var(--faixa); padding: 1.5rem 0 1.7rem; }
 .brands__label {
-  text-align: center; color: rgba(255,255,255,.82);
-  text-transform: uppercase; letter-spacing: .2em; font-size: .72rem;
-  margin-bottom: 1.3rem; font-weight: 700;
+  text-align: center; color: #fff;
+  text-transform: uppercase; letter-spacing: .22em; font-size: .95rem;
+  margin-bottom: .95rem; font-weight: 700;
 }
 .marquee { overflow: hidden; padding: 4px 0; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
-.marquee__track { display: flex; gap: 1rem; width: max-content; animation: marquee 44s linear infinite; }
+.marquee__track { display: flex; gap: .7rem; width: max-content; animation: marquee 44s linear infinite; }
 .marquee:hover .marquee__track { animation-play-state: paused; }
 .brand-chip {
   flex: none;
   display: flex; align-items: center; justify-content: center;
   background: var(--chip);
-  border-radius: 8px;
-  width: 148px; height: 66px;
-  padding: 10px 14px;
+  border-radius: 7px;
+  width: 124px; height: 54px;
+  padding: 7px 11px;
   overflow: hidden;
   transition: transform .25s var(--ease), box-shadow .25s;
 }
-.brand-chip:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,.28); }
-/* o logo ocupa a moldura inteira, sem distorcer */
-.brand-chip img { width: 100%; height: 100%; object-fit: contain; }
+.brand-chip:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,0,0,.26); }
+/* o logo ocupa a moldura inteira. A escala por marca corrige os logos
+   que são quadrados ou finos demais e por isso ficavam pequenos. */
+.brand-chip img { width: 100%; height: 100%; object-fit: contain; transform: scale(var(--escala, 1)); }
 /* marca cujo logo já vem com fundo próprio: a moldura inteira ganha a cor dele */
 .brand-chip--cheio { padding: 0; }
 .brand-chip--cheio img { object-fit: cover; }
@@ -539,15 +527,15 @@ img, svg { display: block; max-width: 100%; }
   .services__grid { grid-template-columns: 1fr; }
   .results__grid { grid-template-columns: 1fr; }
   .poster { width: 160px; }
-  .hero { min-height: 78vh; padding-top: 5rem; }
-  /* no celular o véu vem de baixo, para o rosto aparecer inteiro */
-  .hero__bg { background-position: 72% 6%; }
-  .hero__vignette {
-    background: linear-gradient(180deg, rgba(27,22,19,0) 26%, rgba(27,22,19,.3) 46%, rgba(27,22,19,.88) 68%, var(--bg) 100%);
+  /* no celular a foto vira um bloco em cima e o texto fica embaixo, sem véu nenhum */
+  .hero { min-height: 0; flex-direction: column; align-items: stretch; padding: 5.6rem 1.2rem 2.4rem; }
+  .hero__foto {
+    position: relative; width: 100%; inset: auto;
+    aspect-ratio: 4 / 3; border-radius: 10px; margin-bottom: 1.6rem;
+    background-position: 62% 12%;
   }
-  :root[data-tema="bege"] .hero__vignette {
-    background: linear-gradient(180deg, rgba(239,236,234,0) 26%, rgba(239,236,234,.42) 46%, rgba(239,236,234,.95) 68%, var(--bg) 100%);
-  }
+  .hero__foto::after { background: linear-gradient(180deg, rgba(0,0,0,0) 72%, var(--bg) 100%); }
+  .hero__texto { max-width: 100%; }
   #destaques .hl-grid { grid-template-columns: minmax(0,320px); }
 }
 
@@ -602,10 +590,10 @@ img, svg { display: block; max-width: 100%; }
   <main>
     <!-- ===== HERO / BILLBOARD ===== -->
     <section class="hero" id="topo">
-      <!-- FOTO DA CAPA: o arquivo é img/capa.webp, apontado no CSS em .hero__bg -->
-      <div class="hero__bg" aria-hidden="true"></div>
-      <div class="hero__vignette" aria-hidden="true"></div>
+      <!-- FOTO DA CAPA: o arquivo é img/capa.webp, apontado no CSS em .hero__foto -->
+      <div class="hero__foto" aria-hidden="true"></div>
       <div class="hero__content">
+        <div class="hero__texto">
         <h1 class="hero__title">CINTIA MARINHO</h1>
         <p class="hero__starring">
           Mom UGC Creator
@@ -625,6 +613,7 @@ img, svg { display: block; max-width: 100%; }
         <div class="hero__actions">
           <a href="#portfolio" class="btn btn--play">&#9654; WATCH</a>
           <a href="#contato" class="btn btn--ghost">&#65291; WORK WITH ME</a>
+        </div>
         </div>
       </div>
     </section>
@@ -812,31 +801,31 @@ img, svg { display: block; max-width: 100%; }
 const BRANDS = [
   /* Cada marca puxa o arquivo da pasta logos/.
      Para acrescentar outra, salve o PNG lá e repita uma linha destas. */
-  { nome: "L'Oréal",               logo: "logos/loreal.png" },
-  { nome: "Niche Beauty Lab",      logo: "logos/niche-beauty-lab.png" },
-  { nome: "TheraBreath",           logo: "logos/therabreath.png" },
-  { nome: "COSRX",                 logo: "logos/cosrx.png" },
-  { nome: "Biolage",               logo: "logos/biolage.png" },
-  { nome: "Batiste",               logo: "logos/batiste.png" },
-  { nome: "Haruharu Wonder",       logo: "logos/haruharu-wonder.png" },
-  { nome: "Abera",                 logo: "logos/abera.png" },
-  { nome: "Eupholic",              logo: "logos/eupholic.png" },
-  { nome: "APLB",                  logo: "logos/aplb.png" },
-  { nome: "NovaMane",              logo: "logos/novamane.png" },
-  { nome: "Prime Cosmetics",       logo: "logos/prime-cosmetics.png" },
-  { nome: "Synergy Hair",          logo: "logos/synergy-hair.png" },
-  { nome: "CELLU",                 logo: "logos/cellu.png", cheio: true },  /* logo já vem com fundo próprio */
-  { nome: "Button Amsterdam",      logo: "logos/button-amsterdam.png" },
-  { nome: "Royal Distribution",    logo: "logos/royal-distribution.png" },
-  { nome: "Power Kitchen Toronto", logo: "logos/power-kitchen-toronto.png" },
-  { nome: "TC Nutrition",          logo: "logos/tc-nutrition.png" },
-  { nome: "Formi",                 logo: "logos/formi.png" },
-  { nome: "Alarmy",                logo: "logos/alarmy.png" },
-  { nome: "Linka.ai",              logo: "logos/linka.png" },
-  { nome: "Doggy Sprout",          logo: "logos/doggy-sprout.png" },
-  { nome: "Pupring",               logo: "logos/pupring.png" },
-  { nome: "Jolie",                 logo: "logos/jolie.png" },
-  { nome: "Avergo Bonsai",         logo: "logos/avergo-bonsai.png" }
+  { nome: "L'Oréal",               logo: "logos/loreal.webp" },
+  { nome: "Niche Beauty Lab",      logo: "logos/niche-beauty-lab.webp" , escala: 1.3 },
+  { nome: "TheraBreath",           logo: "logos/therabreath.webp" },
+  { nome: "COSRX",                 logo: "logos/cosrx.webp" },
+  { nome: "Biolage",               logo: "logos/biolage.webp" , escala: 1.12 },
+  { nome: "Batiste",               logo: "logos/batiste.webp" },
+  { nome: "Haruharu Wonder",       logo: "logos/haruharu-wonder.webp" },
+  { nome: "Abera",                 logo: "logos/abera.webp" , escala: 1.35 },
+  { nome: "Eupholic",              logo: "logos/eupholic.webp" , escala: 1.12 },
+  { nome: "APLB",                  logo: "logos/aplb.webp" },
+  { nome: "NovaMane",              logo: "logos/novamane.webp" },
+  { nome: "Prime Cosmetics",       logo: "logos/prime-cosmetics.webp" },
+  { nome: "Synergy Hair",          logo: "logos/synergy-hair.webp" },
+  { nome: "CELLU",                 logo: "logos/cellu.webp", cheio: true },  /* logo já vem com fundo próprio */
+  { nome: "Button Amsterdam",      logo: "logos/button-amsterdam.webp" },
+  { nome: "Royal Distribution",    logo: "logos/royal-distribution.webp" , escala: 1.32 },
+  { nome: "Power Kitchen Toronto", logo: "logos/power-kitchen-toronto.webp" },
+  { nome: "TC Nutrition",          logo: "logos/tc-nutrition.webp" },
+  { nome: "Formi",                 logo: "logos/formi.webp" , escala: 1.2 },
+  { nome: "Alarmy",                logo: "logos/alarmy.webp" },
+  { nome: "Linka.ai",              logo: "logos/linka.webp" },
+  { nome: "Doggy Sprout",          logo: "logos/doggy-sprout.webp" },
+  { nome: "Pupring",               logo: "logos/pupring.webp" },
+  { nome: "Jolie",                 logo: "logos/jolie.webp" },
+  { nome: "Avergo Bonsai",         logo: "logos/avergo-bonsai.webp" }
 ];
 
 const METRICS = [
@@ -973,7 +962,7 @@ const comFoto = (img) => img ? " tem-foto" : "";
    ============================================================ */
 (function buildBrands() {
   const track = $("#brandsTrack");
-  const chip = b => `<span class="brand-chip${b.cheio ? " brand-chip--cheio" : ""}"><img src="${esc(b.logo)}" alt="${esc(b.nome)} logo" decoding="async"></span>`;
+  const chip = b => `<span class="brand-chip${b.cheio ? " brand-chip--cheio" : ""}"${b.escala ? ` style="--escala:${b.escala}"` : ""}><img src="${esc(b.logo)}" alt="${esc(b.nome)} logo" decoding="async"></span>`;
   const make = () => BRANDS.map(chip).join("");
   track.innerHTML = make() + make();
 })();
