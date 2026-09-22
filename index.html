@@ -462,6 +462,9 @@ img, svg { display: block; max-width: 100%; }
   color: var(--text); font-style: italic; font-size: .94rem; margin: 0; flex: 1;
   display: -webkit-box; -webkit-line-clamp: 9; -webkit-box-orient: vertical; overflow: hidden;
 }
+/* depoimento longo ganha o dobro de largura, para caber inteiro sem corte */
+.testimonial--largo { width: 560px; }
+.testimonial--largo .testimonial__text { -webkit-line-clamp: 12; }
 .testimonial__pe { display: flex; align-items: center; justify-content: space-between; gap: .8rem; border-top: 1px solid var(--line); padding-top: .9rem; }
 .estrelas { color: #d9a441; letter-spacing: .12em; font-size: .92rem; }
 .testimonial__nome { font-size: .7rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
@@ -581,6 +584,9 @@ img, svg { display: block; max-width: 100%; }
   .services__grid { grid-template-columns: 1fr; }
   .results__grid { grid-template-columns: 1fr; }
   .poster { width: 160px; }
+  /* no celular não cabe card largo: ele fica do mesmo tamanho e mostra o texto todo */
+  .testimonial, .testimonial--largo { width: 80vw; max-width: 320px; }
+  .testimonial--largo .testimonial__text { -webkit-line-clamp: 24; }
   /* no celular a foto vira um bloco em cima e o texto fica embaixo, sem véu nenhum */
   .retrato { max-width: 250px; }   /* espaço para os fios e os brilhos não encostarem na borda */
   .hero { min-height: 0; flex-direction: column; align-items: stretch; padding: 5.6rem 1.2rem 2.4rem; }
@@ -984,7 +990,7 @@ const TESTIMONIALS = [
     texto:"Hi Cintia! We really enjoyed working with you as well, and truly appreciate the care and effort you put into your delivery. Everything was communicated clearly and professionally, and the process felt very seamless on our end. We would absolutely be happy to work together again in the future if another opportunity comes up. Thanks again for your time and creativity!" },
   { marca:"Prime Cosmetics", logo:"logos/prime-cosmetics.webp",
     texto:"Thank you so much, Cintia! It has been a pleasure working with you and we would be happy to see you join more of our campaigns and work with you again." },
-  { marca:"Niche Beauty Lab", logo:"logos/niche-beauty-lab.webp", fundo:"#000000",
+  { marca:"Niche Beauty Lab", logo:"logos/niche-beauty-lab.webp", fundo:"#000000", largo:true,
     texto:"Working with you has been a really smooth and positive experience. Communication has been easy, and you have been very open to feedback while still bringing your own creativity to the content. The content definitely met our expectations and aligned well with our brand vision. We especially appreciate how natural and authentic your approach is, while still highlighting the product benefits in a clear and engaging way. We would absolutely work with you again and would happily recommend you to other brands." },
   { marca:"Pupring", logo:"logos/pupring.webp",
     texto:"The video looks absolutely lovely, you did such a beautiful job!" },
@@ -1160,7 +1166,7 @@ renderPosters();
 (function buildTestimonials() {
   const estrelas = '<span class="estrelas" aria-label="5 out of 5">&#9733;&#9733;&#9733;&#9733;&#9733;</span>';
   const card = t => `
-    <article class="testimonial">
+    <article class="testimonial${t.largo ? " testimonial--largo" : ""}">
       <span class="testimonial__marca${t.fundo ? " testimonial__marca--cor" : ""}"${t.fundo ? ` style="background:${esc(t.fundo)}"` : ""}>
         <img src="${esc(t.logo)}" alt="${esc(t.marca)} logo" decoding="async">
       </span>
