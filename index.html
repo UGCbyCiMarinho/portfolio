@@ -279,9 +279,9 @@ img, svg { display: block; max-width: 100%; }
 /* o logo ocupa a moldura inteira, sem cortar. Quem é quadrado ou muito fino
    ganha menos margem pela variável --respiro, em vez de ser ampliado. */
 .brand-chip img { width: 100%; height: 100%; object-fit: contain; }
-/* marca cujo logo já vem com fundo próprio: a moldura inteira ganha a cor dele */
-.brand-chip--cheio { padding: 0; }
-.brand-chip--cheio img { object-fit: cover; }
+/* marca cujo logo já vem com fundo próprio: a moldura assume a mesma cor,
+   assim a emenda some e o logo continua inteiro, sem corte */
+.brand-chip--cor { padding: 6px 9px; }
 @keyframes marquee { to { transform: translateX(-50%); } }
 
 /* ===== SOBRE ===== */
@@ -800,8 +800,8 @@ img, svg { display: block; max-width: 100%; }
 const BRANDS = [
   /* Cada marca puxa o arquivo da pasta logos/.
      Para acrescentar outra, salve o PNG lá e repita uma linha destas. */
-  { nome: "L'Oréal",               logo: "logos/loreal.webp" },
-  { nome: "Niche Beauty Lab",      logo: "logos/niche-beauty-lab.webp", cheio: true },  /* logo já vem com fundo próprio */
+  { nome: "L'Oréal",               logo: "logos/loreal.webp", fundo: "#000000" },  /* logo branco sobre preto */
+  { nome: "Niche Beauty Lab",      logo: "logos/niche-beauty-lab.webp", fundo: "#000000" },
   { nome: "TheraBreath",           logo: "logos/therabreath.webp" },
   { nome: "COSRX",                 logo: "logos/cosrx.webp" },
   { nome: "Biolage",               logo: "logos/biolage.webp" , respiro: "5px 9px" },
@@ -813,7 +813,7 @@ const BRANDS = [
   { nome: "NovaMane",              logo: "logos/novamane.webp" },
   { nome: "Prime Cosmetics",       logo: "logos/prime-cosmetics.webp" },
   { nome: "Synergy Hair",          logo: "logos/synergy-hair.webp" },
-  { nome: "CELLU",                 logo: "logos/cellu.webp", cheio: true },  /* logo já vem com fundo próprio */
+  { nome: "CELLU",                 logo: "logos/cellu.webp", fundo: "#2b4c43" },
   { nome: "Button Amsterdam",      logo: "logos/button-amsterdam.webp" },
   { nome: "Royal Distribution",    logo: "logos/royal-distribution.webp", respiro: "2px 6px" },
   { nome: "Power Kitchen Toronto", logo: "logos/power-kitchen-toronto.webp" },
@@ -961,7 +961,13 @@ const comFoto = (img) => img ? " tem-foto" : "";
    ============================================================ */
 (function buildBrands() {
   const track = $("#brandsTrack");
-  const chip = b => `<span class="brand-chip${b.cheio ? " brand-chip--cheio" : ""}"${b.respiro ? ` style="--respiro:${b.respiro}"` : ""}><img src="${esc(b.logo)}" alt="${esc(b.nome)} logo" decoding="async"></span>`;
+  const chip = function (b) {
+    const estilo = [];
+    if (b.fundo) estilo.push("background:" + b.fundo);
+    if (b.respiro) estilo.push("--respiro:" + b.respiro);
+    return `<span class="brand-chip${b.fundo ? " brand-chip--cor" : ""}"${estilo.length ? ` style="${estilo.join(";")}"` : ""}>` +
+           `<img src="${esc(b.logo)}" alt="${esc(b.nome)} logo" decoding="async"></span>`;
+  };
   const make = () => BRANDS.map(chip).join("");
   track.innerHTML = make() + make();
 })();
