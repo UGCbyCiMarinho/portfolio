@@ -298,19 +298,14 @@ img, svg { display: block; max-width: 100%; }
   display: flex; align-items: center; justify-content: center;
   background: var(--chip);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  height: 68px; min-width: 156px;
-  padding: .7rem 1.4rem;
-  white-space: nowrap;
+  border-radius: 10px;
+  width: 190px; height: 88px;
+  padding: 14px 20px;
+  transition: transform .25s var(--ease), box-shadow .25s;
 }
-/* logo em PNG, centralizado e sem distorcer */
-.brand-chip img { max-height: 44px; max-width: 128px; width: auto; object-fit: contain; }
-/* marca ainda sem logo: fica o nome, na mesma moldura */
-.brand-chip .brand-chip__nome {
-  font-family: "Anton", sans-serif;
-  letter-spacing: .05em; text-transform: uppercase;
-  color: #3b312a; font-size: 1rem;
-}
+.brand-chip:hover { transform: translateY(-3px); box-shadow: 0 12px 26px var(--sombra); }
+/* o logo ocupa a moldura inteira, sem distorcer e sem ficar pequeno */
+.brand-chip img { width: 100%; height: 100%; object-fit: contain; }
 @keyframes marquee { to { transform: translateX(-50%); } }
 
 /* ===== SOBRE ===== */
@@ -825,13 +820,14 @@ const TICKER = [
 ];
 
 const BRANDS = [
-  /* Marcas com logo: o arquivo fica na pasta logos/.
-     Para acrescentar uma marca nova, salve o PNG lá e repita o formato abaixo. */
+  /* Cada marca puxa o arquivo da pasta logos/.
+     Para acrescentar outra, salve o PNG lá e repita uma linha destas. */
   { nome: "L'Oréal",               logo: "logos/loreal.png" },
   { nome: "Niche Beauty Lab",      logo: "logos/niche-beauty-lab.png" },
   { nome: "TheraBreath",           logo: "logos/therabreath.png" },
   { nome: "COSRX",                 logo: "logos/cosrx.png" },
   { nome: "Biolage",               logo: "logos/biolage.png" },
+  { nome: "Batiste",               logo: "logos/batiste.png" },
   { nome: "Haruharu Wonder",       logo: "logos/haruharu-wonder.png" },
   { nome: "Abera",                 logo: "logos/abera.png" },
   { nome: "Eupholic",              logo: "logos/eupholic.png" },
@@ -850,24 +846,7 @@ const BRANDS = [
   { nome: "Doggy Sprout",          logo: "logos/doggy-sprout.png" },
   { nome: "Pupring",               logo: "logos/pupring.png" },
   { nome: "Jolie",                 logo: "logos/jolie.png" },
-  { nome: "Avergo Bonsai",         logo: "logos/avergo-bonsai.png" },
-  /* Marcas que ainda não têm logo aqui: aparecem com o nome escrito.
-     Assim que você me mandar o arquivo, é só apontar o caminho em "logo". */
-  { nome: "LANEIGE",        logo: "" },
-  { nome: "e.l.f.",         logo: "" },
-  { nome: "goodal",         logo: "" },
-  { nome: "Torriden",       logo: "" },
-  { nome: "Batiste",        logo: "" },
-  { nome: "H&M",            logo: "" },
-  { nome: "C&A",            logo: "" },
-  { nome: "SHEIN",          logo: "" },
-  { nome: "JW PEI",         logo: "" },
-  { nome: "Kate Spade",     logo: "" },
-  { nome: "Tommy Hilfiger", logo: "" },
-  { nome: "Urban Planet",   logo: "" },
-  { nome: "Bubble",         logo: "" },
-  { nome: "Tineco",         logo: "" },
-  { nome: "Spew.Money",     logo: "" }
+  { nome: "Avergo Bonsai",         logo: "logos/avergo-bonsai.png" }
 ];
 
 const METRICS = [
@@ -1013,9 +992,7 @@ const comFoto = (img) => img ? " tem-foto" : "";
    ============================================================ */
 (function buildBrands() {
   const track = $("#brandsTrack");
-  const chip = b => b.logo
-    ? `<span class="brand-chip"><img src="${esc(b.logo)}" alt="${esc(b.nome)} logo" decoding="async"></span>`
-    : `<span class="brand-chip"><span class="brand-chip__nome">${esc(b.nome)}</span></span>`;
+  const chip = b => `<span class="brand-chip"><img src="${esc(b.logo)}" alt="${esc(b.nome)} logo" decoding="async"></span>`;
   const make = () => BRANDS.map(chip).join("");
   track.innerHTML = make() + make();
 })();
