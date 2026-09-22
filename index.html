@@ -23,6 +23,7 @@
 /* ----- TOM ESPRESSO (marrom escuro) ----- */
 :root, :root[data-tema="espresso"] {
   --bg: #1b1613;
+  --bg-rgb: 27,22,19;   /* mesma cor acima, para degradês que terminam em transparente */
   --red: #c89b76;          /* cor de destaque */
   --red-dark: #b0835e;     /* destaque no hover */
   --on-red: #1b1613;       /* texto em cima do destaque */
@@ -51,6 +52,7 @@
 /* ----- TOM BEGE (claro) ----- */
 :root[data-tema="bege"] {
   --bg: #efecea;
+  --bg-rgb: 239,236,234;
   --red: #8c5c3b;
   --red-dark: #74492d;
   --on-red: #ffffff;
@@ -239,9 +241,25 @@ img, svg { display: block; max-width: 100%; }
   background-position: 62% 14%;
   background-repeat: no-repeat;
 }
+/* a foto se dissolve no fundo: à esquerda, em direção ao texto, e embaixo,
+   em direção à faixa de marcas. Os degradês terminam na própria cor do fundo,
+   senão aparece aquela sombra cinza no meio do caminho. */
 .hero__foto::after {
   content: ""; position: absolute; inset: 0;
-  background: linear-gradient(90deg, var(--bg) 0%, rgba(0,0,0,0) 26%);
+  background:
+    linear-gradient(90deg,
+      rgba(var(--bg-rgb),1) 0%,
+      rgba(var(--bg-rgb),.97) 10%,
+      rgba(var(--bg-rgb),.82) 20%,
+      rgba(var(--bg-rgb),.55) 31%,
+      rgba(var(--bg-rgb),.28) 42%,
+      rgba(var(--bg-rgb),.1) 52%,
+      rgba(var(--bg-rgb),0) 62%),
+    linear-gradient(180deg,
+      rgba(var(--bg-rgb),0) 72%,
+      rgba(var(--bg-rgb),.35) 86%,
+      rgba(var(--bg-rgb),.8) 95%,
+      rgba(var(--bg-rgb),1) 100%);
 }
 .hero__content { position: relative; z-index: 2; max-width: var(--maxw); width: 100%; margin: 0 auto; }
 .hero__texto { max-width: 54%; }
@@ -266,16 +284,15 @@ img, svg { display: block; max-width: 100%; }
 .brands {
   position: relative;
   background:
-    radial-gradient(80% 140% at 50% 50%, var(--faixa-luz), rgba(0,0,0,0) 70%),
-    linear-gradient(180deg, var(--faixa-topo) 0%, var(--faixa) 52%, var(--faixa-base) 100%);
-  padding: 1.5rem 0 1.7rem;
+    radial-gradient(90% 150% at 50% 50%, var(--faixa-luz), rgba(var(--bg-rgb),0) 72%),
+    linear-gradient(180deg,
+      rgba(var(--bg-rgb),1) 0%,
+      var(--faixa-topo) 20%,
+      var(--faixa) 52%,
+      var(--faixa-base) 82%,
+      rgba(var(--bg-rgb),1) 100%);
+  padding: 2.6rem 0 2.8rem;
 }
-/* as pontas de cima e de baixo se dissolvem no fundo da página, para não virar um retângulo seco */
-.brands::before, .brands::after {
-  content: ""; position: absolute; left: 0; right: 0; height: 14px; pointer-events: none;
-}
-.brands::before { top: 0; background: linear-gradient(180deg, var(--bg), rgba(0,0,0,0)); opacity: .5; }
-.brands::after { bottom: 0; background: linear-gradient(0deg, var(--bg), rgba(0,0,0,0)); opacity: .5; }
 .brands__label {
   text-align: center; color: #fff;
   text-transform: uppercase; letter-spacing: .24em; font-size: 1.18rem;
