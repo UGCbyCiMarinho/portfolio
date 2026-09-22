@@ -157,7 +157,8 @@ img, svg { display: block; max-width: 100%; }
   border-radius: 4px;
 }
 .badge--top { background: var(--red); color: var(--on-red); }
-.badge--match { background: transparent; color: var(--match); border: 1px solid var(--match); }
+.badge--match { background: rgba(27,22,19,.55); color: var(--match); border: 1px solid var(--match); }
+:root[data-tema="bege"] .badge--match { background: rgba(255,255,255,.82); }
 .badge--ugc { background: rgba(255,255,255,.1); color: var(--text); border: 1px solid var(--line); }
 :root[data-tema="bege"] .badge--ugc { background: rgba(59,49,42,.06); }
 
@@ -224,30 +225,31 @@ img, svg { display: block; max-width: 100%; }
   padding: 7rem 1.2rem 4rem;
   overflow: hidden;
 }
-/* FOTO DA CAPA: troque o degradê por background-image no .hero__bg */
+/* FOTO DA CAPA: para trocar a imagem, substitua o arquivo img/capa.webp
+   ou aponte outro caminho na linha background-image abaixo. */
 .hero__bg {
   position: absolute; inset: 0;
-  background:
-    radial-gradient(90% 70% at 75% 25%, var(--hero-1), transparent 55%),
-    radial-gradient(70% 60% at 15% 80%, var(--hero-2), transparent 60%),
-    linear-gradient(115deg, var(--hero-3) 0%, var(--hero-4) 55%, var(--hero-5) 100%);
-  background-size: cover; background-position: center;
+  background-image: url("img/capa.webp");
+  background-size: cover;
+  background-position: 72% center;
+  background-repeat: no-repeat;
 }
 .hero__bg::after {
   content: ""; position: absolute; inset: 0;
   background: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px);
   mix-blend-mode: overlay;
 }
+/* véu por cima da foto, para o texto continuar legível nos dois tons */
 .hero__vignette {
   position: absolute; inset: 0;
   background:
-    linear-gradient(180deg, transparent 40%, rgba(0,0,0,.35) 80%, var(--bg) 100%),
-    linear-gradient(90deg, var(--bg) 0%, transparent 58%);
+    linear-gradient(180deg, rgba(27,22,19,.28) 0%, rgba(27,22,19,.12) 35%, rgba(27,22,19,.78) 84%, var(--bg) 100%),
+    linear-gradient(90deg, var(--bg) 4%, rgba(27,22,19,.86) 34%, rgba(27,22,19,.4) 58%, rgba(27,22,19,.15) 100%);
 }
 :root[data-tema="bege"] .hero__vignette {
   background:
-    linear-gradient(180deg, transparent 40%, rgba(239,236,234,.7) 80%, var(--bg) 100%),
-    linear-gradient(90deg, var(--bg) 0%, transparent 62%);
+    linear-gradient(180deg, rgba(239,236,234,.12) 0%, rgba(239,236,234,.06) 40%, rgba(239,236,234,.74) 86%, var(--bg) 100%),
+    linear-gradient(90deg, var(--bg) 4%, rgba(239,236,234,.9) 32%, rgba(239,236,234,.42) 58%, rgba(239,236,234,.08) 100%);
 }
 .hero__content { position: relative; z-index: 2; max-width: var(--maxw); width: 100%; margin: 0 auto; }
 .hero__badges { display: flex; flex-wrap: wrap; gap: .55rem; margin-bottom: 1.1rem; }
@@ -536,6 +538,14 @@ img, svg { display: block; max-width: 100%; }
   .results__grid { grid-template-columns: 1fr; }
   .poster { width: 160px; }
   .hero { min-height: 88vh; padding-top: 6rem; }
+  /* no celular o véu vem de baixo, para o rosto aparecer inteiro */
+  .hero__bg { background-position: 62% center; }
+  .hero__vignette {
+    background: linear-gradient(180deg, rgba(27,22,19,.12) 0%, rgba(27,22,19,.28) 40%, rgba(27,22,19,.84) 72%, var(--bg) 100%);
+  }
+  :root[data-tema="bege"] .hero__vignette {
+    background: linear-gradient(180deg, rgba(239,236,234,.04) 0%, rgba(239,236,234,.45) 42%, rgba(239,236,234,.93) 72%, var(--bg) 100%);
+  }
   #destaques .hl-grid { grid-template-columns: minmax(0,320px); }
 }
 
@@ -590,7 +600,7 @@ img, svg { display: block; max-width: 100%; }
   <main>
     <!-- ===== HERO / BILLBOARD ===== -->
     <section class="hero" id="topo">
-      <!-- FOTO DA CAPA: adicione style="background-image:url('sua-foto.jpg')" na linha abaixo -->
+      <!-- FOTO DA CAPA: o arquivo é img/capa.webp, apontado no CSS em .hero__bg -->
       <div class="hero__bg" aria-hidden="true"></div>
       <div class="hero__vignette" aria-hidden="true"></div>
       <div class="hero__content">
