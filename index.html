@@ -130,6 +130,8 @@ img, svg { display: block; max-width: 100%; }
   font-size: clamp(1.9rem, 5vw, 3.2rem);
   margin-bottom: .4rem;
 }
+/* título que assume a cor de destaque, no lugar do rótulo pequeno */
+.section__title--cor { color: var(--red); }
 .section__sub { color: var(--muted); max-width: 56ch; }
 .section__head { margin-bottom: 1.8rem; }
 
@@ -681,8 +683,7 @@ img, svg { display: block; max-width: 100%; }
         </div>
       </div>
       <div class="about__text">
-        <span class="kicker">About</span>
-        <h2 class="section__title">About me</h2>
+        <h2 class="section__title section__title--cor">About me</h2>
         <p>
           Hello! I am <strong>Cintia Marinho</strong>, a bilingual Portuguese and English UGC creator,
           millennial working mom and finance professional based in <strong>Toronto, Canada</strong>.
