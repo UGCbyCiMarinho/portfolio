@@ -9,7 +9,7 @@
 <link rel="canonical" href="https://ugcbycimarinho.github.io/portfolio/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@1,500;1,600&display=swap" rel="stylesheet">
 <style>
 /* ===== RESET & TOKENS ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -171,14 +171,17 @@ img, svg { display: block; max-width: 100%; }
   display: flex; align-items: center; gap: 1.4rem;
   padding: .85rem 1.2rem;
 }
+/* MARCA: "Cintia" em sans pesada, "Marinho" em serifada itálica,
+   no espírito do logo que você mandou de referência. */
 .brand__mark {
-  font-family: "Anton", sans-serif;
-  letter-spacing: .04em;
-  color: var(--red);
-  font-size: 1.35rem;
-  text-transform: uppercase;
-  white-space: nowrap;
+  display: inline-flex; align-items: baseline; gap: .2em;
+  font-size: 1.5rem; line-height: 1;
+  text-transform: none; letter-spacing: 0;
+  color: var(--text); white-space: nowrap;
 }
+.brand__first { font-family: "Archivo", sans-serif; font-weight: 800; letter-spacing: -.018em; }
+.brand__last { font-family: "Playfair Display", Georgia, serif; font-style: italic; font-weight: 500; color: var(--red); }
+.footer .brand__mark { font-size: 2rem; }
 .nav__links { display: flex; align-items: center; gap: 1.4rem; margin-left: 1rem; }
 .nav__links a { color: var(--muted); font-size: .92rem; font-weight: 500; transition: color .2s; }
 .nav__links a:hover { color: var(--text); }
@@ -567,7 +570,7 @@ img, svg { display: block; max-width: 100%; }
   <header class="nav" id="nav">
     <div class="nav__inner">
       <a href="#topo" class="brand" aria-label="Cintia Marinho, home">
-        <span class="brand__mark">CINTIA&nbsp;MARINHO</span>
+        <span class="brand__mark"><span class="brand__first">Cintia</span><span class="brand__last">Marinho</span></span>
       </a>
 
       <nav class="nav__links" id="navLinks" aria-label="Main navigation">
@@ -766,7 +769,7 @@ img, svg { display: block; max-width: 100%; }
   <footer class="footer">
     <div class="footer__inner">
       <div class="footer__brand">
-        <span class="brand__mark">CINTIA&nbsp;MARINHO</span>
+        <span class="brand__mark"><span class="brand__first">Cintia</span><span class="brand__last">Marinho</span></span>
         <p>Content that looks organic and sells like an ad.</p>
       </div>
       <nav class="footer__links" aria-label="Social links">
