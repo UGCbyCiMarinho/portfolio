@@ -40,6 +40,8 @@
   --rodape: #14100d;
   --chip: #ffffff;      /* moldura dos logos: branca nos dois tons, para os logos de fundo branco somirem na moldura */
   --faixa: #4a3728;     /* fundo marrom da faixa de marcas */
+  --foto-1: #3b2f26;    /* fundo atrás da foto recortada */
+  --foto-2: #221b16;
   --sombra: rgba(0,0,0,.6);
   --radius: 8px;
   --maxw: 1240px;
@@ -65,6 +67,8 @@
   --rodape: #e7e0d9;
   --chip: #ffffff;
   --faixa: #8c5c3b;
+  --foto-1: #e9e0d6;
+  --foto-2: #dcd0c4;
   --sombra: rgba(92,58,36,.22);
 }
 
@@ -224,18 +228,21 @@ img, svg { display: block; max-width: 100%; }
   padding: 7rem 1.2rem 3.5rem;
   overflow: hidden;
 }
-/* FOTO DA CAPA: ela ocupa a metade direita, em tamanho menor que o arquivo,
-   por isso aparece nítida. Para trocar, substitua img/capa.webp. */
+/* FOTO DA CAPA: a Cintia vem recortada em img/cintia.webp, e o fundo é
+   desenhado aqui no CSS. Assim ele acompanha o tom escolhido e nunca perde
+   qualidade, porque cor não pixeliza. Para trocar a foto, substitua o arquivo. */
 .hero__foto {
   position: absolute; top: 0; right: 0; bottom: 0; width: 48%;
-  background-image: url("img/capa.webp?v=3");
-  background-size: cover;
-  background-position: 62% 14%;
-  background-repeat: no-repeat;
+  background-image:
+    url("img/cintia.webp?v=1"),
+    radial-gradient(120% 90% at 62% 18%, var(--foto-1), var(--foto-2) 70%);
+  background-size: auto 94%, cover;
+  background-position: 58% bottom, center;
+  background-repeat: no-repeat, no-repeat;
 }
 .hero__foto::after {
   content: ""; position: absolute; inset: 0;
-  background: linear-gradient(90deg, var(--bg) 0%, rgba(0,0,0,0) 30%);
+  background: linear-gradient(90deg, var(--bg) 0%, rgba(0,0,0,0) 26%);
 }
 .hero__content { position: relative; z-index: 2; max-width: var(--maxw); width: 100%; margin: 0 auto; }
 .hero__texto { max-width: 54%; }
@@ -530,10 +537,11 @@ img, svg { display: block; max-width: 100%; }
   .hero { min-height: 0; flex-direction: column; align-items: stretch; padding: 5.6rem 1.2rem 2.4rem; }
   .hero__foto {
     position: relative; width: 100%; inset: auto;
-    aspect-ratio: 4 / 3; border-radius: 10px; margin-bottom: 1.6rem;
-    background-position: 62% 12%;
+    aspect-ratio: 1 / 1; border-radius: 12px; margin-bottom: 1.6rem; overflow: hidden;
+    background-size: auto 96%, cover;
+    background-position: center bottom, center;
   }
-  .hero__foto::after { background: linear-gradient(180deg, rgba(0,0,0,0) 72%, var(--bg) 100%); }
+  .hero__foto::after { background: linear-gradient(180deg, rgba(0,0,0,0) 78%, rgba(0,0,0,.06) 100%); }
   .hero__texto { max-width: 100%; }
   #destaques .hl-grid { grid-template-columns: minmax(0,320px); }
 }
