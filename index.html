@@ -39,6 +39,7 @@
   --hero-3: #2a1d14; --hero-4: #1b1613; --hero-5: #130e0b;
   --rodape: #14100d;
   --chip: #f5f0ea;      /* fundo dos chips de marca, claro nos dois tons */
+  --faixa: #4a3728;     /* fundo marrom da faixa de marcas */
   --sombra: rgba(0,0,0,.6);
   --radius: 8px;
   --maxw: 1240px;
@@ -63,6 +64,7 @@
   --hero-3: #e3d8cd; --hero-4: #efecea; --hero-5: #e7ded6;
   --rodape: #e7e0d9;
   --chip: #ffffff;
+  --faixa: #8c5c3b;
   --sombra: rgba(92,58,36,.22);
 }
 
@@ -263,49 +265,32 @@ img, svg { display: block; max-width: 100%; }
 .hero__stats { font-weight: 700; letter-spacing: .02em; color: var(--text); margin-bottom: 1.6rem; font-size: 1.02rem; }
 .hero__actions { display: flex; flex-wrap: wrap; gap: .8rem; }
 
-/* ===== TICKER ===== */
-.ticker {
-  background: var(--red);
-  border-top: 1px solid rgba(0,0,0,.18);
-  border-bottom: 1px solid rgba(0,0,0,.18);
-  overflow: hidden;
-  padding: .7rem 0;
-}
-.ticker__track { display: flex; gap: 2.5rem; width: max-content; animation: ticker 26s linear infinite; white-space: nowrap; }
-.ticker__item {
-  font-family: "Anton", sans-serif;
-  text-transform: uppercase;
-  font-size: 1rem;
-  letter-spacing: .08em;
-  color: var(--on-red);
-  display: inline-flex; align-items: center; gap: 2.5rem;
-}
-.ticker__item::before { content: "●"; font-size: .6rem; opacity: .7; }
-@keyframes ticker { to { transform: translateX(-50%); } }
-
 /* ===== MARCAS / MARQUEE ===== */
-.brands { padding: 2.6rem 1.2rem; max-width: var(--maxw); margin: 0 auto; }
+.brands { background: var(--faixa); padding: 2.4rem 0 2.6rem; }
 .brands__label {
-  text-align: center; color: var(--muted);
+  text-align: center; color: rgba(255,255,255,.82);
   text-transform: uppercase; letter-spacing: .2em; font-size: .72rem;
-  margin-bottom: 1.2rem; font-weight: 700;
+  margin-bottom: 1.3rem; font-weight: 700;
 }
-.marquee { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+.marquee { overflow: hidden; padding: 4px 0; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
 .marquee__track { display: flex; gap: 1rem; width: max-content; animation: marquee 44s linear infinite; }
 .marquee:hover .marquee__track { animation-play-state: paused; }
 .brand-chip {
   flex: none;
   display: flex; align-items: center; justify-content: center;
   background: var(--chip);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  width: 190px; height: 88px;
-  padding: 14px 20px;
+  border-radius: 8px;
+  width: 148px; height: 66px;
+  padding: 10px 14px;
+  overflow: hidden;
   transition: transform .25s var(--ease), box-shadow .25s;
 }
-.brand-chip:hover { transform: translateY(-3px); box-shadow: 0 12px 26px var(--sombra); }
-/* o logo ocupa a moldura inteira, sem distorcer e sem ficar pequeno */
+.brand-chip:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,.28); }
+/* o logo ocupa a moldura inteira, sem distorcer */
 .brand-chip img { width: 100%; height: 100%; object-fit: contain; }
+/* marca cujo logo já vem com fundo próprio: a moldura inteira ganha a cor dele */
+.brand-chip--cheio { padding: 0; }
+.brand-chip--cheio img { object-fit: cover; }
 @keyframes marquee { to { transform: translateX(-50%); } }
 
 /* ===== SOBRE ===== */
@@ -562,7 +547,7 @@ img, svg { display: block; max-width: 100%; }
     transition-duration: .001ms !important;
     scroll-behavior: auto !important;
   }
-  .ticker__track, .marquee__track { animation: none !important; }
+  .marquee__track { animation: none !important; }
   .reveal { opacity: 1 !important; transform: none !important; }
 }
 </style>
@@ -627,11 +612,6 @@ img, svg { display: block; max-width: 100%; }
           <a href="#contato" class="btn btn--ghost">&#65291; WORK WITH ME</a>
         </div>
       </div>
-    </section>
-
-    <!-- ===== TICKER ===== -->
-    <section class="ticker" aria-hidden="true">
-      <div class="ticker__track" id="tickerTrack"></div>
     </section>
 
     <!-- ===== MARCAS ===== -->
@@ -813,11 +793,6 @@ img, svg { display: block; max-width: 100%; }
 /* ============================================================
    DADOS, edite tudo por aqui
    ============================================================ */
-const TICKER = [
-  "Strategy-led UGC", "Ad Creatives", "Scripts that Sell",
-  "Product Photography", "Unboxing", "Before & After",
-  "Storytelling", "Mobile Editing"
-];
 
 const BRANDS = [
   /* Cada marca puxa o arquivo da pasta logos/.
@@ -835,7 +810,7 @@ const BRANDS = [
   { nome: "NovaMane",              logo: "logos/novamane.png" },
   { nome: "Prime Cosmetics",       logo: "logos/prime-cosmetics.png" },
   { nome: "Synergy Hair",          logo: "logos/synergy-hair.png" },
-  { nome: "CELLU",                 logo: "logos/cellu.png" },
+  { nome: "CELLU",                 logo: "logos/cellu.png", cheio: true },  /* logo já vem com fundo próprio */
   { nome: "Button Amsterdam",      logo: "logos/button-amsterdam.png" },
   { nome: "Royal Distribution",    logo: "logos/royal-distribution.png" },
   { nome: "Power Kitchen Toronto", logo: "logos/power-kitchen-toronto.png" },
@@ -979,20 +954,11 @@ const comFoto = (img) => img ? " tem-foto" : "";
 })();
 
 /* ============================================================
-   TICKER
-   ============================================================ */
-(function buildTicker() {
-  const track = $("#tickerTrack");
-  const make = () => TICKER.map(t => `<span class="ticker__item">${esc(t)}</span>`).join("");
-  track.innerHTML = make() + make();
-})();
-
-/* ============================================================
    MARCAS (marquee)
    ============================================================ */
 (function buildBrands() {
   const track = $("#brandsTrack");
-  const chip = b => `<span class="brand-chip"><img src="${esc(b.logo)}" alt="${esc(b.nome)} logo" decoding="async"></span>`;
+  const chip = b => `<span class="brand-chip${b.cheio ? " brand-chip--cheio" : ""}"><img src="${esc(b.logo)}" alt="${esc(b.nome)} logo" decoding="async"></span>`;
   const make = () => BRANDS.map(chip).join("");
   track.innerHTML = make() + make();
 })();
