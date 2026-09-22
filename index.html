@@ -799,9 +799,10 @@ img, svg { display: block; max-width: 100%; }
 
 const BRANDS = [
   /* Cada marca puxa o arquivo da pasta logos/.
-     Para acrescentar outra, salve o PNG lá e repita uma linha destas. */
+     Quem tem logo de fundo escuro fica separado dos outros de fundo escuro,
+     para a faixa não juntar dois blocos pretos lado a lado.
+     Para acrescentar outra marca, salve o arquivo em logos/ e repita uma linha destas. */
   { nome: "L'Oréal",               logo: "logos/loreal.webp", fundo: "#000000" },  /* logo branco sobre preto */
-  { nome: "Niche Beauty Lab",      logo: "logos/niche-beauty-lab.webp", fundo: "#000000" },
   { nome: "TheraBreath",           logo: "logos/therabreath.webp" },
   { nome: "COSRX",                 logo: "logos/cosrx.webp" },
   { nome: "Biolage",               logo: "logos/biolage.webp" , respiro: "5px 9px" },
@@ -809,11 +810,12 @@ const BRANDS = [
   { nome: "Haruharu Wonder",       logo: "logos/haruharu-wonder.webp" },
   { nome: "Abera",                 logo: "logos/abera.webp" , respiro: "3px 8px" },
   { nome: "Eupholic",              logo: "logos/eupholic.webp" , respiro: "5px 9px" },
+  { nome: "CELLU",                 logo: "logos/cellu.webp", fundo: "#2b4c43" },
   { nome: "APLB",                  logo: "logos/aplb.webp" },
   { nome: "NovaMane",              logo: "logos/novamane.webp" },
   { nome: "Prime Cosmetics",       logo: "logos/prime-cosmetics.webp" },
   { nome: "Synergy Hair",          logo: "logos/synergy-hair.webp" },
-  { nome: "CELLU",                 logo: "logos/cellu.webp", fundo: "#2b4c43" },
+  { nome: "Niche Beauty Lab",      logo: "logos/niche-beauty-lab.webp", fundo: "#000000" },
   { nome: "Button Amsterdam",      logo: "logos/button-amsterdam.webp" },
   { nome: "Royal Distribution",    logo: "logos/royal-distribution.webp", respiro: "2px 6px" },
   { nome: "Power Kitchen Toronto", logo: "logos/power-kitchen-toronto.webp" },
