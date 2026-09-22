@@ -184,8 +184,7 @@ img, svg { display: block; max-width: 100%; }
   text-transform: none; letter-spacing: 0;
   color: var(--text); white-space: nowrap;
 }
-.brand__first, .brand__last { font-family: "Playfair Display", Georgia, serif; font-style: italic; font-weight: 500; }
-.brand__last { color: var(--red); }
+.brand__first, .brand__last { font-family: "Playfair Display", Georgia, serif; font-style: italic; font-weight: 500; color: var(--red); }
 .footer .brand__mark { font-size: 2rem; }
 .nav__links { display: flex; align-items: center; gap: 1.4rem; margin-left: 1rem; }
 .nav__links a { color: var(--muted); font-size: .92rem; font-weight: 500; transition: color .2s; }
@@ -229,9 +228,9 @@ img, svg { display: block; max-width: 100%; }
    ou aponte outro caminho na linha background-image abaixo. */
 .hero__bg {
   position: absolute; inset: 0;
-  background-image: url("img/capa.webp");
+  background-image: url("img/capa.webp?v=2");   /* o ?v=2 força o navegador a buscar a versão nova */
   background-size: cover;
-  background-position: 72% center;
+  background-position: 62% 8%;
   background-repeat: no-repeat;
 }
 .hero__bg::after {
@@ -239,17 +238,17 @@ img, svg { display: block; max-width: 100%; }
   background: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px);
   mix-blend-mode: overlay;
 }
-/* véu por cima da foto, para o texto continuar legível nos dois tons */
+/* o véu cobre só o lado do texto. A foto fica limpa, sem película por cima. */
 .hero__vignette {
   position: absolute; inset: 0;
   background:
-    linear-gradient(180deg, rgba(27,22,19,.28) 0%, rgba(27,22,19,.12) 35%, rgba(27,22,19,.78) 84%, var(--bg) 100%),
-    linear-gradient(90deg, var(--bg) 4%, rgba(27,22,19,.86) 34%, rgba(27,22,19,.4) 58%, rgba(27,22,19,.15) 100%);
+    linear-gradient(180deg, rgba(27,22,19,0) 88%, var(--bg) 100%),
+    linear-gradient(90deg, var(--bg) 0%, var(--bg) 24%, rgba(27,22,19,.82) 36%, rgba(27,22,19,.3) 48%, rgba(27,22,19,0) 60%);
 }
 :root[data-tema="bege"] .hero__vignette {
   background:
-    linear-gradient(180deg, rgba(239,236,234,.12) 0%, rgba(239,236,234,.06) 40%, rgba(239,236,234,.74) 86%, var(--bg) 100%),
-    linear-gradient(90deg, var(--bg) 4%, rgba(239,236,234,.9) 32%, rgba(239,236,234,.42) 58%, rgba(239,236,234,.08) 100%);
+    linear-gradient(180deg, rgba(239,236,234,0) 88%, var(--bg) 100%),
+    linear-gradient(90deg, var(--bg) 0%, var(--bg) 24%, rgba(239,236,234,.86) 36%, rgba(239,236,234,.34) 48%, rgba(239,236,234,0) 60%);
 }
 .hero__content { position: relative; z-index: 2; max-width: var(--maxw); width: 100%; margin: 0 auto; }
 .hero__title {
@@ -267,8 +266,7 @@ img, svg { display: block; max-width: 100%; }
 }
 .hero__local { display: inline-flex; align-items: center; gap: .4rem; color: var(--red); }
 .hero__local svg { flex: none; }
-.hero__desc { max-width: 50ch; font-size: 1.1rem; color: var(--text); margin-bottom: 1rem; }
-.hero__stats { font-weight: 700; letter-spacing: .02em; color: var(--text); margin-bottom: 1.6rem; font-size: 1.02rem; }
+.hero__desc { max-width: 50ch; font-size: 1.1rem; color: var(--text); margin-bottom: 1.8rem; }
 .hero__actions { display: flex; flex-wrap: wrap; gap: .8rem; }
 
 /* ===== MARCAS / MARQUEE ===== */
@@ -543,12 +541,12 @@ img, svg { display: block; max-width: 100%; }
   .poster { width: 160px; }
   .hero { min-height: 78vh; padding-top: 5rem; }
   /* no celular o véu vem de baixo, para o rosto aparecer inteiro */
-  .hero__bg { background-position: 62% center; }
+  .hero__bg { background-position: 72% 6%; }
   .hero__vignette {
-    background: linear-gradient(180deg, rgba(27,22,19,.12) 0%, rgba(27,22,19,.28) 40%, rgba(27,22,19,.84) 72%, var(--bg) 100%);
+    background: linear-gradient(180deg, rgba(27,22,19,0) 26%, rgba(27,22,19,.3) 46%, rgba(27,22,19,.88) 68%, var(--bg) 100%);
   }
   :root[data-tema="bege"] .hero__vignette {
-    background: linear-gradient(180deg, rgba(239,236,234,.04) 0%, rgba(239,236,234,.45) 42%, rgba(239,236,234,.93) 72%, var(--bg) 100%);
+    background: linear-gradient(180deg, rgba(239,236,234,0) 26%, rgba(239,236,234,.42) 46%, rgba(239,236,234,.95) 68%, var(--bg) 100%);
   }
   #destaques .hl-grid { grid-template-columns: minmax(0,320px); }
 }
@@ -624,8 +622,6 @@ img, svg { display: block; max-width: 100%; }
           Strategy-led content that looks organic and <strong>sells like an ad</strong>.
           Visual hook, verbal hook, problem, transition, solution, benefit and CTA, in every single video.
         </p>
-        <!-- VIEWS: troque o 00M+ quando tiver o número real -->
-        <p class="hero__stats">100+ videos · 60+ brands · 00M+ views</p>
         <div class="hero__actions">
           <a href="#portfolio" class="btn btn--play">&#9654; WATCH</a>
           <a href="#contato" class="btn btn--ghost">&#65291; WORK WITH ME</a>
@@ -635,7 +631,7 @@ img, svg { display: block; max-width: 100%; }
 
     <!-- ===== MARCAS ===== -->
     <section class="brands" aria-label="Brands I have worked with">
-      <p class="brands__label">Already in the catalogue</p>
+      <p class="brands__label">Trusted by</p>
       <div class="marquee">
         <div class="marquee__track" id="brandsTrack"></div>
       </div>
