@@ -435,24 +435,36 @@ img, svg { display: block; max-width: 100%; }
 .result__desc { color: var(--muted); margin-top: .6rem; font-size: .94rem; }
 
 /* ===== DEPOIMENTOS ===== */
-.testimonials { max-width: var(--maxw); margin: 0 auto; padding: 0 1.2rem 4rem; }
-.testimonials__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.testimonials { padding: 0 0 4rem; }
+/* os depoimentos passam sozinhos, como a faixa de marcas, e param no hover */
+.testimonials__wrap {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.testimonials__track { display: flex; gap: 1rem; width: max-content; padding: .4rem 0; animation: marquee 90s linear infinite; }
+.testimonials__wrap:hover .testimonials__track { animation-play-state: paused; }
 .testimonial {
+  flex: none; width: 330px;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 1.6rem;
-  display: flex; flex-direction: column; gap: 1rem;
-  transition: transform .22s var(--ease), border-color .22s;
+  border-radius: var(--radius); padding: 1.5rem 1.4rem 1.3rem;
+  display: flex; flex-direction: column; gap: .9rem;
+  transition: border-color .22s;
 }
-.testimonial:hover { transform: translateY(-4px); border-color: var(--red); }
-.testimonial__text { color: var(--text); font-style: italic; }
-.testimonial__who { display: flex; align-items: center; gap: .8rem; }
-.avatar {
-  width: 46px; height: 46px; border-radius: 6px; flex: none;
-  display: flex; align-items: center; justify-content: center;
-  font-family: "Anton", sans-serif; font-size: 1.2rem; color: #fff;
+.testimonial:hover { border-color: var(--red); }
+.testimonial__marca {
+  align-self: flex-start; display: flex; align-items: center; justify-content: center;
+  height: 40px; min-width: 96px; padding: 5px 10px;
+  background: #fff; border-radius: 6px;
 }
-.testimonial__name { font-weight: 700; }
-.testimonial__niche { color: var(--muted); font-size: .82rem; }
+.testimonial__marca img { max-height: 100%; max-width: 110px; object-fit: contain; }
+.testimonial__text {
+  color: var(--text); font-style: italic; font-size: .94rem; margin: 0; flex: 1;
+  display: -webkit-box; -webkit-line-clamp: 9; -webkit-box-orient: vertical; overflow: hidden;
+}
+.testimonial__pe { display: flex; align-items: center; justify-content: space-between; gap: .8rem; border-top: 1px solid var(--line); padding-top: .9rem; }
+.estrelas { color: #d9a441; letter-spacing: .12em; font-size: .92rem; }
+.testimonial__nome { font-size: .7rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
 
 /* ===== CONTATO ===== */
 .contact {
@@ -559,7 +571,6 @@ img, svg { display: block; max-width: 100%; }
   .metrics__grid { grid-template-columns: repeat(2, 1fr); }
   .services__grid { grid-template-columns: repeat(2, 1fr); }
   .results__grid { grid-template-columns: repeat(2, 1fr); }
-  .testimonials__grid { grid-template-columns: 1fr; }
   .contact { grid-template-columns: 1fr; gap: 2rem; }
   .footer__inner { flex-direction: column; }
   #destaques .hl-grid { grid-template-columns: repeat(2, minmax(0,280px)); }
@@ -748,8 +759,10 @@ img, svg { display: block; max-width: 100%; }
     </section>
 
     <!-- ===== DEPOIMENTOS ===== -->
-    <section class="testimonials reveal" id="depoimentos">
-      <div class="testimonials__grid" id="testimonialsGrid"></div>
+    <section class="testimonials reveal" id="depoimentos" aria-label="What brands say">
+      <div class="testimonials__wrap">
+        <div class="testimonials__track" id="testimonialsTrack"></div>
+      </div>
     </section>
 
     <!-- ===== CONTATO ===== -->
@@ -962,12 +975,23 @@ const RESULTS = [
 /* DEPOIMENTOS: são reais, vieram do seu portfólio no Canva.
    Só falta dizer qual marca falou cada um, no campo "niche". */
 const TESTIMONIALS = [
-  { text: "Working with you has been a really smooth and positive experience. Communication has been easy, and you have been very open to feedback while still bringing your own creativity to the content. The content definitely met our expectations and aligned well with our brand vision. We would absolutely work with you again and would happily recommend you to other brands.", name: "Brand 01", niche: "Skincare", color: "#8c5c3b" },
-  { text: "We really enjoyed working with you, and truly appreciate the care and effort you put into your delivery. Everything was communicated clearly and professionally, and the process felt very seamless on our end.", name: "Brand 02", niche: "Haircare", color: "#6f5c50" },
-  { text: "We truly appreciate your professionalism and the effort you put into your work. Everything you delivered was wonderful and matched our expectations perfectly. We would love to work with you again in future campaigns!", name: "Brand 03", niche: "Maternity", color: "#a9764f" },
-  { text: "Thanks for sending this through, we love it! We have added you to our list for future campaigns, we hope you enjoy the leggings!", name: "Brand 04", niche: "Fashion", color: "#5c3a24" },
-  { text: "Thank you so much, Cintia! It has been a pleasure working with you and we would be happy to see you join more of our campaigns and work with you again.", name: "Brand 05", niche: "Apps & Tech", color: "#7a5a40" },
-  { text: "The video looks absolutely lovely, you did such a beautiful job!", name: "Brand 06", niche: "Pet", color: "#b0835e" }
+  /* Depoimentos reais, com a marca que escreveu cada um.
+     O logo vem da mesma pasta logos/. Quando o logo tem fundo próprio,
+     repita aqui o campo "fundo", como na faixa de marcas. */
+  { marca:"Abera", logo:"logos/abera.webp",
+    texto:"Hi Cintia! We truly appreciate your professionalism and the effort you put into your work. Everything you delivered was wonderful and matched our expectations perfectly. Thank you again for your dedication, and we would love to work with you again in future campaigns!" },
+  { marca:"NovaMane", logo:"logos/novamane.webp",
+    texto:"Hi Cintia! We really enjoyed working with you as well, and truly appreciate the care and effort you put into your delivery. Everything was communicated clearly and professionally, and the process felt very seamless on our end. We would absolutely be happy to work together again in the future if another opportunity comes up. Thanks again for your time and creativity!" },
+  { marca:"Prime Cosmetics", logo:"logos/prime-cosmetics.webp",
+    texto:"Thank you so much, Cintia! It has been a pleasure working with you and we would be happy to see you join more of our campaigns and work with you again." },
+  { marca:"Niche Beauty Lab", logo:"logos/niche-beauty-lab.webp", fundo:"#000000",
+    texto:"Working with you has been a really smooth and positive experience. Communication has been easy, and you have been very open to feedback while still bringing your own creativity to the content. The content definitely met our expectations and aligned well with our brand vision. We especially appreciate how natural and authentic your approach is, while still highlighting the product benefits in a clear and engaging way. We would absolutely work with you again and would happily recommend you to other brands." },
+  { marca:"Pupring", logo:"logos/pupring.webp",
+    texto:"The video looks absolutely lovely, you did such a beautiful job!" },
+  { marca:"TC Nutrition", logo:"logos/tc-nutrition.webp",
+    texto:"A pleasure working with you, Cintia!" },
+  { marca:"Formi", logo:"logos/formi.webp",
+    texto:"Thanks for sending this through, we love it! We have added you to our list for future campaigns, we hope you enjoy the leggings!" }
 ];
 
 /* ============================================================
@@ -1134,20 +1158,18 @@ renderPosters();
    DEPOIMENTOS
    ============================================================ */
 (function buildTestimonials() {
-  $("#testimonialsGrid").innerHTML = TESTIMONIALS.map(t => {
-    const initial = (t.name.match(/\d+/) || [t.name.charAt(0)])[0];
-    return `
+  const estrelas = '<span class="estrelas" aria-label="5 out of 5">&#9733;&#9733;&#9733;&#9733;&#9733;</span>';
+  const card = t => `
     <article class="testimonial">
-      <p class="testimonial__text">&ldquo;${esc(t.text)}&rdquo;</p>
-      <div class="testimonial__who">
-        <div class="avatar" style="background:${esc(t.color)}" aria-hidden="true">${esc(initial)}</div>
-        <div>
-          <div class="testimonial__name">${esc(t.name)}</div>
-          <div class="testimonial__niche">${esc(t.niche)}</div>
-        </div>
-      </div>
+      <span class="testimonial__marca${t.fundo ? " testimonial__marca--cor" : ""}"${t.fundo ? ` style="background:${esc(t.fundo)}"` : ""}>
+        <img src="${esc(t.logo)}" alt="${esc(t.marca)} logo" decoding="async">
+      </span>
+      <p class="testimonial__text">${esc(t.texto)}</p>
+      <div class="testimonial__pe">${estrelas}<span class="testimonial__nome">${esc(t.marca)}</span></div>
     </article>`;
-  }).join("");
+  const linha = () => TESTIMONIALS.map(card).join("");
+  /* a fileira anda sozinha, por isso o conteúdo entra duas vezes */
+  $("#testimonialsTrack").innerHTML = prefersReduced ? linha() : linha() + linha();
 })();
 
 /* ============================================================
