@@ -260,8 +260,8 @@ img, svg { display: block; max-width: 100%; }
 .brands { background: var(--faixa); padding: 1.5rem 0 1.7rem; }
 .brands__label {
   text-align: center; color: #fff;
-  text-transform: uppercase; letter-spacing: .22em; font-size: .95rem;
-  margin-bottom: .95rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .24em; font-size: 1.18rem;
+  margin-bottom: 1.05rem; font-weight: 700;
 }
 .marquee { overflow: hidden; padding: 4px 0; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
 .marquee__track { display: flex; gap: .7rem; width: max-content; animation: marquee 44s linear infinite; }
@@ -272,14 +272,13 @@ img, svg { display: block; max-width: 100%; }
   background: var(--chip);
   border-radius: 7px;
   width: 124px; height: 54px;
-  padding: 7px 11px;
-  overflow: hidden;
+  padding: var(--respiro, 7px 11px);
   transition: transform .25s var(--ease), box-shadow .25s;
 }
 .brand-chip:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,0,0,.26); }
-/* o logo ocupa a moldura inteira. A escala por marca corrige os logos
-   que são quadrados ou finos demais e por isso ficavam pequenos. */
-.brand-chip img { width: 100%; height: 100%; object-fit: contain; transform: scale(var(--escala, 1)); }
+/* o logo ocupa a moldura inteira, sem cortar. Quem é quadrado ou muito fino
+   ganha menos margem pela variável --respiro, em vez de ser ampliado. */
+.brand-chip img { width: 100%; height: 100%; object-fit: contain; }
 /* marca cujo logo já vem com fundo próprio: a moldura inteira ganha a cor dele */
 .brand-chip--cheio { padding: 0; }
 .brand-chip--cheio img { object-fit: cover; }
@@ -802,24 +801,24 @@ const BRANDS = [
   /* Cada marca puxa o arquivo da pasta logos/.
      Para acrescentar outra, salve o PNG lá e repita uma linha destas. */
   { nome: "L'Oréal",               logo: "logos/loreal.webp" },
-  { nome: "Niche Beauty Lab",      logo: "logos/niche-beauty-lab.webp" , escala: 1.3 },
+  { nome: "Niche Beauty Lab",      logo: "logos/niche-beauty-lab.webp", cheio: true },  /* logo já vem com fundo próprio */
   { nome: "TheraBreath",           logo: "logos/therabreath.webp" },
   { nome: "COSRX",                 logo: "logos/cosrx.webp" },
-  { nome: "Biolage",               logo: "logos/biolage.webp" , escala: 1.12 },
+  { nome: "Biolage",               logo: "logos/biolage.webp" , respiro: "5px 9px" },
   { nome: "Batiste",               logo: "logos/batiste.webp" },
   { nome: "Haruharu Wonder",       logo: "logos/haruharu-wonder.webp" },
-  { nome: "Abera",                 logo: "logos/abera.webp" , escala: 1.35 },
-  { nome: "Eupholic",              logo: "logos/eupholic.webp" , escala: 1.12 },
+  { nome: "Abera",                 logo: "logos/abera.webp" , respiro: "3px 8px" },
+  { nome: "Eupholic",              logo: "logos/eupholic.webp" , respiro: "5px 9px" },
   { nome: "APLB",                  logo: "logos/aplb.webp" },
   { nome: "NovaMane",              logo: "logos/novamane.webp" },
   { nome: "Prime Cosmetics",       logo: "logos/prime-cosmetics.webp" },
   { nome: "Synergy Hair",          logo: "logos/synergy-hair.webp" },
   { nome: "CELLU",                 logo: "logos/cellu.webp", cheio: true },  /* logo já vem com fundo próprio */
   { nome: "Button Amsterdam",      logo: "logos/button-amsterdam.webp" },
-  { nome: "Royal Distribution",    logo: "logos/royal-distribution.webp" , escala: 1.32 },
+  { nome: "Royal Distribution",    logo: "logos/royal-distribution.webp", respiro: "2px 6px" },
   { nome: "Power Kitchen Toronto", logo: "logos/power-kitchen-toronto.webp" },
   { nome: "TC Nutrition",          logo: "logos/tc-nutrition.webp" },
-  { nome: "Formi",                 logo: "logos/formi.webp" , escala: 1.2 },
+  { nome: "Formi",                 logo: "logos/formi.webp" , respiro: "4px 9px" },
   { nome: "Alarmy",                logo: "logos/alarmy.webp" },
   { nome: "Linka.ai",              logo: "logos/linka.webp" },
   { nome: "Doggy Sprout",          logo: "logos/doggy-sprout.webp" },
@@ -962,7 +961,7 @@ const comFoto = (img) => img ? " tem-foto" : "";
    ============================================================ */
 (function buildBrands() {
   const track = $("#brandsTrack");
-  const chip = b => `<span class="brand-chip${b.cheio ? " brand-chip--cheio" : ""}"${b.escala ? ` style="--escala:${b.escala}"` : ""}><img src="${esc(b.logo)}" alt="${esc(b.nome)} logo" decoding="async"></span>`;
+  const chip = b => `<span class="brand-chip${b.cheio ? " brand-chip--cheio" : ""}"${b.respiro ? ` style="--respiro:${b.respiro}"` : ""}><img src="${esc(b.logo)}" alt="${esc(b.nome)} logo" decoding="async"></span>`;
   const make = () => BRANDS.map(chip).join("");
   track.innerHTML = make() + make();
 })();
