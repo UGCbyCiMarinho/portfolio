@@ -235,7 +235,7 @@ img, svg { display: block; max-width: 100%; }
 /* FOTO DA CAPA: ela ocupa a metade direita, exibida menor que o arquivo,
    por isso aparece nítida. Para trocar, substitua img/capa.webp. */
 .hero__foto {
-  position: absolute; top: 0; right: 0; bottom: 0; width: 48%;
+  position: absolute; top: 0; right: 0; bottom: 0; width: 56%;
   background-image: url("img/capa.webp?v=3");
   background-size: cover;
   background-position: 62% 14%;
@@ -249,12 +249,12 @@ img, svg { display: block; max-width: 100%; }
   background:
     linear-gradient(90deg,
       rgba(var(--bg-rgb),1) 0%,
-      rgba(var(--bg-rgb),.97) 10%,
-      rgba(var(--bg-rgb),.82) 20%,
-      rgba(var(--bg-rgb),.55) 31%,
-      rgba(var(--bg-rgb),.28) 42%,
-      rgba(var(--bg-rgb),.1) 52%,
-      rgba(var(--bg-rgb),0) 62%),
+      rgba(var(--bg-rgb),.9) 8%,
+      rgba(var(--bg-rgb),.66) 17%,
+      rgba(var(--bg-rgb),.4) 26%,
+      rgba(var(--bg-rgb),.18) 35%,
+      rgba(var(--bg-rgb),.05) 44%,
+      rgba(var(--bg-rgb),0) 52%),
     linear-gradient(180deg,
       rgba(var(--bg-rgb),0) 72%,
       rgba(var(--bg-rgb),.35) 86%,
@@ -281,18 +281,7 @@ img, svg { display: block; max-width: 100%; }
 .hero__actions { display: flex; flex-wrap: wrap; gap: .8rem; }
 
 /* ===== MARCAS / MARQUEE ===== */
-.brands {
-  position: relative;
-  background:
-    radial-gradient(90% 150% at 50% 50%, var(--faixa-luz), rgba(var(--bg-rgb),0) 72%),
-    linear-gradient(180deg,
-      rgba(var(--bg-rgb),1) 0%,
-      var(--faixa-topo) 20%,
-      var(--faixa) 52%,
-      var(--faixa-base) 82%,
-      rgba(var(--bg-rgb),1) 100%);
-  padding: 2.6rem 0 2.8rem;
-}
+.brands { background: var(--faixa); padding: 1.5rem 0 1.7rem; }
 .brands__label {
   text-align: center; color: #fff;
   text-transform: uppercase; letter-spacing: .24em; font-size: 1.18rem;
