@@ -314,11 +314,13 @@ img, svg { display: block; max-width: 100%; }
   padding: 4rem 1.2rem;
   display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 3rem; align-items: center;
 }
-.ph--portrait { aspect-ratio: 4/5; border-radius: var(--radius); }
+.ph--portrait { aspect-ratio: 4/5; border-radius: var(--radius); background-size: cover; background-position: center; }
 .about__text p { color: var(--muted); margin-bottom: 1rem; }
 .about__text strong { color: var(--text); }
-.tags { list-style: none; display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.2rem; }
-.tags li { background: var(--card); border: 1px solid var(--line); padding: .4rem .85rem; border-radius: 20px; font-size: .82rem; color: var(--muted); }
+.about__fecho {
+  margin-top: 1.6rem; padding-top: 1.3rem; border-top: 1px solid var(--line);
+  color: var(--red); font-size: 1.12rem; font-weight: 500; letter-spacing: .01em;
+}
 
 /* ===== MÉTRICAS ===== */
 .metrics { max-width: var(--maxw); margin: 0 auto; padding: 2rem 1.2rem 4rem; }
@@ -652,8 +654,9 @@ img, svg { display: block; max-width: 100%; }
     <!-- ===== SOBRE ===== -->
     <section class="about reveal" id="sobre">
       <div class="about__media">
-        <!-- FOTO DO SOBRE: troque por style="background-image:url('sua-foto.jpg')" e some a classe do degradê -->
-        <div class="ph ph--portrait" role="img" aria-label="Photo of Cintia Marinho"></div>
+        <!-- FOTO DO SOBRE: para trocar, substitua o arquivo img/sobre.webp -->
+        <div class="ph ph--portrait tem-foto" role="img" aria-label="Photo of Cintia Marinho"
+             style="background-image:url('img/sobre.webp')"></div>
       </div>
       <div class="about__text">
         <span class="kicker">About</span>
@@ -670,17 +673,7 @@ img, svg { display: block; max-width: 100%; }
           With <strong>15+ years</strong> in finance and the corporate world, I bring a deep understanding of brand
           positioning and consumer psychology: the foundation behind high converting content.
         </p>
-        <ul class="tags" aria-label="Niches">
-          <li>Skincare</li>
-          <li>Haircare</li>
-          <li>Sensorial</li>
-          <li>Fashion</li>
-          <li>Food</li>
-          <li>Maternity</li>
-          <li>Apps &amp; Tech</li>
-          <li>Pet</li>
-          <li>Home &amp; Decor</li>
-        </ul>
+        <p class="about__fecho">&#10024; Let's turn your product into high-performing content!</p>
       </div>
     </section>
 
