@@ -183,7 +183,7 @@ img, svg { display: block; max-width: 100%; }
 .nav.is-scrolled { background: var(--bg); backdrop-filter: blur(8px); border-bottom-color: var(--line); }
 .nav__inner {
   max-width: var(--maxw); margin: 0 auto;
-  display: flex; align-items: center; gap: 1.4rem;
+  display: flex; align-items: center; gap: 1rem;
   padding: .85rem 1.2rem;
 }
 /* MARCA: "Cintia" em sans pesada, "Marinho" em serifada itálica,
@@ -196,8 +196,8 @@ img, svg { display: block; max-width: 100%; }
 }
 .brand__first, .brand__last { font-family: "Playfair Display", Georgia, serif; font-style: italic; font-weight: 500; color: var(--red); }
 .footer .brand__mark { font-size: 2rem; }
-.nav__links { display: flex; align-items: center; gap: 1.4rem; margin-left: 1rem; }
-.nav__links a { color: var(--muted); font-size: .92rem; font-weight: 500; transition: color .2s; }
+.nav__links { display: flex; align-items: center; gap: 1.15rem; margin-left: .8rem; }
+.nav__links a { color: var(--muted); font-size: .9rem; font-weight: 500; white-space: nowrap; transition: color .2s; }
 .nav__links a:hover { color: var(--text); }
 .nav__cta {
   background: var(--red); color: var(--on-red) !important;
@@ -205,12 +205,15 @@ img, svg { display: block; max-width: 100%; }
   transition: background .2s, transform .18s var(--ease);
 }
 .nav__cta:hover { background: var(--red-dark); transform: translateY(-1px); }
-.nav__icons { margin-left: auto; display: flex; align-items: center; gap: 1rem; font-size: 1.05rem; }
-.nav__icon { cursor: pointer; opacity: .85; }
-.nav__avatar {
-  width: 28px; height: 28px; border-radius: 5px;
-  background: linear-gradient(135deg, var(--red), var(--ph-1));
+.nav__icons { margin-left: auto; display: flex; align-items: center; gap: .55rem; }
+.nav__icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); border: 1px solid transparent;
+  transition: color .2s, border-color .2s, background .2s;
 }
+.nav__icon svg { width: 17px; height: 17px; }
+.nav__icon:hover { color: var(--red); border-color: var(--line); background: var(--card); }
 /* troca de tom, temporária */
 .nav__tema { display: flex; gap: 4px; border: 1px solid var(--line); border-radius: 999px; padding: 3px; margin-left: .6rem; }
 .nav__tema button { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); cursor: pointer; font-size: 0; padding: 0; }
@@ -564,7 +567,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 #destaques .hl-sub { font-size: .88rem; color: var(--muted); margin-top: 2px; }
 
 /* ===== RESPONSIVE ===== */
-@media (max-width: 960px) {
+@media (max-width: 1100px) {
   .nav__links {
     position: fixed; top: 0; right: 0; height: 100vh; width: min(80vw, 320px);
     flex-direction: column; align-items: flex-start; justify-content: center;
@@ -576,7 +579,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
   }
   .nav.is-open .nav__links { transform: translateX(0); }
   .nav__links a { font-size: 1.1rem; }
-  .nav__icons { display: none; }
+  .nav__icons { margin-left: auto; }
   .nav__tema { margin-left: auto; }
   .nav__burger { display: flex; }
   .about { grid-template-columns: 1fr; gap: 2rem; }
@@ -588,6 +591,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 }
 
 @media (max-width: 560px) {
+  .nav__icons { display: none; }   /* no celular as redes ficam no rodapé e no contato */
   .processo__grid { grid-template-columns: 1fr; }
   .services__grid { grid-template-columns: 1fr; }
   .poster { width: 160px; }
@@ -630,6 +634,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 
       <nav class="nav__links" id="navLinks" aria-label="Main navigation">
         <a href="#sobre">About</a>
+        <a href="#depoimentos">Reviews</a>
         <a href="#destaques">Featured</a>
         <a href="#portfolio">Portfolio</a>
         <a href="#servicos">Services</a>
@@ -637,11 +642,8 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
         <a href="#contato" class="nav__cta">Work with me</a>
       </nav>
 
-      <div class="nav__icons" aria-hidden="true">
-        <span class="nav__icon" title="Search">&#128269;</span>
-        <span class="nav__icon" title="Notifications">&#128276;</span>
-        <span class="nav__icon nav__avatar" title="Profile"></span>
-      </div>
+      <!-- redes sociais, clicáveis. Os endereços saem do array CONTATOS. -->
+      <div class="nav__icons" id="navRedes" aria-label="Social links"></div>
 
       <!-- TROCA DE TOM: temporária, até você escolher entre bege e espresso -->
       <div class="nav__tema" role="group" aria-label="Colour tone">
@@ -724,6 +726,21 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
       </div>
     </section>
 
+    <!-- ===== O QUE AS MARCAS FALAM ===== -->
+    <section class="results reveal" id="resultados">
+      <div class="section__head">
+        <span class="kicker">Kind words</span>
+        <h2 class="section__title">What brands say</h2>
+      </div>
+    </section>
+
+    <!-- ===== DEPOIMENTOS ===== -->
+    <section class="testimonials reveal" id="depoimentos" aria-label="What brands say">
+      <div class="testimonials__wrap">
+        <div class="testimonials__track" id="testimonialsTrack"></div>
+      </div>
+    </section>
+
     <!-- ===== CONTEÚDOS DE DESTAQUE ===== -->
     <section class="portfolio reveal" id="destaques">
       <div class="section__head">
@@ -774,21 +791,6 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
         <p class="section__sub">Four steps agreed by email, so you always know where your content is.</p>
       </div>
       <div class="processo__grid" id="processoGrid"></div>
-    </section>
-
-    <!-- ===== O QUE AS MARCAS FALAM ===== -->
-    <section class="results reveal" id="resultados">
-      <div class="section__head">
-        <span class="kicker">Kind words</span>
-        <h2 class="section__title">What brands say</h2>
-      </div>
-    </section>
-
-    <!-- ===== DEPOIMENTOS ===== -->
-    <section class="testimonials reveal" id="depoimentos" aria-label="What brands say">
-      <div class="testimonials__wrap">
-        <div class="testimonials__track" id="testimonialsTrack"></div>
-      </div>
     </section>
 
     <!-- ===== CONTATO ===== -->
@@ -1199,6 +1201,19 @@ const ICONES = {
   x: '<path d="M4 3h3.8l4.3 5.8L17 3h3.4l-6.2 7.2L21 21h-3.8l-4.6-6.2L7.2 21H3.8l6.6-7.7L4 3Z" fill="currentColor"/>',
   local: '<path d="M12 2.6a6.6 6.6 0 0 0-6.6 6.6c0 4.8 6.6 12.2 6.6 12.2s6.6-7.4 6.6-12.2A6.6 6.6 0 0 0 12 2.6Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="9.1" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/>'
 };
+
+(function buildRedesTopo() {
+  const alvo = $("#navRedes");
+  if (!alvo) return;
+  const nomes = { email:"Email", instagram:"Instagram", tiktok:"TikTok", x:"X", whatsapp:"WhatsApp" };
+  /* só as redes, sem a linha de localização */
+  const redes = CONTATOS.filter(c => ["email","instagram","tiktok","x"].includes(c.icone));
+  alvo.innerHTML = redes.map(function (c) {
+    const fora = c.link.startsWith("http") ? ' target="_blank" rel="noopener"' : "";
+    return `<a class="nav__icon" href="${esc(c.link)}"${fora} title="${esc(nomes[c.icone])}" aria-label="${esc(nomes[c.icone])}">` +
+           `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONES[c.icone] || ""}</svg></a>`;
+  }).join("");
+})();
 
 (function buildContatos() {
   const alvo = $("#contactList");
