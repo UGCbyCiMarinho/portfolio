@@ -133,8 +133,8 @@ img, svg { display: block; max-width: 100%; }
 /* título que assume a cor de destaque, no lugar do rótulo pequeno */
 .section__title--cor { color: var(--red); }
 .section__sub { color: var(--muted); max-width: 56ch; }
-/* o & da Anton e da Archivo é duro demais: aqui ele vira o & da serifada itálica */
-.amp { font-family: "Playfair Display", Georgia, serif; font-style: italic; font-weight: 400; padding: 0 .04em; }
+/* o & da Anton fica estranho: aqui ele usa o desenho limpo da Archivo */
+.amp { font-family: "Archivo", system-ui, sans-serif; font-style: normal; font-weight: 500; }
 .section__head { margin-bottom: 1.8rem; }
 
 /* ===== BUTTONS ===== */
@@ -520,14 +520,14 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 .footer__disclaimer strong { color: var(--text); }
 
 /* ===== PLAYER EM TELA CHEIA ===== */
-.player { position: fixed; inset: 0; z-index: 110; display: flex; align-items: center; justify-content: center; padding: 6vh 4vw 4vh; }
+.player { position: fixed; inset: 0; z-index: 110; display: flex; align-items: center; justify-content: center; padding: 4vh 3vw 3vh; }
 .player[hidden] { display: none; }
 .player__fundo { position: absolute; inset: 0; background: rgba(8,5,4,.86); backdrop-filter: blur(6px); opacity: 0; transition: opacity .26s ease; }
 .player.is-open .player__fundo { opacity: 1; }
 .player__caixa { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: .9rem; transform: scale(.94); opacity: 0; transition: transform .26s var(--ease), opacity .26s ease; }
 .player.is-open .player__caixa { transform: none; opacity: 1; }
-.player__moldura { height: min(74vh, 880px); width: auto; aspect-ratio: 9 / 16; max-width: 92vw; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
-.player__moldura--deitado { width: min(88vw, 1100px); height: auto; max-height: 74vh; aspect-ratio: 16 / 9; }
+.player__moldura { height: min(86vh, 1100px); width: auto; aspect-ratio: 9 / 16; max-width: 92vw; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+.player__moldura--deitado { width: min(92vw, 1400px); height: auto; max-height: 82vh; aspect-ratio: 16 / 9; }
 .player__moldura iframe { width: 100%; height: 100%; border: 0; display: block; }
 .player__legenda { display: flex; align-items: center; gap: .7rem; color: #f2ece6; }
 .player__marca { font-size: .76rem; letter-spacing: .18em; text-transform: uppercase; }
@@ -540,7 +540,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 .player__fechar:hover { background: rgba(255,255,255,.26); }
 @media (max-width: 560px) {
   .player__fechar { top: 12px; right: 12px; }
-  .player__moldura { height: min(68vh, 700px); max-width: 90vw; }
+  .player__moldura { height: min(76vh, 760px); max-width: 94vw; }
 }
 
 /* ===== MODAL ===== */
@@ -1025,11 +1025,11 @@ const VIDEOS = [
   { nicho:"Home & Decor", ordem: 5, id:"0NTgK-lCiLs", marca:"Tineco", formato:"Problem → Solution", tipo:"short" },
   { nicho:"Home & Decor", ordem: 6, id:"U8oTiqrzwCk", marca:"IKEA", formato:"Before & After", tipo:"short" },
   /* ---- Food ---- */
-  { nicho:"Food", ordem: 1, id:"l4PC0vzp4-w", marca:"Best Buy", formato:"Unboxing", tipo:"video" },
-  { nicho:"Food", ordem: 2, id:"wpiz6WTMNK4", marca:"Catelli", formato:"Recipe", tipo:"video" },
+  { nicho:"Food", ordem: 1, id:"l4PC0vzp4-w", marca:"Best Buy", formato:"Unboxing", tipo:"short" },
+  { nicho:"Food", ordem: 2, id:"wpiz6WTMNK4", marca:"Catelli", formato:"Recipe", tipo:"short" },
   { nicho:"Food", ordem: 3, id:"r47E-oMPZ1M", marca:"YOKI", formato:"Recipe", tipo:"short" },
-  { nicho:"Food", ordem: 4, id:"whMBzmB3wxM", marca:"Magic Baking Powder", formato:"Recipe", tipo:"video" },
-  { nicho:"Food", ordem: 5, id:"_TF3PcjzZOY", marca:"Sensarte", formato:"Unboxing", tipo:"video" },
+  { nicho:"Food", ordem: 4, id:"whMBzmB3wxM", marca:"Magic Baking Powder", formato:"Recipe", tipo:"short" },
+  { nicho:"Food", ordem: 5, id:"_TF3PcjzZOY", marca:"Sensarte", formato:"Unboxing", tipo:"short" },
   /* ---- Pet ---- */
   { nicho:"Pet", ordem: 1, id:"F9OceacQfrI", marca:"DoggySpout", formato:"Problem → Solution", tipo:"short" },
   { nicho:"Pet", ordem: 2, id:"l6WtHV9c0rY", marca:"Purina", formato:"Product Demo", tipo:"short" },
@@ -1193,11 +1193,14 @@ let activeTab = "todos";
 
 function molduraHTML(v) {
   /* a capa vem do próprio YouTube, não precisa subir imagem nenhuma */
-  const capa = "https://i.ytimg.com/vi/" + v.id + "/maxresdefault.jpg";
-  const reserva = "https://i.ytimg.com/vi/" + v.id + "/hqdefault.jpg";
+  /* oardefault é a capa no formato original (vertical, 1080x1920) e sai bem mais nítida.
+     Se o vídeo não tiver, cai para a de 16:9 e depois para a menor. */
+  const capa = "https://i.ytimg.com/vi/" + v.id + "/oardefault.jpg";
+  const reserva = "https://i.ytimg.com/vi/" + v.id + "/maxresdefault.jpg";
+  const ultima = "https://i.ytimg.com/vi/" + v.id + "/hqdefault.jpg";
   return `<button class="poster__botao" type="button" aria-label="Play: ${esc(v.marca)}, ${esc(v.formato)}">
       <img class="poster__capa" src="${capa}" alt="" loading="lazy" decoding="async"
-           onerror="this.onerror=null;this.src='${reserva}'">
+           onerror="if(this.dataset.passo){this.onerror=null;this.src='${ultima}'}else{this.dataset.passo=1;this.src='${reserva}'}">
       <span class="poster__play" aria-hidden="true">&#9654;</span>
     </button>`;
 }
