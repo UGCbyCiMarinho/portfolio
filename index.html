@@ -392,45 +392,30 @@ img, svg { display: block; max-width: 100%; }
 .row::-webkit-scrollbar-thumb { background: var(--red); border-radius: 8px; }
 .row__track { display: flex; gap: 1rem; width: max-content; }
 
-.poster {
-  flex: none;
-  width: 220px;
-  background: var(--card);
-  border-radius: var(--radius);
+.poster { flex: none; width: 216px; }
+.poster--video { width: 384px; }
+.poster__quadro {
+  position: relative; width: 100%; aspect-ratio: 9 / 16;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   overflow: hidden;
-  cursor: pointer;
-  border: 1px solid var(--line);
-  transition: transform .25s var(--ease), box-shadow .25s, border-color .25s;
-  position: relative;
-  color: inherit; display: block;
 }
-.poster:hover, .poster:focus-visible {
-  transform: scale(1.07);
-  z-index: 5;
-  box-shadow: 0 18px 40px var(--sombra);
-  border-color: var(--red);
-}
-.poster__thumb { aspect-ratio: 2/3; position: relative; }
-.poster__overlay {
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, transparent 45%, rgba(0,0,0,.92));
-  display: flex; flex-direction: column; justify-content: flex-end;
-  padding: .9rem; opacity: 0; transition: opacity .25s;
-}
-.poster:hover .poster__overlay, .poster:focus-visible .poster__overlay { opacity: 1; }
-.poster__badge {
-  align-self: flex-start; background: var(--red); color: var(--on-red);
-  font-size: .64rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
-  padding: .22rem .5rem; border-radius: 3px; margin-bottom: .5rem;
-}
-.poster__name { font-family: "Archivo", sans-serif; font-weight: 700; font-size: .95rem; color: #fff; }
+.poster--video .poster__quadro { aspect-ratio: 16 / 9; }
+.poster__botao { position: absolute; inset: 0; padding: 0; border: 0; cursor: pointer; background: none; width: 100%; height: 100%; }
+.poster__capa { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .35s var(--ease); }
+.poster__botao:hover .poster__capa { transform: scale(1.06); }
+.poster__quadro iframe { width: 100%; height: 100%; border: 0; display: block; }
 .poster__play {
-  width: 38px; height: 38px; border-radius: 50%;
-  background: rgba(255,255,255,.95); color: #111;
-  display: flex; align-items: center; justify-content: center;
-  font-size: .9rem; margin-top: .6rem;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  width: 52px; height: 52px; border-radius: 50%;
+  background: rgba(255,255,255,.92); color: #111;
+  display: flex; align-items: center; justify-content: center; font-size: 1rem;
+  box-shadow: 0 6px 20px rgba(0,0,0,.35); transition: transform .3s var(--ease);
 }
-.poster__tagline { position: absolute; left: 0; right: 0; bottom: 0; padding: .7rem; background: linear-gradient(transparent, rgba(0,0,0,.82)); font-size: .78rem; font-weight: 700; color: #fff; }
+.poster__botao:hover .poster__play { transform: translate(-50%,-50%) scale(1.1); }
+/* marca e formato embaixo do vídeo, discretos */
+.poster__meta { padding: .7rem .2rem 0; display: flex; flex-direction: column; gap: .12rem; }
+.poster__marca { font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
+.poster__formato { font-size: .78rem; color: var(--muted); font-style: italic; }
 
 /* ===== SERVIÇOS ===== */
 .services { max-width: var(--maxw); margin: 0 auto; padding: 4rem 1.2rem; }
@@ -564,12 +549,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 #destaques .hl-grid { display: grid; grid-template-columns: repeat(3, minmax(0,300px)); gap: 20px; justify-content: center; align-items: start; }
 #destaques .hl-card { display: block; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 16px; color: inherit; transition: transform .25s var(--ease), border-color .25s; }
 #destaques .hl-card:hover { transform: translateY(-6px); border-color: var(--red); }
-#destaques .hl-thumb { aspect-ratio: 9/16; max-height: 380px; border-radius: 8px; position: relative; overflow: hidden; }
-#destaques .hl-play {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-  width: 50px; height: 50px; border-radius: 50%; z-index: 3;
-  background: rgba(255,255,255,.92); color: #111; display: grid; place-items: center; font-size: 17px;
-}
+#destaques .hl-thumb { aspect-ratio: 9/16; max-height: 420px; border-radius: 8px; }
 #destaques .hl-num { display: block; font-family: "Anton", sans-serif; font-size: 28px; line-height: 1.05; margin-top: 12px; color: var(--red); }
 #destaques .hl-rot { display: block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 #destaques .hl-tit { font-size: 16px; font-weight: 700; margin: 8px 0 0; }
@@ -603,7 +583,8 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
   .nav__icons { display: none; }   /* no celular as redes ficam no rodapé e no contato */
   .processo__grid { grid-template-columns: 1fr; }
   .services__grid { grid-template-columns: 1fr; }
-  .poster { width: 160px; }
+  .poster { width: 168px; }
+  .poster--video { width: 300px; }
   /* no celular não cabe card largo: ele fica do mesmo tamanho e mostra o texto todo */
   .testimonial, .testimonial--largo { width: 80vw; max-width: 320px; }
   .testimonial--largo .testimonial__text { -webkit-line-clamp: 24; }
@@ -931,69 +912,117 @@ const PROCESSO = [
 ];
 
 const TABS = [
-  { id: "todos",     label: "All" },
-  { id: "skincare",  label: "Skincare" },
-  { id: "haircare",  label: "Haircare" },
-  { id: "sensorial", label: "Sensorial" },
-  { id: "fashion",   label: "Fashion" },
-  { id: "food",      label: "Food" },
-  { id: "maternity", label: "Maternity" },
-  { id: "tech",      label: "Apps & Tech" },
-  { id: "pet",       label: "Pet" },
-  { id: "casa",      label: "Home & Decor" }
+  { id:"todos",    label:"All" },
+  { id:"Skincare", label:"Skincare" },
+  { id:"Haircare", label:"Haircare" },
+  { id:"Beauty",   label:"Beauty" },
+  { id:"Fashion",  label:"Fashion" },
+  { id:"Home & Decor", label:"Home & Decor" },
+  { id:"Food",     label:"Food" },
+  { id:"Pet",      label:"Pet" },
+  { id:"Tech",     label:"Tech" },
+  { id:"YouTube",  label:"YouTube" }
 ];
 
-/* PORTFÓLIO
-   badge   -> o tipo de conteúdo, no seu padrão
-   name    -> a marca
-   tagline -> a frase que aparece no rodapé do pôster
-   img     -> caminho da imagem real, ex "work/cosrx.jpg". Vazio = degradê.
-   link    -> opcional, "" enquanto o vídeo não estiver publicado.  */
-const PORTFOLIO = [
-  { niche: "skincare",  badge: "Problem → Solution", name: "COSRX",                 tagline: "Morning routine in 3 steps", img: "", link: "" },
-  { niche: "skincare",  badge: "Aesthetic Routine",  name: "LANEIGE",               tagline: "Night routine, soft light",  img: "", link: "" },
-  { niche: "skincare",  badge: "Before & After",     name: "Abera",                 tagline: "14 days of real use",        img: "", link: "" },
-  { niche: "skincare",  badge: "Creative Edit",      name: "goodal",                tagline: "Texture in macro",           img: "", link: "" },
-  { niche: "skincare",  badge: "Routine",            name: "Torriden",              tagline: "Hydration that lasts",       img: "", link: "" },
-  { niche: "skincare",  badge: "Testimonial",        name: "TheraBreath",           tagline: "Honest review",              img: "", link: "" },
-  { niche: "haircare",  badge: "Product Demo",       name: "L'Oréal",               tagline: "Salon shine at home",        img: "", link: "" },
-  { niche: "haircare",  badge: "Before & After",     name: "Biolage",               tagline: "Wash day transformation",    img: "", link: "" },
-  { niche: "haircare",  badge: "How to",             name: "Batiste",               tagline: "Refresh in 60 seconds",      img: "", link: "" },
-  { niche: "haircare",  badge: "Storytelling",       name: "Synergy Hair",          tagline: "Five minute styling",        img: "", link: "" },
-  { niche: "haircare",  badge: "Aesthetic",          name: "NovaMane",              tagline: "Slow motion detail",         img: "", link: "" },
-  { niche: "sensorial", badge: "ASMR",               name: "Niche Beauty Lab",      tagline: "Sound and texture",          img: "", link: "" },
-  { niche: "sensorial", badge: "Aesthetic",          name: "e.l.f.",                tagline: "Everyday glow",              img: "", link: "" },
-  { niche: "sensorial", badge: "Product Showcase",   name: "CELLU",                 tagline: "Flat lay for catalogue",     img: "", link: "" },
-  { niche: "sensorial", badge: "Creative Edit",      name: "Prime Cosmetics",       tagline: "Get ready with me",          img: "", link: "" },
-  { niche: "fashion",   badge: "Product Showcase",   name: "H&M",                   tagline: "Three looks, one piece",     img: "", link: "" },
-  { niche: "fashion",   badge: "Storytelling",       name: "SHEIN",                 tagline: "Try on haul",                img: "", link: "" },
-  { niche: "fashion",   badge: "Creative Edit",      name: "JW PEI",                tagline: "Bag of the season",          img: "", link: "" },
-  { niche: "fashion",   badge: "Aesthetic",          name: "Kate Spade",            tagline: "Detail and finish",          img: "", link: "" },
-  { niche: "fashion",   badge: "Creative Edit",      name: "Urban Planet",          tagline: "Street style in Toronto",    img: "", link: "" },
-  { niche: "fashion",   badge: "Product Demo",       name: "Button Amsterdam",      tagline: "Everyday essentials",        img: "", link: "" },
-  { niche: "food",      badge: "Recipe",             name: "Power Kitchen Toronto", tagline: "Dinner in 20 minutes",       img: "", link: "" },
-  { niche: "food",      badge: "Unboxing",           name: "TC Nutrition",          tagline: "Post workout shake",         img: "", link: "" },
-  { niche: "maternity", badge: "Problem → Solution", name: "Bubble",                tagline: "Mom to mom",                 img: "", link: "" },
-  { niche: "maternity", badge: "Routine",            name: "APLB",                  tagline: "Baby bath routine",          img: "", link: "" },
-  { niche: "maternity", badge: "Product Demo",       name: "Formi",                 tagline: "What is in my bag",          img: "", link: "" },
-  { niche: "tech",      badge: "Product Demo",       name: "Alarmy",                tagline: "The alarm that works",       img: "", link: "" },
-  { niche: "tech",      badge: "Testimonial",        name: "Linka.ai",              tagline: "Screen recording and voice", img: "", link: "" },
-  { niche: "tech",      badge: "Product Demo",       name: "Tineco",                tagline: "Cleaning made easy",         img: "", link: "" },
-  { niche: "tech",      badge: "Storytelling",       name: "Spew.Money",            tagline: "Money talk, light tone",     img: "", link: "" },
-  { niche: "pet",       badge: "Product Demo",       name: "Doggy Sprout",          tagline: "Approved by Maya",           img: "", link: "" },
-  { niche: "pet",       badge: "Problem → Solution", name: "Pupring",               tagline: "Gift for pet lovers",        img: "", link: "" },
-  { niche: "casa",      badge: "Before & After",     name: "Jolie",                 tagline: "Shower that feels like spa",  img: "", link: "" },
-  { niche: "casa",      badge: "Aesthetic",          name: "Avergo Bonsai",         tagline: "Green corner of the room",   img: "", link: "" },
-  { niche: "casa",      badge: "Product Showcase",   name: "Royal Distribution",    tagline: "Styled for the feed",        img: "", link: "" }
+/* VÍDEOS: vieram da sua planilha, na ordem da coluna Ordem, por nicho.
+   id = o trecho final do link do YouTube. tipo: short (vertical) ou video (deitado). */
+const VIDEOS = [
+  /* ---- Skincare ---- */
+  { nicho:"Skincare", ordem: 1, id:"GJiC4yul2_c", marca:"Haruharu Wonder", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Skincare", ordem: 2, id:"tVAM3iAPCTw", marca:"Beauty of Joseon", formato:"Testimonial", tipo:"short" },
+  { nicho:"Skincare", ordem: 3, id:"5WbmcAll4pk", marca:"Niche Beauty Lab", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Skincare", ordem: 4, id:"8Z9WfmGYAv8", marca:"Niche Beauty Lab", formato:"Product Demo", tipo:"short" },
+  { nicho:"Skincare", ordem: 4, id:"L7eljVsoaXI", marca:"Beauty of Joseon", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Skincare", ordem: 4, id:"GUXteXjRfdY", marca:"Beauty of Joseon", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Skincare", ordem: 5, id:"JwZRjpgf-Lc", marca:"L'Oréal", formato:"Product Demo", tipo:"short" },
+  { nicho:"Skincare", ordem: 6, id:"VV4CywPp198", marca:"LANEIGE", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Skincare", ordem: 8, id:"aS4VfOxU2H4", marca:"Anua", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Skincare", ordem: 9, id:"8EH82dervHw", marca:"Niche Beauty Lab", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Skincare", ordem:10, id:"HMSVmEwpNfY", marca:"Abera", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Skincare", ordem:11, id:"PHekKVYqJms", marca:"Niche Beauty Lab", formato:"Creative Edit", tipo:"short" },
+  { nicho:"Skincare", ordem:12, id:"eKzIKMS7DAc", marca:"Beauty of Joseon", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Skincare", ordem:23, id:"vBfIdQAgGYI", marca:"Niche Beauty Lab", formato:"Aesthetic", tipo:"short" },
+  /* ---- Haircare ---- */
+  { nicho:"Haircare", ordem: 1, id:"9jFA6OZS3oM", marca:"Royal Distribution", formato:"Before & After", tipo:"short" },
+  { nicho:"Haircare", ordem: 2, id:"oPY0MB_yshQ", marca:"Vichy", formato:"Testimonial", tipo:"short" },
+  { nicho:"Haircare", ordem: 3, id:"tAb3IT9a9pc", marca:"Shark", formato:"How to", tipo:"short" },
+  { nicho:"Haircare", ordem: 4, id:"atGtKSM7Auk", marca:"Royal Distribution", formato:"Unboxing", tipo:"short" },
+  { nicho:"Haircare", ordem: 5, id:"IRTEzjBwhpI", marca:"Synergy Hair", formato:"Product Demo", tipo:"short" },
+  { nicho:"Haircare", ordem: 6, id:"8sFzSTTHaIU", marca:"CHI", formato:"Creative Edit", tipo:"short" },
+  { nicho:"Haircare", ordem: 7, id:"ScerD6rI94s", marca:"Revlon", formato:"How to", tipo:"short" },
+  { nicho:"Haircare", ordem: 8, id:"E9XTPUI6CbI", marca:"Royal Distribution", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Haircare", ordem: 9, id:"3SnvwvI_p-Y", marca:"Synergy Hair", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Haircare", ordem:10, id:"l91OA7zwvQo", marca:"Revlon", formato:"Before & After", tipo:"short" },
+  { nicho:"Haircare", ordem:11, id:"1k2RFv46fIg", marca:"Synergy Hair", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Haircare", ordem:12, id:"kXsS0omB5N8", marca:"Royal Distribution", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Haircare", ordem:13, id:"jxIbJhGgZNg", marca:"Redken", formato:"Product Demo", tipo:"short" },
+  { nicho:"Haircare", ordem:14, id:"vDIpNaS0clk", marca:"Royal Distribution", formato:"Creative Edit", tipo:"short" },
+  { nicho:"Haircare", ordem:15, id:"eH3mSSlB1Us", marca:"NovaMane", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Haircare", ordem:16, id:"DSWAqbH8mYs", marca:"Eupholic", formato:"Product Demo", tipo:"short" },
+  { nicho:"Haircare", ordem:17, id:"uMHKJGooQps", marca:"Truss", formato:"Aesthetic", tipo:"short" },
+  /* ---- Beauty ---- */
+  { nicho:"Beauty", ordem: 1, id:"Gj1RT0h90Lo", marca:"Yves Saint Laurent", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Beauty", ordem: 2, id:"6dKfUVm6djM", marca:"Niche Beauty Lab", formato:"Unboxing", tipo:"short" },
+  { nicho:"Beauty", ordem: 3, id:"i2l2DOfurew", marca:"Abera", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Beauty", ordem: 4, id:"ipubj5pedj4", marca:"APLB", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Beauty", ordem: 5, id:"MJj2bax2dpU", marca:"COSRX", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Beauty", ordem: 6, id:"9GmnVgsgE8A", marca:"CELLU", formato:"Storytelling", tipo:"short" },
+  { nicho:"Beauty", ordem: 7, id:"jLZ77r-MRUs", marca:"Essence", formato:"Before & After", tipo:"short" },
+  { nicho:"Beauty", ordem: 8, id:"3AmeeoXKejw", marca:"Abera", formato:"Storytelling", tipo:"short" },
+  /* ---- Fashion ---- */
+  { nicho:"Fashion", ordem: 1, id:"SVXtneaeGZA", marca:"H&M", formato:"Product Showcase", tipo:"short" },
+  { nicho:"Fashion", ordem: 2, id:"7hMVd3Ix2iw", marca:"C&A", formato:"Creative Edit", tipo:"short" },
+  { nicho:"Fashion", ordem: 3, id:"lZ9ZELOP03Q", marca:"Milly", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Fashion", ordem: 4, id:"zFDs7-ao5xM", marca:"JW PEI", formato:"Creative Edit", tipo:"short" },
+  { nicho:"Fashion", ordem: 5, id:"i4IvGK2g3UU", marca:"Buttom Amsterdam", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Fashion", ordem: 6, id:"nZx73ABGUOU", marca:"Buttom Amsterdam", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Fashion", ordem: 7, id:"P057kttu9c8", marca:"Urban Planet", formato:"Creative Edit", tipo:"short" },
+  { nicho:"Fashion", ordem: 8, id:"Ln1Hm5NCfJI", marca:"Kate Spade", formato:"Creative Edit", tipo:"short" },
+  { nicho:"Fashion", ordem: 9, id:"CxyTgX31oPg", marca:"SHEIN", formato:"Creative Edit", tipo:"short" },
+  { nicho:"Fashion", ordem:10, id:"B0dIhJltJzI", marca:"Buttom Amsterdam", formato:"Storytelling", tipo:"short" },
+  { nicho:"Fashion", ordem:11, id:"MLxZzMpHUYg", marca:"Tommy Hilfiger", formato:"Creative Edit", tipo:"short" },
+  /* ---- Home & Decor ---- */
+  { nicho:"Home & Decor", ordem: 1, id:"xCFB9AnIGxo", marca:"Tineco", formato:"ASMR", tipo:"short" },
+  { nicho:"Home & Decor", ordem: 2, id:"VMktQ1--zCI", marca:"IKEA", formato:"Before & After", tipo:"short" },
+  { nicho:"Home & Decor", ordem: 3, id:"CABNTUOolXE", marca:"Beautural", formato:"Product Demo", tipo:"short" },
+  { nicho:"Home & Decor", ordem: 4, id:"Fe2djm1hOZs", marca:"Lifewit", formato:"Product Demo", tipo:"short" },
+  { nicho:"Home & Decor", ordem: 5, id:"0NTgK-lCiLs", marca:"Tineco", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Home & Decor", ordem: 6, id:"U8oTiqrzwCk", marca:"IKEA", formato:"Before & After", tipo:"short" },
+  /* ---- Food ---- */
+  { nicho:"Food", ordem: 1, id:"l4PC0vzp4-w", marca:"Best Buy", formato:"Unboxing", tipo:"video" },
+  { nicho:"Food", ordem: 2, id:"wpiz6WTMNK4", marca:"Catelli", formato:"Recipe", tipo:"video" },
+  { nicho:"Food", ordem: 3, id:"r47E-oMPZ1M", marca:"YOKI", formato:"Recipe", tipo:"short" },
+  { nicho:"Food", ordem: 4, id:"whMBzmB3wxM", marca:"Magic Baking Powder", formato:"Recipe", tipo:"video" },
+  { nicho:"Food", ordem: 5, id:"_TF3PcjzZOY", marca:"Sensarte", formato:"Unboxing", tipo:"video" },
+  /* ---- Pet ---- */
+  { nicho:"Pet", ordem: 1, id:"F9OceacQfrI", marca:"DoggySpout", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Pet", ordem: 2, id:"l6WtHV9c0rY", marca:"Purina", formato:"Product Demo", tipo:"short" },
+  { nicho:"Pet", ordem: 3, id:"sVnPKUdWdFI", marca:"Petstore", formato:"Product Demo", tipo:"short" },
+  { nicho:"Pet", ordem: 4, id:"jVcwJEwZ1r8", marca:"Turma da Mônica", formato:"Product Demo", tipo:"short" },
+  { nicho:"Pet", ordem: 5, id:"-Fn6f1-QDFE", marca:"SHEIN", formato:"Product Demo", tipo:"short" },
+  /* ---- Tech ---- */
+  { nicho:"Tech", ordem: 1, id:"1pbfM_y1js8", marca:"Tapo", formato:"Product Demo", tipo:"short" },
+  { nicho:"Tech", ordem: 2, id:"SRdEFcZvbSc", marca:"Linka.ai", formato:"Product Demo", tipo:"short" },
+  { nicho:"Tech", ordem: 3, id:"mdPBceviXeo", marca:"Walmart", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Tech", ordem: 4, id:"_VTUiGMeGvY", marca:"FitIndex", formato:"Product Demo", tipo:"short" },
+  { nicho:"Tech", ordem: 5, id:"CR7ioNEOubQ", marca:"Jkoailiwi", formato:"Testimonial", tipo:"short" },
+  { nicho:"Tech", ordem: 6, id:"HeHVBtJz7uA", marca:"Yeedi", formato:"Product Demo", tipo:"short" },
+  /* ---- YouTube ---- */
+  { nicho:"YouTube", ordem: 1, id:"N8hkDTIue-A", marca:"e.l.f.", formato:"Aesthetic Makeup Routine", tipo:"video" },
 ];
 
 /* CONTEÚDOS DE DESTAQUE
    link -> AQUI ENTRA O LINK DO VÍDEO
    img  -> AQUI ENTRA A CAPA vertical, ex "destaque-1.jpg". Vazio = degradê. */
+/* CONTEÚDOS DE DESTAQUE: os três que você mostra primeiro.
+   O id é o final do link do YouTube. Troque quando quiser destacar outros. */
 const DESTAQUES = [
-  { num: "+00K", rot: "views on this video", titulo: "Skincare hook in 15 seconds",   sub: "Problem and solution in natural light.", brand: "COSRX",   img: "", link: "https://youtube.com/shorts/JwZRjpgf-Lc" },
-  { num: "+00K", rot: "views on this video", titulo: "The product in a real routine", sub: "Testimonial with before and after.",     brand: "L'Oréal", img: "", link: "https://youtube.com/shorts/GJiC4yul2_c" },
-  { num: "+00K", rot: "views on this video", titulo: "First impression, real reaction",sub: "Benefit said in the first 3 seconds.",  brand: "Bubble",  img: "", link: "https://youtube.com/shorts/8Z9WfmGYAv8" }
+  { id:"JwZRjpgf-Lc", marca:"L'Oréal",          formato:"Product Demo", numero:"+00K", rotulo:"views on this video",
+    titulo:"Skincare routine that sells", contexto:"Problem and solution in natural light, with burned in captions." },
+  { id:"GJiC4yul2_c", marca:"Haruharu Wonder",  formato:"Aesthetic",    numero:"+00K", rotulo:"views on this video",
+    titulo:"The product inside a real routine", contexto:"Aesthetic take, slow hands, close up on texture." },
+  { id:"8Z9WfmGYAv8", marca:"Niche Beauty Lab", formato:"Product Demo", numero:"+00K", rotulo:"views on this video",
+    titulo:"Night skin reset", contexto:"Benefit said within the first three seconds." }
 ];
 
 const SERVICES = [
@@ -1104,28 +1133,6 @@ const comFoto = (img) => img ? " tem-foto" : "";
 })();
 
 /* ============================================================
-   CONTEÚDOS DE DESTAQUE
-   ============================================================ */
-(function buildDestaques() {
-  $("#hlGrid").innerHTML = DESTAQUES.map(d => {
-    const tag = "hl-card";
-    const abre = d.link
-      ? `<a class="${tag}" href="${esc(d.link)}" target="_blank" rel="noopener" aria-label="Watch: ${esc(d.titulo)}">`
-      : `<article class="${tag}">`;
-    const fecha = d.link ? "</a>" : "</article>";
-    return `${abre}
-      <div class="ph hl-thumb${comFoto(d.img)}"${fundo(d.img)}>
-        <span class="hl-play" aria-hidden="true">&#9654;</span>
-      </div>
-      <b class="hl-num">${esc(d.num)}</b>
-      <span class="hl-rot">${esc(d.rot)}</span>
-      <p class="hl-tit">${esc(d.titulo)}</p>
-      <p class="hl-sub">${esc(d.brand)} · ${esc(d.sub)}</p>
-    ${fecha}`;
-  }).join("");
-})();
-
-/* ============================================================
    PORTFÓLIO (abas + render)
    ============================================================ */
 let activeTab = "todos";
@@ -1147,27 +1154,69 @@ let activeTab = "todos";
   });
 })();
 
+function molduraHTML(v) {
+  /* a capa vem do próprio YouTube, não precisa subir imagem nenhuma */
+  const capa = "https://i.ytimg.com/vi/" + v.id + "/maxresdefault.jpg";
+  const reserva = "https://i.ytimg.com/vi/" + v.id + "/hqdefault.jpg";
+  return `<button class="poster__botao" type="button" aria-label="Play: ${esc(v.marca)}, ${esc(v.formato)}">
+      <img class="poster__capa" src="${capa}" alt="" loading="lazy" decoding="async"
+           onerror="this.onerror=null;this.src='${reserva}'">
+      <span class="poster__play" aria-hidden="true">&#9654;</span>
+    </button>`;
+}
+
 function renderPosters() {
   const row = $("#posterRow");
-  const items = activeTab === "todos" ? PORTFOLIO : PORTFOLIO.filter(p => p.niche === activeTab);
-  row.innerHTML = items.map(p => {
-    const abre = p.link
-      ? `<a class="poster" href="${esc(p.link)}" target="_blank" rel="noopener">`
-      : `<article class="poster" tabindex="0">`;
-    const fecha = p.link ? "</a>" : "</article>";
-    return `${abre}
-      <div class="ph poster__thumb${comFoto(p.img)}"${fundo(p.img)}>
-        <div class="poster__overlay">
-          <span class="poster__badge">${esc(p.badge)}</span>
-          <span class="poster__name">${esc(p.name)}</span>
-          <span class="poster__play" aria-hidden="true">&#9654;</span>
-        </div>
-        <div class="poster__tagline">${esc(p.tagline)}</div>
+  const itens = activeTab === "todos" ? VIDEOS : VIDEOS.filter(v => v.nicho === activeTab);
+  row.innerHTML = itens.map(v => `
+    <article class="poster poster--${v.tipo}">
+      <div class="poster__quadro" data-id="${esc(v.id)}" data-marca="${esc(v.marca)}" data-formato="${esc(v.formato)}">
+        ${molduraHTML(v)}
       </div>
-    ${fecha}`;
-  }).join("");
+      <div class="poster__meta">
+        <span class="poster__marca">${esc(v.marca)}</span>
+        <span class="poster__formato">${esc(v.formato)}</span>
+      </div>
+    </article>`).join("");
 }
 renderPosters();
+
+/* ============================================================
+   CONTEÚDOS DE DESTAQUE
+   ============================================================ */
+(function buildDestaques() {
+  $("#hlGrid").innerHTML = DESTAQUES.map(d => `
+    <article class="hl-card">
+      <div class="poster__quadro hl-thumb" data-id="${esc(d.id)}" data-marca="${esc(d.marca)}" data-formato="${esc(d.formato)}">
+        ${molduraHTML(d)}
+      </div>
+      <b class="hl-num">${esc(d.numero)}</b>
+      <span class="hl-rot">${esc(d.rotulo)}</span>
+      <p class="hl-tit">${esc(d.titulo)}</p>
+      <p class="hl-sub">${esc(d.marca)} · ${esc(d.formato)}</p>
+    </article>`).join("");
+})();
+
+/* o vídeo toca dentro da própria página, um de cada vez */
+(function ligaPlayer() {
+  let tocando = null;
+  function desliga(quadro) {
+    if (quadro) quadro.innerHTML = molduraHTML({ id: quadro.dataset.id, marca: quadro.dataset.marca, formato: quadro.dataset.formato });
+  }
+  function ouvir(area) { if (area) area.addEventListener("click", aoClicar); }
+  function aoClicar(ev) {
+    const botao = ev.target.closest(".poster__botao");
+    if (!botao) return;
+    const quadro = botao.closest(".poster__quadro");
+    if (tocando && tocando !== quadro) desliga(tocando);
+    quadro.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + quadro.dataset.id +
+      '?autoplay=1&rel=0&playsinline=1" title="' + quadro.dataset.marca + '" loading="lazy" ' +
+      'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
+    tocando = quadro;
+  }
+  ouvir($("#posterRow"));
+  ouvir($("#hlGrid"));
+})();
 
 /* ============================================================
    SERVIÇOS
