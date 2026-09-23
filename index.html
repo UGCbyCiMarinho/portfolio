@@ -445,7 +445,7 @@ img, svg { display: block; max-width: 100%; }
 .service__title { font-family: "Anton", sans-serif; text-transform: uppercase; font-weight: 400; font-size: 1.25rem; margin-bottom: .4rem; }
 .service__desc { color: var(--muted); font-size: .94rem; }
 
-.results { max-width: var(--maxw); margin: 0 auto; padding: 4rem 1.2rem 1.4rem; }
+.results { max-width: var(--maxw); margin: 0 auto; padding: 4rem 1.2rem 1.4rem; scroll-margin-top: 86px; }
 
 /* ===== DEPOIMENTOS ===== */
 .testimonials { padding: 0 0 4rem; }
@@ -643,7 +643,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 
       <nav class="nav__links" id="navLinks" aria-label="Main navigation">
         <a href="#sobre">About</a>
-        <a href="#depoimentos">Reviews</a>
+        <a href="#resultados">Reviews</a>
         <a href="#destaques">Featured</a>
         <a href="#portfolio">Portfolio</a>
         <a href="#servicos">Services</a>
@@ -1268,7 +1268,7 @@ navLinks.addEventListener("click", e => {
 
   /* cada link aponta para uma seção. Estas duas não têm link próprio,
      então emprestam o destaque de outra: */
-  const emprestado = { resultados: "depoimentos", processo: "porque" };
+  const emprestado = { depoimentos: "resultados", processo: "porque" };
 
   const pontos = [];
   links.forEach(function (a) {
