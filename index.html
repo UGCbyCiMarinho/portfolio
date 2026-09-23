@@ -340,17 +340,27 @@ img, svg { display: block; max-width: 100%; }
   color: var(--red); font-size: 1.12rem; font-weight: 500; letter-spacing: .01em;
 }
 
-/* ===== MÉTRICAS ===== */
-.metrics { max-width: var(--maxw); margin: 0 auto; padding: 2rem 1.2rem 4rem; }
-.metrics__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
-.metric {
-  background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 1.6rem 1.2rem; text-align: center;
-  position: relative; overflow: hidden;
+/* ===== POR QUE EU ===== */
+.porque { max-width: var(--maxw); margin: 0 auto; padding: 4rem 1.2rem 2rem; }
+.porque__texto { max-width: 74ch; }
+.porque__texto p { color: var(--muted); margin-bottom: 1.1rem; font-size: 1.02rem; }
+.porque__texto strong { color: var(--text); font-weight: 600; }
+
+/* ===== O PROCESSO ===== */
+.processo { max-width: var(--maxw); margin: 0 auto; padding: 3rem 1.2rem 4rem; }
+.processo__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.passo {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 1.6rem 1.4rem; position: relative; overflow: hidden;
+  transition: transform .22s var(--ease), border-color .22s, background .22s;
 }
-.metric::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--red); }
-.metric__num { font-family: "Anton", sans-serif; font-size: clamp(2.2rem, 5vw, 3rem); color: var(--text); line-height: 1; }
-.metric__label { color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font-size: .74rem; margin-top: .5rem; }
+.passo:hover { transform: translateY(-4px); border-color: var(--red); background: var(--card-2); }
+.passo__n {
+  font-family: "Anton", sans-serif; font-size: 2.6rem; line-height: 1;
+  color: var(--red); display: block; margin-bottom: .6rem;
+}
+.passo__titulo { font-family: "Anton", sans-serif; font-weight: 400; text-transform: uppercase; font-size: 1.1rem; margin-bottom: .4rem; }
+.passo__texto { color: var(--muted); font-size: .92rem; margin: 0; }
 
 /* ===== PORTFÓLIO ===== */
 .portfolio { max-width: var(--maxw); margin: 0 auto; padding: 4rem 1.2rem; }
@@ -423,16 +433,7 @@ img, svg { display: block; max-width: 100%; }
 .service__title { font-family: "Anton", sans-serif; text-transform: uppercase; font-weight: 400; font-size: 1.25rem; margin-bottom: .4rem; }
 .service__desc { color: var(--muted); font-size: .94rem; }
 
-/* ===== RESULTADOS ===== */
-.results { max-width: var(--maxw); margin: 0 auto; padding: 4rem 1.2rem; }
-.results__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
-.result {
-  background: linear-gradient(160deg, var(--card-2), var(--card));
-  border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 1.6rem; text-align: left;
-}
-.result__metric { font-family: "Anton", sans-serif; font-size: clamp(2rem, 4.5vw, 2.7rem); color: var(--red); line-height: 1; }
-.result__desc { color: var(--muted); margin-top: .6rem; font-size: .94rem; }
+.results { max-width: var(--maxw); margin: 0 auto; padding: 4rem 1.2rem 1.4rem; }
 
 /* ===== DEPOIMENTOS ===== */
 .testimonials { padding: 0 0 4rem; }
@@ -571,18 +572,16 @@ img, svg { display: block; max-width: 100%; }
   .nav__tema { margin-left: auto; }
   .nav__burger { display: flex; }
   .about { grid-template-columns: 1fr; gap: 2rem; }
-  .metrics__grid { grid-template-columns: repeat(2, 1fr); }
+  .processo__grid { grid-template-columns: repeat(2, 1fr); }
   .services__grid { grid-template-columns: repeat(2, 1fr); }
-  .results__grid { grid-template-columns: repeat(2, 1fr); }
   .contact { grid-template-columns: 1fr; gap: 2rem; }
   .footer__inner { flex-direction: column; }
   #destaques .hl-grid { grid-template-columns: repeat(2, minmax(0,280px)); }
 }
 
 @media (max-width: 560px) {
-  .metrics__grid { grid-template-columns: 1fr; }
+  .processo__grid { grid-template-columns: 1fr; }
   .services__grid { grid-template-columns: 1fr; }
-  .results__grid { grid-template-columns: 1fr; }
   .poster { width: 160px; }
   /* no celular não cabe card largo: ele fica do mesmo tamanho e mostra o texto todo */
   .testimonial, .testimonial--largo { width: 80vw; max-width: 320px; }
@@ -626,7 +625,7 @@ img, svg { display: block; max-width: 100%; }
         <a href="#destaques">Featured</a>
         <a href="#portfolio">Portfolio</a>
         <a href="#servicos">Services</a>
-        <a href="#numeros">Numbers</a>
+        <a href="#porque">Why me</a>
         <a href="#contato" class="nav__cta">Work with me</a>
       </nav>
 
@@ -750,18 +749,31 @@ img, svg { display: block; max-width: 100%; }
       <div class="services__grid" id="servicesGrid"></div>
     </section>
 
-    <!-- ===== MÉTRICAS ===== -->
-    <section id="numeros" class="metrics reveal" aria-label="Numbers">
-      <div class="metrics__grid" id="metricsGrid"></div>
+    <!-- ===== POR QUE EU ===== -->
+    <section class="porque reveal" id="porque">
+      <div class="section__head">
+        <span class="kicker">Why me</span>
+        <h2 class="section__title">Why me?</h2>
+      </div>
+      <div class="porque__texto" id="porqueTexto"></div>
     </section>
 
-    <!-- ===== RESULTADOS ===== -->
+    <!-- ===== O PROCESSO ===== -->
+    <section class="processo reveal" id="processo">
+      <div class="section__head">
+        <span class="kicker">Step by step</span>
+        <h2 class="section__title">The process</h2>
+        <p class="section__sub">Four steps agreed by email, so you always know where your content is.</p>
+      </div>
+      <div class="processo__grid" id="processoGrid"></div>
+    </section>
+
+    <!-- ===== O QUE AS MARCAS FALAM ===== -->
     <section class="results reveal" id="resultados">
       <div class="section__head">
-        <span class="kicker">Results</span>
-        <h2 class="section__title">Numbers and kind words</h2>
+        <span class="kicker">Kind words</span>
+        <h2 class="section__title">What brands say</h2>
       </div>
-      <div class="results__grid" id="resultsGrid"></div>
     </section>
 
     <!-- ===== DEPOIMENTOS ===== -->
@@ -888,11 +900,20 @@ const BRANDS = [
   { nome: "Avergo Bonsai",         logo: "logos/avergo-bonsai.webp" }
 ];
 
-const METRICS = [
-  { target: 100, suffix: "+", label: "Videos delivered" },
-  { target: 60,  suffix: "+", label: "Brands served" },
-  { target: 9,   suffix: "",  label: "Niches covered" },
-  { target: 15,  suffix: "+", label: "Years in corporate" }
+/* POR QUE EU: cada item vira um parágrafo. O trecho entre *asteriscos*
+   sai em destaque, sem precisar escrever HTML. */
+const PORQUE = [
+  "I create strategy-led UGC for brands that want content with purpose, not just pretty visuals. My process follows a clear structure: *visual hook, verbal hook, problem, transition, solution, benefit, and CTA.*",
+  "Before creating, *I identify the emotion the content needs to trigger*: relief, desire, trust, confidence or curiosity, and connect it to the consumer's real life routine.",
+  "*With a background in finance, 15+ years in the corporate world*, and ongoing studies in UGC, storytelling and consumer behaviour, I create content that feels natural, polished and intentionally built to support brand goals."
+];
+
+/* O PROCESSO: os quatro passos. */
+const PROCESSO = [
+  { n:"1", titulo:"Strategic alignment", texto:"We align on content ideas and goals by email, in order to build a strategic piece of content." },
+  { n:"2", titulo:"Creative direction",  texto:"Before recording, I send a detailed script for approval, ensuring full alignment." },
+  { n:"3", titulo:"Filming",             texto:"The draft content is finalised and sent to you for approval." },
+  { n:"4", titulo:"Delivery",            texto:"Payment is completed and the content is delivered by the agreed deadline." }
 ];
 
 const TABS = [
@@ -970,14 +991,6 @@ const SERVICES = [
   { ic: "🗓️", title: "Monthly package",  desc: "A full month of content planned ahead, with priority booking and a better rate." }
 ];
 
-/* RESULTADOS: troque os 00% quando tiver os números reais das campanhas. */
-const RESULTS = [
-  { metric: "00M+", desc: "Views generated across brand campaigns." },
-  { metric: "00x",  desc: "Average ROAS on the best performing creatives." },
-  { metric: "-00%", desc: "Drop in cost per acquisition with fresh UGC." },
-  { metric: "+00%", desc: "Lift in engagement versus brand made content." }
-];
-
 /* DEPOIMENTOS: são reais, vieram do seu portfólio no Canva.
    Só falta dizer qual marca falou cada um, no campo "niche". */
 const TESTIMONIALS = [
@@ -1045,31 +1058,25 @@ const comFoto = (img) => img ? " tem-foto" : "";
 })();
 
 /* ============================================================
-   MÉTRICAS
+   POR QUE EU E O PROCESSO
    ============================================================ */
-(function buildMetrics() {
-  $("#metricsGrid").innerHTML = METRICS.map((m, i) => `
-    <div class="metric">
-      <div class="metric__num" data-target="${m.target}" data-suffix="${esc(m.suffix)}" id="metric-${i}">0</div>
-      <div class="metric__label">${esc(m.label)}</div>
-    </div>`).join("");
+(function buildPorque() {
+  const alvo = $("#porqueTexto");
+  if (!alvo) return;
+  const realce = t => esc(t).replace(/\*([^*]+)\*/g, "<strong>$1</strong>");
+  alvo.innerHTML = PORQUE.map(t => `<p>${realce(t)}</p>`).join("");
 })();
 
-function animateCount(el) {
-  const target = parseFloat(el.dataset.target);
-  const suffix = el.dataset.suffix || "";
-  if (prefersReduced) { el.textContent = target + suffix; return; }
-  const dur = 1400;
-  const start = performance.now();
-  function tick(now) {
-    const p = Math.min((now - start) / dur, 1);
-    const eased = 1 - Math.pow(1 - p, 3);
-    el.textContent = Math.round(target * eased) + suffix;
-    if (p < 1) requestAnimationFrame(tick);
-    else el.textContent = target + suffix;
-  }
-  requestAnimationFrame(tick);
-}
+(function buildProcesso() {
+  const alvo = $("#processoGrid");
+  if (!alvo) return;
+  alvo.innerHTML = PROCESSO.map(p => `
+    <article class="passo">
+      <span class="passo__n">${esc(p.n)}</span>
+      <h3 class="passo__titulo">${esc(p.titulo)}</h3>
+      <p class="passo__texto">${esc(p.texto)}</p>
+    </article>`).join("");
+})();
 
 /* ============================================================
    CONTEÚDOS DE DESTAQUE
@@ -1150,17 +1157,6 @@ renderPosters();
 })();
 
 /* ============================================================
-   RESULTADOS
-   ============================================================ */
-(function buildResults() {
-  $("#resultsGrid").innerHTML = RESULTS.map(r => `
-    <article class="result">
-      <div class="result__metric">${esc(r.metric)}</div>
-      <p class="result__desc">${esc(r.desc)}</p>
-    </article>`).join("");
-})();
-
-/* ============================================================
    DEPOIMENTOS
    ============================================================ */
 (function buildTestimonials() {
@@ -1210,14 +1206,6 @@ const revealObserver = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.12 });
 $$(".reveal").forEach(el => revealObserver.observe(el));
-
-const countObserver = new IntersectionObserver((entries, obs) => {
-  entries.forEach(en => {
-    if (en.isIntersecting) { $$(".metric__num", en.target).forEach(animateCount); obs.unobserve(en.target); }
-  });
-}, { threshold: 0.4 });
-const metricsSection = $(".metrics");
-if (metricsSection) countObserver.observe(metricsSection);
 
 /* ============================================================
    FORMULÁRIOS (enviando → enviado)
