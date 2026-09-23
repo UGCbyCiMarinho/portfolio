@@ -133,6 +133,8 @@ img, svg { display: block; max-width: 100%; }
 /* título que assume a cor de destaque, no lugar do rótulo pequeno */
 .section__title--cor { color: var(--red); }
 .section__sub { color: var(--muted); max-width: 56ch; }
+/* o & da Anton e da Archivo é duro demais: aqui ele vira o & da serifada itálica */
+.amp { font-family: "Playfair Display", Georgia, serif; font-style: italic; font-weight: 400; padding: 0 .04em; }
 .section__head { margin-bottom: 1.8rem; }
 
 /* ===== BUTTONS ===== */
@@ -517,6 +519,30 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 .footer__disclaimer { line-height: 1.5; }
 .footer__disclaimer strong { color: var(--text); }
 
+/* ===== PLAYER EM TELA CHEIA ===== */
+.player { position: fixed; inset: 0; z-index: 110; display: flex; align-items: center; justify-content: center; padding: 6vh 4vw 4vh; }
+.player[hidden] { display: none; }
+.player__fundo { position: absolute; inset: 0; background: rgba(8,5,4,.86); backdrop-filter: blur(6px); opacity: 0; transition: opacity .26s ease; }
+.player.is-open .player__fundo { opacity: 1; }
+.player__caixa { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: .9rem; transform: scale(.94); opacity: 0; transition: transform .26s var(--ease), opacity .26s ease; }
+.player.is-open .player__caixa { transform: none; opacity: 1; }
+.player__moldura { height: min(74vh, 880px); width: auto; aspect-ratio: 9 / 16; max-width: 92vw; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+.player__moldura--deitado { width: min(88vw, 1100px); height: auto; max-height: 74vh; aspect-ratio: 16 / 9; }
+.player__moldura iframe { width: 100%; height: 100%; border: 0; display: block; }
+.player__legenda { display: flex; align-items: center; gap: .7rem; color: #f2ece6; }
+.player__marca { font-size: .76rem; letter-spacing: .18em; text-transform: uppercase; }
+.player__formato { font-size: .85rem; font-style: italic; opacity: .75; }
+.player__fechar {
+  position: absolute; z-index: 3; top: 18px; right: 22px; width: 42px; height: 42px; border-radius: 50%;
+  background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.35); color: #fff;
+  font-size: 1rem; cursor: pointer; transition: background .2s;
+}
+.player__fechar:hover { background: rgba(255,255,255,.26); }
+@media (max-width: 560px) {
+  .player__fechar { top: 12px; right: 12px; }
+  .player__moldura { height: min(68vh, 700px); max-width: 90vw; }
+}
+
 /* ===== MODAL ===== */
 .modal { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 1.2rem; }
 .modal.is-open { display: flex; }
@@ -839,6 +865,16 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
     </div>
   </footer>
 
+  <!-- ===== PLAYER EM TELA CHEIA ===== -->
+  <div class="player" id="playerModal" hidden>
+    <div class="player__fundo" data-fechar></div>
+    <button class="player__fechar" id="playerFechar" type="button" data-fechar aria-label="Close">&#10005;</button>
+    <div class="player__caixa" role="dialog" aria-modal="true" aria-label="Video player">
+      <div class="player__moldura" id="playerMoldura"></div>
+      <div class="player__legenda" id="playerLegenda"></div>
+    </div>
+  </div>
+
   <!-- ===== MODAL DE LEAD ===== -->
   <div class="modal" id="leadModal" aria-hidden="true">
     <div class="modal__overlay" data-close></div>
@@ -934,7 +970,7 @@ const VIDEOS = [
   { nicho:"Skincare", ordem: 4, id:"8Z9WfmGYAv8", marca:"Niche Beauty Lab", formato:"Product Demo", tipo:"short" },
   { nicho:"Skincare", ordem: 4, id:"L7eljVsoaXI", marca:"Beauty of Joseon", formato:"Aesthetic", tipo:"short" },
   { nicho:"Skincare", ordem: 4, id:"GUXteXjRfdY", marca:"Beauty of Joseon", formato:"Aesthetic", tipo:"short" },
-  { nicho:"Skincare", ordem: 5, id:"JwZRjpgf-Lc", marca:"L'Oréal", formato:"Product Demo", tipo:"short" },
+  { nicho:"Skincare", ordem: 5, id:"JwZRjpgf-Lc", marca:"L'Oréal", formato:"Problem → Solution", tipo:"short" },
   { nicho:"Skincare", ordem: 6, id:"VV4CywPp198", marca:"LANEIGE", formato:"Aesthetic", tipo:"short" },
   { nicho:"Skincare", ordem: 8, id:"aS4VfOxU2H4", marca:"Anua", formato:"Problem → Solution", tipo:"short" },
   { nicho:"Skincare", ordem: 9, id:"8EH82dervHw", marca:"Niche Beauty Lab", formato:"Aesthetic", tipo:"short" },
@@ -974,12 +1010,12 @@ const VIDEOS = [
   { nicho:"Fashion", ordem: 2, id:"7hMVd3Ix2iw", marca:"C&A", formato:"Creative Edit", tipo:"short" },
   { nicho:"Fashion", ordem: 3, id:"lZ9ZELOP03Q", marca:"Milly", formato:"Problem → Solution", tipo:"short" },
   { nicho:"Fashion", ordem: 4, id:"zFDs7-ao5xM", marca:"JW PEI", formato:"Creative Edit", tipo:"short" },
-  { nicho:"Fashion", ordem: 5, id:"i4IvGK2g3UU", marca:"Buttom Amsterdam", formato:"Aesthetic", tipo:"short" },
-  { nicho:"Fashion", ordem: 6, id:"nZx73ABGUOU", marca:"Buttom Amsterdam", formato:"Problem → Solution", tipo:"short" },
+  { nicho:"Fashion", ordem: 5, id:"i4IvGK2g3UU", marca:"Button Amsterdam", formato:"Aesthetic", tipo:"short" },
+  { nicho:"Fashion", ordem: 6, id:"nZx73ABGUOU", marca:"Formi", formato:"Problem → Solution", tipo:"short" },
   { nicho:"Fashion", ordem: 7, id:"P057kttu9c8", marca:"Urban Planet", formato:"Creative Edit", tipo:"short" },
   { nicho:"Fashion", ordem: 8, id:"Ln1Hm5NCfJI", marca:"Kate Spade", formato:"Creative Edit", tipo:"short" },
   { nicho:"Fashion", ordem: 9, id:"CxyTgX31oPg", marca:"SHEIN", formato:"Creative Edit", tipo:"short" },
-  { nicho:"Fashion", ordem:10, id:"B0dIhJltJzI", marca:"Buttom Amsterdam", formato:"Storytelling", tipo:"short" },
+  { nicho:"Fashion", ordem:10, id:"B0dIhJltJzI", marca:"Button Amsterdam", formato:"Storytelling", tipo:"short" },
   { nicho:"Fashion", ordem:11, id:"MLxZzMpHUYg", marca:"Tommy Hilfiger", formato:"Creative Edit", tipo:"short" },
   /* ---- Home & Decor ---- */
   { nicho:"Home & Decor", ordem: 1, id:"xCFB9AnIGxo", marca:"Tineco", formato:"ASMR", tipo:"short" },
@@ -1017,7 +1053,7 @@ const VIDEOS = [
 /* CONTEÚDOS DE DESTAQUE: os três que você mostra primeiro.
    O id é o final do link do YouTube. Troque quando quiser destacar outros. */
 const DESTAQUES = [
-  { id:"JwZRjpgf-Lc", marca:"L'Oréal",          formato:"Product Demo", numero:"+00K", rotulo:"views on this video",
+  { id:"JwZRjpgf-Lc", marca:"L'Oréal",          formato:"Problem → Solution", numero:"+00K", rotulo:"views on this video",
     titulo:"Skincare routine that sells", contexto:"Problem and solution in natural light, with burned in captions." },
   { id:"GJiC4yul2_c", marca:"Haruharu Wonder",  formato:"Aesthetic",    numero:"+00K", rotulo:"views on this video",
     titulo:"The product inside a real routine", contexto:"Aesthetic take, slow hands, close up on texture." },
@@ -1073,6 +1109,7 @@ const CONTATOS = [
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const amp = (t) => String(t == null ? "" : t).replace(/&amp;/g, '<span class="amp">&amp;</span>');
 const esc = (t) => String(t == null ? "" : t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fundo = (img) => img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '';
 const comFoto = (img) => img ? " tem-foto" : "";
@@ -1174,8 +1211,8 @@ function renderPosters() {
         ${molduraHTML(v)}
       </div>
       <div class="poster__meta">
-        <span class="poster__marca">${esc(v.marca)}</span>
-        <span class="poster__formato">${esc(v.formato)}</span>
+        <span class="poster__marca">${amp(esc(v.marca))}</span>
+        <span class="poster__formato">${amp(esc(v.formato))}</span>
       </div>
     </article>`).join("");
 }
@@ -1193,29 +1230,51 @@ renderPosters();
       <b class="hl-num">${esc(d.numero)}</b>
       <span class="hl-rot">${esc(d.rotulo)}</span>
       <p class="hl-tit">${esc(d.titulo)}</p>
-      <p class="hl-sub">${esc(d.marca)} · ${esc(d.formato)}</p>
+      <p class="hl-sub">${amp(esc(d.marca))} · ${amp(esc(d.formato))}</p>
     </article>`).join("");
 })();
 
-/* o vídeo toca dentro da própria página, um de cada vez */
+/* o vídeo abre grande, por cima da página, e fecha no X, no fundo ou no Esc */
 (function ligaPlayer() {
-  let tocando = null;
-  function desliga(quadro) {
-    if (quadro) quadro.innerHTML = molduraHTML({ id: quadro.dataset.id, marca: quadro.dataset.marca, formato: quadro.dataset.formato });
+  const caixa = $("#playerModal");
+  if (!caixa) return;
+  const moldura = $("#playerMoldura");
+  const legenda = $("#playerLegenda");
+  let focoAnterior = null;
+
+  function abrir(quadro) {
+    focoAnterior = document.activeElement;
+    const vertical = !quadro.closest(".poster--video");
+    moldura.classList.toggle("player__moldura--deitado", !vertical);
+    moldura.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + quadro.dataset.id +
+      '?autoplay=1&rel=0&playsinline=1&cc_load_policy=0&iv_load_policy=3" title="' + quadro.dataset.marca + '" ' +
+      'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
+    legenda.innerHTML = '<span class="player__marca">' + amp(esc(quadro.dataset.marca)) + '</span>' +
+                        '<span class="player__formato">' + amp(esc(quadro.dataset.formato)) + '</span>';
+    caixa.hidden = false;
+    requestAnimationFrame(() => caixa.classList.add("is-open"));
+    document.body.style.overflow = "hidden";
+    $("#playerFechar").focus();
+    document.addEventListener("keydown", tecla);
   }
-  function ouvir(area) { if (area) area.addEventListener("click", aoClicar); }
+  function fechar() {
+    caixa.classList.remove("is-open");
+    document.removeEventListener("keydown", tecla);
+    document.body.style.overflow = "";
+    window.setTimeout(function () { moldura.innerHTML = ""; caixa.hidden = true; }, prefersReduced ? 0 : 260);
+    if (focoAnterior && focoAnterior.focus) focoAnterior.focus();
+  }
+  function tecla(ev) { if (ev.key === "Escape") fechar(); }
+
   function aoClicar(ev) {
     const botao = ev.target.closest(".poster__botao");
     if (!botao) return;
-    const quadro = botao.closest(".poster__quadro");
-    if (tocando && tocando !== quadro) desliga(tocando);
-    quadro.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + quadro.dataset.id +
-      '?autoplay=1&rel=0&playsinline=1" title="' + quadro.dataset.marca + '" loading="lazy" ' +
-      'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
-    tocando = quadro;
+    abrir(botao.closest(".poster__quadro"));
   }
-  ouvir($("#posterRow"));
-  ouvir($("#hlGrid"));
+  const row = $("#posterRow"); if (row) row.addEventListener("click", aoClicar);
+  const hl = $("#hlGrid"); if (hl) hl.addEventListener("click", aoClicar);
+
+  caixa.addEventListener("click", function (ev) { if (ev.target.hasAttribute("data-fechar")) fechar(); });
 })();
 
 /* ============================================================
@@ -1241,7 +1300,7 @@ renderPosters();
         <img src="${esc(t.logo)}" alt="${esc(t.marca)} logo" decoding="async">
       </span>
       <p class="testimonial__text">${esc(t.texto)}</p>
-      <div class="testimonial__pe">${estrelas}<span class="testimonial__nome">${esc(t.marca)}</span></div>
+      <div class="testimonial__pe">${estrelas}<span class="testimonial__nome">${amp(esc(t.marca))}</span></div>
     </article>`;
   const linha = () => TESTIMONIALS.map(card).join("");
   /* a fileira anda sozinha, por isso o conteúdo entra duas vezes */
