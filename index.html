@@ -199,6 +199,15 @@ img, svg { display: block; max-width: 100%; }
 .nav__links { display: flex; align-items: center; gap: 1.15rem; margin-left: .8rem; }
 .nav__links a { color: var(--muted); font-size: .9rem; font-weight: 500; white-space: nowrap; transition: color .2s; }
 .nav__links a:hover { color: var(--text); }
+/* o item da seção em que você está fica marcado */
+.nav__links a { position: relative; }
+.nav__links a.is-active { color: var(--red); }
+.nav__links a.is-active::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -7px;
+  height: 2px; border-radius: 2px; background: var(--red);
+}
+.nav__cta.is-active { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--red); }
+.nav__cta.is-active::after { display: none; }
 .nav__cta {
   background: var(--red); color: var(--on-red) !important;
   padding: .5rem .95rem; border-radius: 5px; font-weight: 700 !important;
@@ -1249,6 +1258,59 @@ navLinks.addEventListener("click", e => {
     burger.setAttribute("aria-expanded", "false");
   }
 });
+
+/* ============================================================
+   MENU: marca a seção em que você está
+   ============================================================ */
+(function scrollSpy() {
+  const links = $$(".nav__links a[href^='#']");
+  if (!links.length) return;
+
+  /* cada link aponta para uma seção. Estas duas não têm link próprio,
+     então emprestam o destaque de outra: */
+  const emprestado = { resultados: "depoimentos", processo: "porque" };
+
+  const pontos = [];
+  links.forEach(function (a) {
+    const id = a.getAttribute("href").slice(1);
+    const el = document.getElementById(id);
+    if (el) pontos.push({ el, link: a });
+  });
+  Object.keys(emprestado).forEach(function (id) {
+    const el = document.getElementById(id);
+    const dono = links.find(a => a.getAttribute("href") === "#" + emprestado[id]);
+    if (el && dono) pontos.push({ el, link: dono });
+  });
+  if (!pontos.length) return;
+
+  let atual = null;
+  function marca(link) {
+    if (link === atual) return;
+    links.forEach(a => a.classList.toggle("is-active", a === link));
+    atual = link;
+  }
+
+  let agendado = false;
+  function atualiza() {
+    agendado = false;
+    const linha = window.scrollY + window.innerHeight * 0.3;
+    const ordenados = pontos
+      .map(p => ({ link: p.link, topo: p.el.getBoundingClientRect().top + window.scrollY }))
+      .sort((a, b) => a.topo - b.topo);
+    let escolhido = null;
+    ordenados.forEach(function (p) { if (p.topo <= linha) escolhido = p.link; });
+    /* no fim da página, o último item é o que vale */
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+      escolhido = ordenados[ordenados.length - 1].link;
+    }
+    marca(escolhido);
+  }
+  function pede() { if (!agendado) { agendado = true; requestAnimationFrame(atualiza); } }
+
+  window.addEventListener("scroll", pede, { passive: true });
+  window.addEventListener("resize", pede);
+  atualiza();
+})();
 
 /* ============================================================
    REVEAL + CONTADORES
