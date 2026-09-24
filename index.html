@@ -227,7 +227,8 @@ img, svg { display: block; max-width: 100%; }
 .nav__icon svg { width: 17px; height: 17px; }
 .nav__icon:hover { color: var(--red); border-color: var(--line); background: var(--card); }
 /* troca de tom, temporária */
-.nav__tema { display: flex; gap: 4px; border: 1px solid var(--line); border-radius: 999px; padding: 3px; margin-left: .6rem; }
+.nav__tema { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px 3px 12px; margin-left: .6rem; }
+.nav__tema-rotulo { font-size: .58rem; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
 .nav__tema button { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); cursor: pointer; font-size: 0; padding: 0; }
 .nav__tema button[data-tema="bege"] { background: #efecea; }
 .nav__tema button[data-tema="espresso"] { background: #2a221d; }
@@ -429,7 +430,15 @@ img, svg { display: block; max-width: 100%; }
   transition: transform .22s var(--ease), border-color .22s, background .22s;
 }
 .service:hover { transform: translateY(-4px); border-color: var(--red); background: var(--card-2); }
+.service { position: relative; }
+.service__selo {
+  position: absolute; top: 1rem; right: 1rem;
+  padding: .25rem .6rem; border-radius: 999px; border: 1px solid var(--red);
+  color: var(--red); font-size: .58rem; letter-spacing: .18em; text-transform: uppercase;
+}
 .service__ic { font-size: 1.8rem; margin-bottom: .8rem; }
+/* com sete cartões o último fica sozinho: aqui ele vai para o meio */
+.services__grid .service:last-child:nth-child(3n + 1) { grid-column: 2; }
 .service__title { font-family: "Anton", sans-serif; text-transform: uppercase; font-weight: 400; font-size: 1.25rem; margin-bottom: .4rem; }
 .service__desc { color: var(--muted); font-size: .94rem; }
 
@@ -737,8 +746,9 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 
       <!-- TROCA DE TOM: temporária, até você escolher entre bege e espresso -->
       <div class="nav__tema" role="group" aria-label="Colour tone">
-        <button type="button" data-tema="bege" aria-pressed="false" aria-label="Beige tone">Beige</button>
-        <button type="button" data-tema="espresso" aria-pressed="true" aria-label="Espresso tone">Espresso</button>
+        <span class="nav__tema-rotulo">Tone</span>
+        <button type="button" data-tema="bege" aria-pressed="false" aria-label="Beige tone" title="Beige tone">Beige</button>
+        <button type="button" data-tema="espresso" aria-pressed="true" aria-label="Espresso tone" title="Espresso tone">Espresso</button>
       </div>
 
       <button class="nav__burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
@@ -860,8 +870,8 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
     <section class="services reveal" id="servicos">
       <div class="section__head">
         <span class="kicker">Services</span>
-        <h2 class="section__title">How I help you</h2>
-        <p class="section__sub">Pick the format. I take care of the rest.</p>
+        <h2 class="section__title">What can we create together?</h2>
+        <p class="section__sub">Pick what your campaign needs. I take care of the rest.</p>
       </div>
       <div class="services__grid" id="servicesGrid"></div>
     </section>
@@ -1160,13 +1170,23 @@ const CASO_CITACAO = {
   marca: "Royal Distribution"
 };
 
+/* O QUE PODEMOS CRIAR JUNTOS: os serviços são separados por finalidade,
+   não por formato. O selo é opcional: apague a linha "selo" para tirar. */
 const SERVICES = [
-  { ic: "🎬", title: "UGC video",         desc: "A vertical video with my own script, a strong hook and a clear call to action." },
-  { ic: "🚀", title: "Ad cutdown",        desc: "Short versions of the same footage, edited to run as paid media." },
-  { ic: "📸", title: "Product photos",    desc: "Clean flat lay and lifestyle images, ready for feed, website and catalogue." },
-  { ic: "📦", title: "Unboxing",          desc: "A real first impression, from the sealed package to the product in use." },
-  { ic: "📱", title: "Post on my profile",desc: "Content published on my Instagram, with your brand tagged and stories to support it." },
-  { ic: "🗓️", title: "Monthly package",  desc: "A full month of content planned ahead, with priority booking and a better rate." }
+  { ic:"🌿", title:"Organic videos",
+    desc:"Content for your feed and TikTok, in the voice of someone recommending, not announcing." },
+  { ic:"🚀", title:"Videos for ads",
+    desc:"Built to run as paid media: hook in the first three seconds, benefit shown on camera and a CTA that tells the buyer what to do. Delivered in 9:16 and 4:5, captions burned in." },
+  { ic:"🧩", title:"Packs", selo:"Most requested",
+    desc:"Book three, four or five videos at a better rate, or build a test: choose the hooks, the body and the CTAs. Two hooks, one body and two CTAs already give four combinations to test without a second shoot." },
+  { ic:"📸", title:"UGC photos",
+    desc:"Your product in real hands, not in a studio. Flat lay, in context and in use, in the crops your feed, site and ads need." },
+  { ic:"📣", title:"Ads from my handle",
+    desc:"Your campaign runs from my profile instead of the brand account, so the audience sees a person, not an ad. I hand over the permissions and the code your media team needs." },
+  { ic:"✍️", title:"Scripts and creative direction",
+    desc:"The hook, the script and the shot list, for brands that already have someone to film." },
+  { ic:"🗓️", title:"Monthly package", selo:"Best value",
+    desc:"A set number of videos every month, planned in advance, with priority on my calendar and a better rate per video." }
 ];
 
 /* DEPOIMENTOS: são reais, vieram do seu portfólio no Canva.
@@ -1436,9 +1456,10 @@ renderPosters();
 (function buildServices() {
   $("#servicesGrid").innerHTML = SERVICES.map(s => `
     <article class="service">
+      ${s.selo ? `<span class="service__selo">${esc(s.selo)}</span>` : ""}
       <div class="service__ic" aria-hidden="true">${s.ic}</div>
-      <h3 class="service__title">${esc(s.title)}</h3>
-      <p class="service__desc">${esc(s.desc)}</p>
+      <h3 class="service__title">${amp(esc(s.title))}</h3>
+      <p class="service__desc">${amp(esc(s.desc))}</p>
     </article>`).join("");
 })();
 
