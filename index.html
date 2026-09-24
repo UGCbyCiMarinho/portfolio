@@ -1697,7 +1697,15 @@ function handleForm(form, btn, feedback, msg) {
     feedback.classList.remove("form__feedback--erro");
 
     const dados = Object.fromEntries(new FormData(form).entries());
-    dados._subject  = "New message from the portfolio";
+
+    /* Assunto diferente a cada envio. Se todos tivessem o mesmo texto, o Gmail
+       empilharia as mensagens numa conversa só e uma marca nova entraria
+       escondida embaixo da anterior. Marca + dia + hora nunca se repete. */
+    const agora = new Date();
+    const quando = agora.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) + ", " +
+                   agora.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const quem = String(dados.brand || dados.name || "Portfolio").trim().slice(0, 60) || "Portfolio";
+    dados._subject  = "New brief · " + quem + " · " + quando;
     dados._template = "table";
     dados._captcha  = "false";
 
