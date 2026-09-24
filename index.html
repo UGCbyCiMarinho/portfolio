@@ -398,12 +398,14 @@ img, svg { display: block; max-width: 100%; }
 
 .poster { flex: none; width: 216px; }
 .poster--video { width: 384px; }
+.poster--foto { width: 288px; }
 .poster__quadro {
   position: relative; width: 100%; aspect-ratio: 9 / 16;
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   overflow: hidden;
 }
 .poster--video .poster__quadro { aspect-ratio: 16 / 9; }
+.poster--foto .poster__quadro { aspect-ratio: 3 / 4; }
 .poster__botao { position: absolute; inset: 0; padding: 0; border: 0; cursor: pointer; background: none; width: 100%; height: 100%; }
 .poster__capa { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .35s var(--ease); }
 .poster__botao:hover .poster__capa { transform: scale(1.06); }
@@ -588,6 +590,9 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 .player__moldura { height: min(86vh, 1100px); width: auto; aspect-ratio: 9 / 16; max-width: 92vw; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
 .player__moldura--deitado { width: min(92vw, 1400px); height: auto; max-height: 82vh; aspect-ratio: 16 / 9; }
 .player__moldura iframe { width: 100%; height: 100%; border: 0; display: block; }
+/* foto: a largura vem da própria imagem, então cada uma abre no formato em que foi tirada */
+.player__moldura--foto { aspect-ratio: auto; width: auto; background: transparent; }
+.player__moldura--foto img { height: 100%; width: auto; max-width: 92vw; object-fit: contain; display: block; }
 .player__legenda { display: flex; align-items: center; gap: .7rem; color: #f2ece6; }
 .player__marca { font-size: .76rem; letter-spacing: .18em; text-transform: uppercase; }
 .player__formato { font-size: .85rem; font-style: italic; opacity: .75; }
@@ -677,6 +682,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
   .services__grid { grid-template-columns: 1fr; }
   .poster { width: 168px; }
   .poster--video { width: 300px; }
+  .poster--foto { width: 224px; }
   /* no celular não cabe card largo: ele fica do mesmo tamanho e mostra o texto todo */
   .testimonial, .testimonial--largo { width: 80vw; max-width: 320px; }
   .testimonial--largo .testimonial__text { -webkit-line-clamp: 24; }
@@ -1036,7 +1042,8 @@ const TABS = [
   { id:"Tech",         label:"Tech" },
   { id:"Pet",          label:"Pet" },
   { id:"Food",         label:"Food" },
-  { id:"YouTube",      label:"YouTube" }
+  { id:"YouTube",      label:"YouTube" },
+  { id:"Photos",       label:"Photos" }
 ];
 
 /* VÍDEOS: vieram da sua planilha, na ordem da coluna Ordem, por nicho.
@@ -1124,6 +1131,22 @@ const VIDEOS = [
   { nicho:"Tech", ordem: 6, id:"HeHVBtJz7uA", marca:"Yeedi", formato:"Product Demo", tipo:"short" },
   /* ---- YouTube ---- */
   { nicho:"YouTube", ordem: 1, id:"N8hkDTIue-A", marca:"e.l.f.", formato:"Aesthetic Makeup Routine", tipo:"video" },
+];
+
+/* FOTOS: o que aparece na aba Photos, nesta ordem.
+   "arquivo" é o nome dentro da pasta fotos, sem o .webp. Cada foto tem duas versões:
+   "nome.webp" é a que abre grande e "nome-capa.webp" é o quadradinho da fileira.
+   Para trocar a ordem, troque as linhas de lugar. */
+const FOTOS = [
+  { arquivo:"royal",              marca:"Royal Distribution", formato:"Lifestyle" },
+  { arquivo:"anua-cleansing",     marca:"Anua",               formato:"In use" },
+  { arquivo:"kerastase",          marca:"Kérastase",          formato:"Flat lay" },
+  { arquivo:"therabreath-mirror", marca:"TheraBreath",        formato:"In use" },
+  { arquivo:"novamane",           marca:"NovaMane",           formato:"Lifestyle" },
+  { arquivo:"revlon",             marca:"Revlon",             formato:"Flat lay" },
+  { arquivo:"vichy-dercos",       marca:"Vichy",              formato:"Portrait with product" },
+  { arquivo:"anua-serum",         marca:"Anua",               formato:"Product in hand" },
+  { arquivo:"therabreath-hand",   marca:"TheraBreath",        formato:"Product in hand" }
 ];
 
 /* CONTEÚDOS DE DESTAQUE
@@ -1315,10 +1338,8 @@ function molduraHTML(v) {
     </button>`;
 }
 
-function renderPosters() {
-  const row = $("#posterRow");
-  const itens = activeTab === "todos" ? VIDEOS : VIDEOS.filter(v => v.nicho === activeTab);
-  row.innerHTML = itens.map(v => `
+function cartaoVideo(v) {
+  return `
     <article class="poster poster--${v.tipo}">
       <div class="poster__quadro" data-id="${esc(v.id)}" data-marca="${esc(v.marca)}" data-formato="${esc(v.formato)}">
         ${molduraHTML(v)}
@@ -1327,7 +1348,31 @@ function renderPosters() {
         <span class="poster__marca">${amp(esc(v.marca))}</span>
         <span class="poster__formato">${amp(esc(v.formato))}</span>
       </div>
-    </article>`).join("");
+    </article>`;
+}
+
+function cartaoFoto(f) {
+  /* a foto não tem play: o cursor vira "View" e ela abre no mesmo visor dos vídeos */
+  return `
+    <article class="poster poster--foto">
+      <div class="poster__quadro" data-foto="fotos/${esc(f.arquivo)}.webp" data-marca="${esc(f.marca)}" data-formato="${esc(f.formato)}">
+        <button class="poster__botao" type="button" data-cursor="play" data-rotulo="View" aria-label="Open photo: ${esc(f.marca)}, ${esc(f.formato)}">
+          <img class="poster__capa" src="fotos/${esc(f.arquivo)}-capa.webp" alt="${esc(f.marca)}, ${esc(f.formato)}" loading="lazy" decoding="async">
+        </button>
+      </div>
+      <div class="poster__meta">
+        <span class="poster__marca">${amp(esc(f.marca))}</span>
+        <span class="poster__formato">${amp(esc(f.formato))}</span>
+      </div>
+    </article>`;
+}
+
+function renderPosters() {
+  const row = $("#posterRow");
+  if (activeTab === "Photos") { row.innerHTML = FOTOS.map(cartaoFoto).join(""); return; }
+  const itens = activeTab === "todos" ? VIDEOS : VIDEOS.filter(v => v.nicho === activeTab);
+  const cartoes = itens.map(cartaoVideo).join("");
+  row.innerHTML = activeTab === "todos" ? cartoes + FOTOS.map(cartaoFoto).join("") : cartoes;
 }
 renderPosters();
 
@@ -1383,11 +1428,15 @@ renderPosters();
   }
 
   function mostrar(quadro) {
+    const foto = quadro.dataset.foto;
     const vertical = !quadro.closest(".poster--video");
-    moldura.classList.toggle("player__moldura--deitado", !vertical);
-    moldura.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + quadro.dataset.id +
-      '?autoplay=1&rel=0&playsinline=1&cc_load_policy=0&iv_load_policy=3" title="' + quadro.dataset.marca + '" ' +
-      'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
+    moldura.classList.toggle("player__moldura--deitado", !foto && !vertical);
+    moldura.classList.toggle("player__moldura--foto", !!foto);
+    moldura.innerHTML = foto
+      ? '<img src="' + esc(foto) + '" alt="' + esc(quadro.dataset.marca + ", " + quadro.dataset.formato) + '">'
+      : '<iframe src="https://www.youtube-nocookie.com/embed/' + quadro.dataset.id +
+        '?autoplay=1&rel=0&playsinline=1&cc_load_policy=0&iv_load_policy=3" title="' + quadro.dataset.marca + '" ' +
+        'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
     legenda.innerHTML = '<span class="player__marca">' + amp(esc(quadro.dataset.marca)) + '</span>' +
                         '<span class="player__formato">' + amp(esc(quadro.dataset.formato)) + '</span>' +
                         '<span class="player__conta">' + (indice + 1) + ' / ' + lista.length + '</span>';
@@ -1557,6 +1606,8 @@ navLinks.addEventListener("click", e => {
     alvoX = ev.clientX; alvoY = ev.clientY;
     el.classList.remove("sumiu");
     const sobre = ev.target.closest('[data-cursor="play"]');
+    const rotulo = el.querySelector(".cursor__rotulo");
+    if (sobre && rotulo) rotulo.textContent = sobre.dataset.rotulo || "Watch";
     const clicavel = ev.target.closest('a, button, .tab, [role="button"]');
     el.classList.toggle("no-video", !!sobre);
     el.classList.toggle("no-alvo", !sobre && !!clicavel);
