@@ -521,6 +521,8 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(140,92,59,.18); }
 .form__feedback { margin-top: .8rem; font-weight: 700; color: var(--match); min-height: 1.2em; }
+.form__feedback--erro { color: var(--red); }
+.honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 
 /* ===== FOOTER ===== */
 .footer { border-top: 1px solid var(--line); background: var(--rodape); padding: 3rem 1.2rem 2rem; }
@@ -614,30 +616,6 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
   .player__seta--dir { right: 6px; }
   .player__moldura { height: min(76vh, 760px); max-width: 94vw; }
 }
-
-/* ===== MODAL ===== */
-.modal { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 1.2rem; }
-.modal.is-open { display: flex; }
-.modal__overlay { position: absolute; inset: 0; background: rgba(10,7,5,.8); backdrop-filter: blur(4px); }
-.modal__card {
-  position: relative; z-index: 2;
-  background: var(--card); border: 1px solid var(--line);
-  border-radius: 12px; padding: 2.2rem 1.8rem; max-width: 420px; width: 100%;
-  text-align: center; box-shadow: 0 30px 80px var(--sombra);
-  animation: pop .3s var(--ease);
-}
-@keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.modal__tag { margin-bottom: 1rem; }
-.modal__close { position: absolute; top: .8rem; right: .9rem; background: none; border: 0; color: var(--muted); font-size: 1.2rem; cursor: pointer; }
-.modal__close:hover { color: var(--text); }
-.modal__title { font-family: "Anton", sans-serif; font-weight: 400; text-transform: uppercase; font-size: 1.9rem; margin-bottom: .6rem; }
-.modal__text { color: var(--muted); margin-bottom: 1.4rem; }
-.modal__form { display: flex; flex-direction: column; gap: .7rem; }
-.modal__form input {
-  width: 100%; background: var(--campo); border: 1px solid var(--line);
-  border-radius: 6px; padding: .8rem .9rem; color: var(--text); font-family: inherit;
-}
-.modal__form input:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(140,92,59,.18); }
 
 /* ===== REVEAL ===== */
 .reveal { opacity: 0; transform: translateY(28px); transition: opacity .6s var(--ease), transform .6s var(--ease); }
@@ -913,7 +891,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
         <div class="field__par">
           <div class="field">
             <label for="cf-nome">Name</label>
-            <input type="text" id="cf-nome" name="nome" placeholder="Your name" required>
+            <input type="text" id="cf-nome" name="name" placeholder="Your name" required>
           </div>
           <div class="field">
             <label for="cf-email">Email</label>
@@ -922,16 +900,18 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
         </div>
         <div class="field">
           <label for="cf-marca">Brand / company</label>
-          <input type="text" id="cf-marca" name="marca" placeholder="Brand name" required>
+          <input type="text" id="cf-marca" name="brand" placeholder="Brand name" required>
         </div>
         <div class="field">
           <label for="cf-orcamento">Estimated budget</label>
-          <input type="text" id="cf-orcamento" name="orcamento" placeholder="Ex: $500 to $1,500 CAD">
+          <input type="text" id="cf-orcamento" name="budget" placeholder="Ex: $500 to $1,500 CAD">
         </div>
         <div class="field">
           <label for="cf-msg">Tell me about the project</label>
-          <textarea id="cf-msg" name="mensagem" rows="4" placeholder="Category, format, how many videos, deadline, campaign goal..." required></textarea>
+          <textarea id="cf-msg" name="message" rows="4" placeholder="Category, format, how many videos, deadline, campaign goal..." required></textarea>
         </div>
+        <!-- campo invisível: robô preenche, pessoa não. Serve de filtro de spam. -->
+        <input type="text" name="_honey" class="honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
         <button type="submit" class="btn btn--play btn--full" id="contactSubmit">&#9654; SEND MESSAGE</button>
         <p class="form__feedback" id="contactFeedback" role="status" aria-live="polite"></p>
       </form>
@@ -976,24 +956,6 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
     </div>
   </div>
 
-  <!-- ===== MODAL DE LEAD ===== -->
-  <div class="modal" id="leadModal" aria-hidden="true">
-    <div class="modal__overlay" data-close></div>
-    <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <button class="modal__close" id="modalClose" data-close aria-label="Close">&#10005;</button>
-      <span class="badge badge--match modal__tag">Keep watching?</span>
-      <h3 id="modalTitle" class="modal__title">Are you still there?</h3>
-      <p class="modal__text">
-        Leave your contact and I will send you the <strong>full media kit</strong> with formats and rates.
-      </p>
-      <form id="leadForm" class="modal__form" novalidate>
-        <input type="text" id="lead-nome" name="nome" placeholder="Your name" required>
-        <input type="email" id="lead-email" name="email" placeholder="you@yourbrand.com" required>
-        <button type="submit" class="btn btn--play btn--full" id="leadSubmit">&#9654; SEND ME THE KIT</button>
-        <p class="form__feedback" id="leadFeedback" role="status" aria-live="polite"></p>
-      </form>
-    </div>
-  </div>
 
 <script>
 /* ============================================================
@@ -1668,77 +1630,48 @@ const revealObserver = new IntersectionObserver((entries) => {
 $$(".reveal").forEach(el => revealObserver.observe(el));
 
 /* ============================================================
-   FORMULÁRIOS (enviando → enviado)
+   FORMULÁRIO: a mensagem chega de verdade no seu Gmail.
+   O serviço formsubmit.co recebe o envio e repassa para o e-mail abaixo.
+   Para trocar o e-mail de destino, mude só a linha DESTINO_FORM.
    ============================================================ */
+const DESTINO_FORM = "https://formsubmit.co/ajax/cimarinho.ugc@gmail.com";
+
 function handleForm(form, btn, feedback, msg) {
-  form.addEventListener("submit", e => {
+  form.addEventListener("submit", async e => {
     e.preventDefault();
     if (!form.checkValidity()) { form.reportValidity(); return; }
     const original = btn.innerHTML;
     btn.disabled = true;
     btn.textContent = "Sending...";
     feedback.textContent = "";
-    setTimeout(() => {
-      btn.disabled = false;
-      btn.innerHTML = original;
+    feedback.classList.remove("form__feedback--erro");
+
+    const dados = Object.fromEntries(new FormData(form).entries());
+    dados._subject  = "New message from the portfolio";
+    dados._template = "table";
+    dados._captcha  = "false";
+
+    try {
+      const resposta = await fetch(DESTINO_FORM, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(dados)
+      });
+      if (!resposta.ok) throw new Error(resposta.status);
       feedback.textContent = msg;
       form.reset();
-    }, 1100);
+    } catch (erro) {
+      /* se o envio falhar, a pessoa precisa saber, e ter o e-mail à mão */
+      feedback.classList.add("form__feedback--erro");
+      feedback.textContent = "Could not send. Please write to cimarinho.ugc@gmail.com.";
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
   });
 }
 handleForm($("#contactForm"), $("#contactSubmit"), $("#contactFeedback"),
   "✓ Message received! I reply within 48h.");
-
-/* ============================================================
-   MODAL DE LEAD (7s ou ao sair da página, 1x por sessão)
-   ============================================================ */
-const modal = $("#leadModal");
-let modalShown = false;
-let focoAnterior = null;
-
-function openModal() {
-  if (modalShown) return;
-  try { if (sessionStorage.getItem("leadSeen")) return; } catch (e) {}
-  modalShown = true;
-  try { sessionStorage.setItem("leadSeen", "1"); } catch (e) {}
-  focoAnterior = document.activeElement;
-  modal.classList.add("is-open");
-  modal.setAttribute("aria-hidden", "false");
-  const f = $("#lead-nome");
-  if (f) f.focus();
-}
-function closeModal() {
-  modal.classList.remove("is-open");
-  modal.setAttribute("aria-hidden", "true");
-  if (focoAnterior && focoAnterior.focus) focoAnterior.focus();
-}
-
-let jaViu = false;
-try { jaViu = sessionStorage.getItem("leadSeen") === "1"; } catch (e) {}
-if (!jaViu) {
-  setTimeout(openModal, 7000);
-  document.addEventListener("mouseout", function onLeave(e) {
-    if (e.clientY <= 0 && !e.relatedTarget) { openModal(); document.removeEventListener("mouseout", onLeave); }
-  });
-}
-
-modal.addEventListener("click", e => { if (e.target.hasAttribute("data-close")) closeModal(); });
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape" && modal.classList.contains("is-open")) closeModal();
-  if (e.key === "Tab" && modal.classList.contains("is-open")) {
-    const foc = $$("button, input", $(".modal__card")).filter(el => !el.disabled);
-    if (!foc.length) return;
-    const primeiro = foc[0], ultimo = foc[foc.length - 1];
-    if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
-    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
-  }
-});
-
-handleForm($("#leadForm"), $("#leadSubmit"), $("#leadFeedback"),
-  "✓ Done! The media kit is on its way to your inbox.");
-$("#leadForm").addEventListener("submit", () => {
-  setTimeout(() => { if (modal.classList.contains("is-open")) closeModal(); }, 1900);
-});
 
 /* ============================================================
    ANO DO RODAPÉ
