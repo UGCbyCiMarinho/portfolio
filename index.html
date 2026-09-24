@@ -761,9 +761,9 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
     <!-- ===== CONTEÚDOS DE DESTAQUE ===== -->
     <section class="portfolio reveal" id="destaques">
       <div class="section__head">
-        <span class="kicker">Top picks</span>
-        <h2 class="section__title">Start here</h2>
-        <p class="section__sub">The three videos I show first to any brand, and what each one proves. Click a cover to watch.</p>
+        <span class="kicker">Case in focus</span>
+        <h2 class="section__title">One brand, three angles</h2>
+        <p class="section__sub">Royal Distribution booked four videos with me. Three of them, each doing a different job. Click a cover to watch.</p>
       </div>
       <div class="hl-grid" id="hlGrid"></div>
     </section>
@@ -1055,13 +1055,15 @@ const VIDEOS = [
    O id é o final do link do YouTube. Troque quando quiser destacar outros. */
 /* COMEÇA POR AQUI: os três vídeos que você mostra primeiro.
    Em vez de número de views, cada um diz o que prova para a marca. */
+/* COMEÇA POR AQUI: uma marca só, em três ângulos diferentes.
+   Para trocar um vídeo, troque o id pelo final do link do YouTube. */
 const DESTAQUES = [
-  { id:"JwZRjpgf-Lc", marca:"L'Oréal",          formato:"Problem → Solution",
-    titulo:"From problem to purchase", contexto:"Shows how I build desire in under twenty seconds, hook to CTA." },
-  { id:"GJiC4yul2_c", marca:"Haruharu Wonder",  formato:"Aesthetic",
-    titulo:"Selling by feel", contexto:"Quiet, tactile storytelling for brands whose product is an experience." },
-  { id:"8Z9WfmGYAv8", marca:"Niche Beauty Lab", formato:"Product Demo",
-    titulo:"A routine explained", contexto:"A full routine that teaches the product without sounding like an ad." }
+  { id:"9jFA6OZS3oM", marca:"Royal Distribution", formato:"Before & After",
+    titulo:"The proof", contexto:"The result on camera, without promising what the product does not deliver." },
+  { id:"atGtKSM7Auk", marca:"Royal Distribution", formato:"Unboxing",
+    titulo:"The first impression", contexto:"The reaction to the package, where desire starts before the product is even used." },
+  { id:"kXsS0omB5N8", marca:"Royal Distribution", formato:"Problem → Solution",
+    titulo:"The argument", contexto:"The pain named out loud and the product arriving as the answer." }
 ];
 
 const SERVICES = [
@@ -1180,7 +1182,7 @@ let activeTab = "todos";
 (function buildTabs() {
   const wrap = $("#tabs");
   wrap.innerHTML = TABS.map(t =>
-    `<button class="tab${t.id === "todos" ? " is-active" : ""}" role="tab" aria-selected="${t.id === "todos"}" data-tab="${t.id}">${esc(t.label)}</button>`
+    `<button class="tab${t.id === "todos" ? " is-active" : ""}" role="tab" aria-selected="${t.id === "todos"}" data-tab="${t.id}">${amp(esc(t.label))}</button>`
   ).join("");
   wrap.addEventListener("click", e => {
     const btn = e.target.closest(".tab");
