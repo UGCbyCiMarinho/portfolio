@@ -538,25 +538,29 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
     transition: opacity .2s ease;
   }
   .cursor.sumiu { opacity: 0; }
-  .cursor__anel {
-    display: block; width: 26px; height: 26px; border-radius: 50%;
-    border: 1px solid var(--red); background: transparent;
-    transition: width .25s var(--ease), height .25s var(--ease), background .25s ease, border-color .25s ease;
+  /* o brilho de quatro pontas, o mesmo do retrato do About */
+  .cursor__brilho {
+    display: block; width: 22px; height: 22px; fill: var(--red);
+    transition: width .25s var(--ease), height .25s var(--ease), opacity .2s ease, transform .3s var(--ease);
+  }
+  /* sobre link ou botão: o brilho encolhe um pouco */
+  .cursor.no-alvo .cursor__brilho { width: 14px; height: 14px; transform: rotate(45deg); }
+  /* sobre vídeo: o brilho some e entra o círculo com Watch */
+  .cursor.no-video .cursor__brilho { opacity: 0; transform: scale(.4); }
+  .cursor__circulo {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(.3);
+    width: 74px; height: 74px; border-radius: 50%; background: var(--red);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .2s ease, transform .25s var(--ease);
   }
   .cursor__rotulo {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(.7);
     font-size: .58rem; letter-spacing: .18em; text-transform: uppercase;
-    color: var(--sobre-destaque); opacity: 0; white-space: nowrap;
-    transition: opacity .2s ease, transform .25s var(--ease);
+    color: var(--sobre-destaque); white-space: nowrap;
   }
-  /* sobre link ou botão: vira um ponto cheio */
-  .cursor.no-alvo .cursor__anel { width: 10px; height: 10px; background: var(--red); }
-  /* sobre vídeo: cresce, preenche e mostra Watch */
-  .cursor.no-video .cursor__anel { width: 74px; height: 74px; background: var(--red); border-color: var(--red); }
-  .cursor.no-video .cursor__rotulo { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  .cursor.no-video .cursor__circulo { opacity: 1; transform: translate(-50%,-50%) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cursor__anel, .cursor__rotulo { transition: none; }
+  .cursor__brilho, .cursor__circulo { transition: none; }
 }
 
 /* ===== PLAYER EM TELA CHEIA ===== */
@@ -636,8 +640,18 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 #destaques .hl-tit { font-size: 16px; font-weight: 700; margin: 8px 0 0; }
 #destaques .hl-sub { font-size: .88rem; color: var(--muted); margin-top: 2px; }
 /* o que a marca escreveu, fechando o caso */
-.caso__citacao { max-width: 62ch; margin: 2.2rem auto 0; text-align: center; }
-.caso__aspas { font-family: "Anton", sans-serif; font-size: 2.4rem; color: var(--red); line-height: .5; display: block; height: 18px; }
+.caso__numeros {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 1.6rem;
+  margin: 2rem 0 0; font-size: .74rem; letter-spacing: .2em; text-transform: uppercase; color: var(--text);
+}
+.caso__numeros span { display: flex; align-items: center; gap: 1.6rem; }
+.caso__numeros span + span::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--red); }
+.caso__citacao { max-width: 62ch; margin: 1.6rem auto 0; text-align: center; }
+.caso__rotulo {
+  display: inline-block; margin-bottom: .7rem; padding: .3rem .8rem; border-radius: 999px;
+  border: 1px solid var(--red); color: var(--red);
+  font-size: .62rem; letter-spacing: .2em; text-transform: uppercase;
+}
 .caso__citacao p { font-style: italic; font-size: 1.06rem; color: var(--text); margin: 0 0 .7rem; }
 .caso__citacao cite { font-style: normal; font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
 
@@ -821,10 +835,11 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
     <section class="portfolio reveal" id="destaques">
       <div class="section__head">
         <span class="kicker">Case in focus</span>
-        <h2 class="section__title">One brand, four angles</h2>
-        <p class="section__sub">Royal Distribution booked four videos with me. Four angles, four different jobs. Click a cover to watch.</p>
+        <h2 class="section__title">One product, four ways to sell it</h2>
+        <p class="section__sub">Each angle answers a different objection: one buyer needs proof, another needs the feeling, another needs the reason. A pack covers all of them.</p>
       </div>
       <div class="hl-grid" id="hlGrid"></div>
+      <p class="caso__numeros"><span>One brief</span><span>Four videos</span><span>Zero revisions</span></p>
       <blockquote class="caso__citacao" id="casoCitacao"></blockquote>
     </section>
 
@@ -928,8 +943,8 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 
   <!-- ===== CURSOR ===== -->
   <div class="cursor" id="cursor" aria-hidden="true">
-    <span class="cursor__anel"></span>
-    <span class="cursor__rotulo">Watch</span>
+    <svg class="cursor__brilho" viewBox="0 0 24 24" focusable="false"><path d="M12 0c1 7 5 11 12 12-7 1-11 5-12 12-1-7-5-11-12-12C7 11 11 7 12 0Z"/></svg>
+    <span class="cursor__circulo"><span class="cursor__rotulo">Watch</span></span>
   </div>
 
   <!-- ===== PLAYER EM TELA CHEIA ===== -->
@@ -1140,6 +1155,7 @@ const DESTAQUES = [
 
 /* O que a Royal escreveu depois da entrega. */
 const CASO_CITACAO = {
+  rotulo: "Approval, first round",
   texto: "Love love love the videos! I don't have any comments to add! Aesthetic is perfect, music, volume, closeup, usage, everything is very cute!",
   marca: "Royal Distribution"
 };
@@ -1311,7 +1327,7 @@ renderPosters();
 (function buildCitacao() {
   const alvo = $("#casoCitacao");
   if (!alvo || typeof CASO_CITACAO === "undefined") return;
-  alvo.innerHTML = '<span class="caso__aspas" aria-hidden="true">&#8220;</span>' +
+  alvo.innerHTML = '<span class="caso__rotulo">' + esc(CASO_CITACAO.rotulo) + '</span>' +
                    '<p>' + esc(CASO_CITACAO.texto) + '</p>' +
                    '<cite>' + amp(esc(CASO_CITACAO.marca)) + '</cite>';
 })();
