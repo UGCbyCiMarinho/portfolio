@@ -431,9 +431,16 @@ img, svg { display: block; max-width: 100%; }
 }
 .service:hover { transform: translateY(-4px); border-color: var(--red); background: var(--card-2); }
 .service { position: relative; }
-.service--destaque { border-color: var(--red); }
-.service__estrela { position: absolute; top: .9rem; right: .9rem; color: var(--red); }
-.service__estrela svg { width: 15px; height: 15px; display: block; }
+.service--destaque { border-color: var(--red); padding-top: 1.7rem; }
+/* a etiqueta senta na borda de cima do cartão, como nos planos em destaque */
+.service__estrela {
+  position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap;
+  background: var(--card); border: 1px solid var(--red); border-radius: 999px;
+  padding: .22rem .7rem; color: var(--red);
+  font-size: .56rem; letter-spacing: .18em; text-transform: uppercase;
+}
+.service__estrela svg { width: 12px; height: 12px; display: block; fill: #d9a441; color: #d9a441; }
 .service__ic { color: var(--red); margin-bottom: .7rem; }
 .service__ic svg { width: 26px; height: 26px; display: block; }
 .service__title { font-family: "Anton", sans-serif; text-transform: uppercase; font-weight: 400; font-size: 1.05rem; margin-bottom: .35rem; }
@@ -1036,7 +1043,8 @@ const ICONES_SERVICO = {
   caneta: '<path d="M4 20h4L20 8a2.4 2.4 0 0 0-3.4-3.4L4.6 16.6 4 20Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="m15 6 3.4 3.4" fill="none" stroke="currentColor" stroke-width="1.4"/>',
   filme: '<rect x="2.8" y="4.8" width="18.4" height="14.4" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7.4 4.8v14.4M16.6 4.8v14.4M2.8 12h18.4" fill="none" stroke="currentColor" stroke-width="1.4"/>',
   calendario: '<rect x="3.2" y="5.4" width="17.6" height="15" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3.2 10h17.6M8 3.4v4M16 3.4v4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
-  estrela: '<path d="M12 0c1 7 5 11 12 12-7 1-11 5-12 12-1-7-5-11-12-12C7 11 11 7 12 0Z" fill="currentColor"/>'
+  estrela: '<path d="M12 0c1 7 5 11 12 12-7 1-11 5-12 12-1-7-5-11-12-12C7 11 11 7 12 0Z" fill="currentColor"/>',
+  estrelaCheia: '<path d="M12 2.2l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.1l-5.9 3.1 1.2-6.5L2.5 9.1l6.6-.9 2.9-6Z" fill="currentColor"/>'
 };
 
 const PORQUE = [
@@ -1054,16 +1062,16 @@ const PROCESSO = [
 ];
 
 const TABS = [
-  { id:"todos",    label:"All" },
-  { id:"Skincare", label:"Skincare" },
-  { id:"Haircare", label:"Haircare" },
-  { id:"Beauty",   label:"Beauty" },
-  { id:"Fashion",  label:"Fashion" },
+  { id:"todos",        label:"All" },
+  { id:"Haircare",     label:"Haircare" },
+  { id:"Skincare",     label:"Skincare" },
+  { id:"Beauty",       label:"Beauty" },
+  { id:"Fashion",      label:"Fashion" },
   { id:"Home & Decor", label:"Home & Decor" },
-  { id:"Food",     label:"Food" },
-  { id:"Pet",      label:"Pet" },
-  { id:"Tech",     label:"Tech" },
-  { id:"YouTube",  label:"YouTube" }
+  { id:"Tech",         label:"Tech" },
+  { id:"Pet",          label:"Pet" },
+  { id:"Food",         label:"Food" },
+  { id:"YouTube",      label:"YouTube" }
 ];
 
 /* VÍDEOS: vieram da sua planilha, na ordem da coluna Ordem, por nicho.
@@ -1473,7 +1481,7 @@ renderPosters();
 (function buildServices() {
   $("#servicesGrid").innerHTML = SERVICES.map(s => `
     <article class="service${s.destaque ? " service--destaque" : ""}">
-      ${s.destaque ? `<span class="service__estrela" title="${esc(s.destaqueTexto || "")}" aria-label="${esc(s.destaqueTexto || "")}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONES_SERVICO.estrela}</svg></span>` : ""}
+      ${s.destaque ? `<span class="service__estrela"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONES_SERVICO.estrelaCheia}</svg>${esc(s.destaqueTexto || "")}</span>` : ""}
       <div class="service__ic" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONES_SERVICO[s.icone] || ""}</svg></div>
       <h3 class="service__title">${amp(esc(s.title))}</h3>
       <p class="service__desc">${amp(esc(s.desc))}</p>
