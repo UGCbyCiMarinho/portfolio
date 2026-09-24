@@ -423,24 +423,21 @@ img, svg { display: block; max-width: 100%; }
 
 /* ===== SERVIÇOS ===== */
 .services { max-width: var(--maxw); margin: 0 auto; padding: 4rem 1.2rem; }
-.services__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.services__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .9rem; }
 .service {
   background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 1.6rem;
+  border-radius: var(--radius); padding: 1.3rem 1.2rem;
   transition: transform .22s var(--ease), border-color .22s, background .22s;
 }
 .service:hover { transform: translateY(-4px); border-color: var(--red); background: var(--card-2); }
 .service { position: relative; }
-.service__selo {
-  position: absolute; top: 1rem; right: 1rem;
-  padding: .25rem .6rem; border-radius: 999px; border: 1px solid var(--red);
-  color: var(--red); font-size: .58rem; letter-spacing: .18em; text-transform: uppercase;
-}
-.service__ic { font-size: 1.8rem; margin-bottom: .8rem; }
-/* com sete cartões o último fica sozinho: aqui ele vai para o meio */
-.services__grid .service:last-child:nth-child(3n + 1) { grid-column: 2; }
-.service__title { font-family: "Anton", sans-serif; text-transform: uppercase; font-weight: 400; font-size: 1.25rem; margin-bottom: .4rem; }
-.service__desc { color: var(--muted); font-size: .94rem; }
+.service--destaque { border-color: var(--red); }
+.service__estrela { position: absolute; top: .9rem; right: .9rem; color: var(--red); }
+.service__estrela svg { width: 15px; height: 15px; display: block; }
+.service__ic { color: var(--red); margin-bottom: .7rem; }
+.service__ic svg { width: 26px; height: 26px; display: block; }
+.service__title { font-family: "Anton", sans-serif; text-transform: uppercase; font-weight: 400; font-size: 1.05rem; margin-bottom: .35rem; }
+.service__desc { color: var(--muted); font-size: .86rem; line-height: 1.6; }
 
 .results { max-width: var(--maxw); margin: 0 auto; padding: 4rem 1.2rem 1.4rem; scroll-margin-top: 86px; }
 
@@ -456,12 +453,12 @@ img, svg { display: block; max-width: 100%; }
 .testimonials__wrap:hover .testimonials__track { animation-play-state: paused; }
 .testimonial {
   flex: none; width: 330px;
-  background: var(--card); border: 1px solid var(--line);
+  background: var(--faixa); border: 1px solid rgba(255,255,255,.14); color: #f6efe9;
   border-radius: var(--radius); padding: 1.5rem 1.4rem 1.3rem;
   display: flex; flex-direction: column; gap: .9rem;
   transition: border-color .22s;
 }
-.testimonial:hover { border-color: var(--red); }
+.testimonial:hover { border-color: rgba(255,255,255,.4); }
 /* na faixa de marcas o logo fica num retângulo. Aqui ele vira pílula, para
    as duas seções não parecerem a mesma coisa. */
 .testimonial__marca {
@@ -471,15 +468,15 @@ img, svg { display: block; max-width: 100%; }
 }
 .testimonial__marca img { max-height: 100%; max-width: 110px; object-fit: contain; }
 .testimonial__text {
-  color: var(--text); font-style: italic; font-size: .94rem; margin: 0; flex: 1;
+  color: #f6efe9; font-style: italic; font-size: .94rem; margin: 0; flex: 1;
   display: -webkit-box; -webkit-line-clamp: 9; -webkit-box-orient: vertical; overflow: hidden;
 }
 /* depoimento longo ganha o dobro de largura, para caber inteiro sem corte */
 .testimonial--largo { width: 560px; }
 .testimonial--largo .testimonial__text { -webkit-line-clamp: 12; }
-.testimonial__pe { display: flex; align-items: center; justify-content: space-between; gap: .8rem; border-top: 1px solid var(--line); padding-top: .9rem; }
+.testimonial__pe { display: flex; align-items: center; justify-content: space-between; gap: .8rem; border-top: 1px solid rgba(255,255,255,.2); padding-top: .9rem; }
 .estrelas { color: #d9a441; letter-spacing: .12em; font-size: .92rem; }
-.testimonial__nome { font-size: .7rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.testimonial__nome { font-size: .7rem; letter-spacing: .18em; text-transform: uppercase; color: rgba(246,239,233,.78); }
 
 /* ===== CONTATO ===== */
 .contact {
@@ -1027,6 +1024,21 @@ const BRANDS = [
 
 /* POR QUE EU: cada item vira um parágrafo. O trecho entre *asteriscos*
    sai em destaque, sem precisar escrever HTML. */
+/* ============================================================
+   DESENHOS DOS SERVIÇOS
+   ============================================================ */
+const ICONES_SERVICO = {
+  folha: '<path d="M4 20c0-8 6-14 16-15 0 10-6 15-16 15Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M4 20c4-4 8-6 12-7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+  alvo: '<circle cx="12" cy="12" r="8.4" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>',
+  camadas: '<path d="M12 3.4 20.6 8 12 12.6 3.4 8 12 3.4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="m3.4 12.4 8.6 4.6 8.6-4.6M3.4 16.8l8.6 4.6 8.6-4.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
+  camera: '<rect x="2.8" y="6.6" width="18.4" height="13" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8.6 6.6 10 4.2h4l1.4 2.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.6" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  megafone: '<path d="M4 9.6v4.8a1.6 1.6 0 0 0 1.6 1.6H8l7 4.4V3.6L8 8H5.6A1.6 1.6 0 0 0 4 9.6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M18 9.2a4 4 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+  caneta: '<path d="M4 20h4L20 8a2.4 2.4 0 0 0-3.4-3.4L4.6 16.6 4 20Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="m15 6 3.4 3.4" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  filme: '<rect x="2.8" y="4.8" width="18.4" height="14.4" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7.4 4.8v14.4M16.6 4.8v14.4M2.8 12h18.4" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  calendario: '<rect x="3.2" y="5.4" width="17.6" height="15" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3.2 10h17.6M8 3.4v4M16 3.4v4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+  estrela: '<path d="M12 0c1 7 5 11 12 12-7 1-11 5-12 12-1-7-5-11-12-12C7 11 11 7 12 0Z" fill="currentColor"/>'
+};
+
 const PORQUE = [
   "I create strategy-led UGC for brands that want content with purpose, not just pretty visuals. My process follows a clear structure: *visual hook, verbal hook, problem, transition, solution, benefit, and CTA.*",
   "Before creating, *I identify the emotion the content needs to trigger*: relief, desire, trust, confidence or curiosity, and connect it to the consumer's real life routine.",
@@ -1172,20 +1184,25 @@ const CASO_CITACAO = {
 
 /* O QUE PODEMOS CRIAR JUNTOS: os serviços são separados por finalidade,
    não por formato. O selo é opcional: apague a linha "selo" para tirar. */
+/* O QUE PODEMOS CRIAR JUNTOS: serviços separados por finalidade, não por formato.
+   "icone" escolhe um dos desenhos da lista ICONES_SERVICO. "destaque: true" põe
+   a estrelinha no canto. */
 const SERVICES = [
-  { ic:"🌿", title:"Organic videos",
+  { icone:"folha", title:"Organic videos",
     desc:"Content for your feed and TikTok, in the voice of someone recommending, not announcing." },
-  { ic:"🚀", title:"Videos for ads",
-    desc:"Built to run as paid media: hook in the first three seconds, benefit shown on camera and a CTA that tells the buyer what to do. Delivered in 9:16 and 4:5, captions burned in." },
-  { ic:"🧩", title:"Packs", selo:"Most requested",
-    desc:"Book three, four or five videos at a better rate, or build a test: choose the hooks, the body and the CTAs. Two hooks, one body and two CTAs already give four combinations to test without a second shoot." },
-  { ic:"📸", title:"UGC photos",
+  { icone:"alvo", title:"Videos for ads",
+    desc:"Built to run as paid media: hook in the first three seconds, benefit shown on camera and a clear CTA. Delivered in 9:16 and 4:5, captions burned in." },
+  { icone:"camadas", title:"Packs", destaque:true, destaqueTexto:"Most requested",
+    desc:"Book three, four or five videos at a better rate, or build a test: choose the hooks, the body and the CTAs. Two hooks, one body and two CTAs give four combinations to test without a second shoot." },
+  { icone:"camera", title:"UGC photos",
     desc:"Your product in real hands, not in a studio. Flat lay, in context and in use, in the crops your feed, site and ads need." },
-  { ic:"📣", title:"Ads from my handle",
-    desc:"Your campaign runs from my profile instead of the brand account, so the audience sees a person, not an ad. I hand over the permissions and the code your media team needs." },
-  { ic:"✍️", title:"Scripts and creative direction",
+  { icone:"megafone", title:"Ads from my handle",
+    desc:"Your campaign runs from my profile instead of the brand account, so the audience sees a person, not an ad. Permissions and code included." },
+  { icone:"caneta", title:"Scripts and creative direction",
     desc:"The hook, the script and the shot list, for brands that already have someone to film." },
-  { ic:"🗓️", title:"Monthly package", selo:"Best value",
+  { icone:"filme", title:"Raw content",
+    desc:"The unedited footage, straight from the camera, for brands whose team prefers to edit in house." },
+  { icone:"calendario", title:"Monthly package",
     desc:"A set number of videos every month, planned in advance, with priority on my calendar and a better rate per video." }
 ];
 
@@ -1455,9 +1472,9 @@ renderPosters();
    ============================================================ */
 (function buildServices() {
   $("#servicesGrid").innerHTML = SERVICES.map(s => `
-    <article class="service">
-      ${s.selo ? `<span class="service__selo">${esc(s.selo)}</span>` : ""}
-      <div class="service__ic" aria-hidden="true">${s.ic}</div>
+    <article class="service${s.destaque ? " service--destaque" : ""}">
+      ${s.destaque ? `<span class="service__estrela" title="${esc(s.destaqueTexto || "")}" aria-label="${esc(s.destaqueTexto || "")}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONES_SERVICO.estrela}</svg></span>` : ""}
+      <div class="service__ic" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONES_SERVICO[s.icone] || ""}</svg></div>
       <h3 class="service__title">${amp(esc(s.title))}</h3>
       <p class="service__desc">${amp(esc(s.desc))}</p>
     </article>`).join("");
