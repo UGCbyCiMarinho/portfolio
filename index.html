@@ -133,8 +133,9 @@ img, svg { display: block; max-width: 100%; }
 /* título que assume a cor de destaque, no lugar do rótulo pequeno */
 .section__title--cor { color: var(--red); }
 .section__sub { color: var(--muted); max-width: 56ch; }
-/* o & da Anton fica estranho: aqui ele usa o desenho limpo da Archivo */
-.amp { font-family: "Archivo", system-ui, sans-serif; font-style: normal; font-weight: 500; }
+/* a Archivo desenha o & como um "Ɛ" e a Anton piora: este aqui usa o & clássico
+   da Helvetica, que combina com o texto e não chama atenção */
+.amp { font-family: Helvetica, Arial, sans-serif; font-style: normal; font-weight: inherit; }
 .section__head { margin-bottom: 1.8rem; }
 
 /* ===== BUTTONS ===== */
@@ -576,8 +577,8 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 #destaques .hl-card { display: block; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 16px; color: inherit; transition: transform .25s var(--ease), border-color .25s; }
 #destaques .hl-card:hover { transform: translateY(-6px); border-color: var(--red); }
 #destaques .hl-thumb { aspect-ratio: 9/16; max-height: 420px; border-radius: 8px; }
-#destaques .hl-num { display: block; font-family: "Anton", sans-serif; font-size: 28px; line-height: 1.05; margin-top: 12px; color: var(--red); }
-#destaques .hl-rot { display: block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+#destaques .hl-marca { font-size: .7rem; letter-spacing: .18em; text-transform: uppercase; color: var(--text); margin: 10px 0 0; }
+#destaques .hl-rot { display: block; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--red); margin-top: 12px; }
 #destaques .hl-tit { font-size: 16px; font-weight: 700; margin: 8px 0 0; }
 #destaques .hl-sub { font-size: .88rem; color: var(--muted); margin-top: 2px; }
 
@@ -761,8 +762,8 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
     <section class="portfolio reveal" id="destaques">
       <div class="section__head">
         <span class="kicker">Top picks</span>
-        <h2 class="section__title">Featured content</h2>
-        <p class="section__sub">The three videos I show first to any brand. Click a cover to watch.</p>
+        <h2 class="section__title">Start here</h2>
+        <p class="section__sub">The three videos I show first to any brand, and what each one proves. Click a cover to watch.</p>
       </div>
       <div class="hl-grid" id="hlGrid"></div>
     </section>
@@ -1052,13 +1053,15 @@ const VIDEOS = [
    img  -> AQUI ENTRA A CAPA vertical, ex "destaque-1.jpg". Vazio = degradê. */
 /* CONTEÚDOS DE DESTAQUE: os três que você mostra primeiro.
    O id é o final do link do YouTube. Troque quando quiser destacar outros. */
+/* COMEÇA POR AQUI: os três vídeos que você mostra primeiro.
+   Em vez de número de views, cada um diz o que prova para a marca. */
 const DESTAQUES = [
-  { id:"JwZRjpgf-Lc", marca:"L'Oréal",          formato:"Problem → Solution", numero:"+00K", rotulo:"views on this video",
-    titulo:"Skincare routine that sells", contexto:"Problem and solution in natural light, with burned in captions." },
-  { id:"GJiC4yul2_c", marca:"Haruharu Wonder",  formato:"Aesthetic",    numero:"+00K", rotulo:"views on this video",
-    titulo:"The product inside a real routine", contexto:"Aesthetic take, slow hands, close up on texture." },
-  { id:"8Z9WfmGYAv8", marca:"Niche Beauty Lab", formato:"Product Demo", numero:"+00K", rotulo:"views on this video",
-    titulo:"Night skin reset", contexto:"Benefit said within the first three seconds." }
+  { id:"JwZRjpgf-Lc", marca:"L'Oréal",          formato:"Problem → Solution",
+    titulo:"From problem to purchase", contexto:"Shows how I build desire in under twenty seconds, hook to CTA." },
+  { id:"GJiC4yul2_c", marca:"Haruharu Wonder",  formato:"Aesthetic",
+    titulo:"Selling by feel", contexto:"Quiet, tactile storytelling for brands whose product is an experience." },
+  { id:"8Z9WfmGYAv8", marca:"Niche Beauty Lab", formato:"Product Demo",
+    titulo:"A routine explained", contexto:"A full routine that teaches the product without sounding like an ad." }
 ];
 
 const SERVICES = [
@@ -1200,6 +1203,7 @@ function molduraHTML(v) {
   const ultima = "https://i.ytimg.com/vi/" + v.id + "/hqdefault.jpg";
   return `<button class="poster__botao" type="button" aria-label="Play: ${esc(v.marca)}, ${esc(v.formato)}">
       <img class="poster__capa" src="${capa}" alt="" loading="lazy" decoding="async"
+           onload="if(this.naturalWidth<400&&!this.dataset.passo){this.dataset.passo=1;this.src='${reserva}'}"
            onerror="if(this.dataset.passo){this.onerror=null;this.src='${ultima}'}else{this.dataset.passo=1;this.src='${reserva}'}">
       <span class="poster__play" aria-hidden="true">&#9654;</span>
     </button>`;
@@ -1230,10 +1234,10 @@ renderPosters();
       <div class="poster__quadro hl-thumb" data-id="${esc(d.id)}" data-marca="${esc(d.marca)}" data-formato="${esc(d.formato)}">
         ${molduraHTML(d)}
       </div>
-      <b class="hl-num">${esc(d.numero)}</b>
-      <span class="hl-rot">${esc(d.rotulo)}</span>
+      <span class="hl-rot">${amp(esc(d.formato))}</span>
       <p class="hl-tit">${esc(d.titulo)}</p>
-      <p class="hl-sub">${amp(esc(d.marca))} · ${amp(esc(d.formato))}</p>
+      <p class="hl-sub">${amp(esc(d.contexto))}</p>
+      <p class="hl-marca">${amp(esc(d.marca))}</p>
     </article>`).join("");
 })();
 
