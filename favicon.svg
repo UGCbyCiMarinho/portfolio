@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="Ci Marinho">
+  <rect width="24" height="24" rx="5" fill="#1b1613"/>
+  <g transform="translate(12 12) scale(.62) translate(-12 -12)">
+    <path d="M12 0c1 7 5 11 12 12-7 1-11 5-12 12-1-7-5-11-12-12C7 11 11 7 12 0Z" fill="#e8dcd0"/>
+  </g>
+</svg>
