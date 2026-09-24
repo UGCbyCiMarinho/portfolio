@@ -522,6 +522,43 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 .footer__disclaimer { line-height: 1.5; }
 .footer__disclaimer strong { color: var(--text); }
 
+/* ===== CURSOR PRÓPRIO =====
+   Só entra em quem usa mouse. No celular e no tablet nada muda. */
+.cursor { display: none; }
+@media (pointer: fine) {
+  html.tem-cursor, html.tem-cursor body { cursor: none; }
+  html.tem-cursor a, html.tem-cursor button, html.tem-cursor .poster__botao, html.tem-cursor .tab { cursor: none; }
+  /* nos campos de texto o cursor normal continua, senão atrapalha na hora de escrever */
+  html.tem-cursor input, html.tem-cursor textarea { cursor: text; }
+  html.tem-cursor.player-aberto, html.tem-cursor.player-aberto body { cursor: auto; }
+
+  .cursor {
+    display: block; position: fixed; left: 0; top: 0; z-index: 200;
+    pointer-events: none; transform: translate(-50%, -50%);
+    transition: opacity .2s ease;
+  }
+  .cursor.sumiu { opacity: 0; }
+  .cursor__anel {
+    display: block; width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid var(--red); background: transparent;
+    transition: width .25s var(--ease), height .25s var(--ease), background .25s ease, border-color .25s ease;
+  }
+  .cursor__rotulo {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(.7);
+    font-size: .58rem; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--sobre-destaque); opacity: 0; white-space: nowrap;
+    transition: opacity .2s ease, transform .25s var(--ease);
+  }
+  /* sobre link ou botão: vira um ponto cheio */
+  .cursor.no-alvo .cursor__anel { width: 10px; height: 10px; background: var(--red); }
+  /* sobre vídeo: cresce, preenche e mostra Watch */
+  .cursor.no-video .cursor__anel { width: 74px; height: 74px; background: var(--red); border-color: var(--red); }
+  .cursor.no-video .cursor__rotulo { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cursor__anel, .cursor__rotulo { transition: none; }
+}
+
 /* ===== PLAYER EM TELA CHEIA ===== */
 .player { position: fixed; inset: 0; z-index: 110; display: flex; align-items: center; justify-content: center; padding: 4vh 3vw 3vh; }
 .player[hidden] { display: none; }
@@ -889,6 +926,12 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
     </div>
   </footer>
 
+  <!-- ===== CURSOR ===== -->
+  <div class="cursor" id="cursor" aria-hidden="true">
+    <span class="cursor__anel"></span>
+    <span class="cursor__rotulo">Watch</span>
+  </div>
+
   <!-- ===== PLAYER EM TELA CHEIA ===== -->
   <div class="player" id="playerModal" hidden>
     <div class="player__fundo" data-fechar></div>
@@ -1238,7 +1281,7 @@ function molduraHTML(v) {
   const capa = "https://i.ytimg.com/vi/" + v.id + "/oardefault.jpg";
   const reserva = "https://i.ytimg.com/vi/" + v.id + "/maxresdefault.jpg";
   const ultima = "https://i.ytimg.com/vi/" + v.id + "/hqdefault.jpg";
-  return `<button class="poster__botao" type="button" aria-label="Play: ${esc(v.marca)}, ${esc(v.formato)}">
+  return `<button class="poster__botao" type="button" data-cursor="play" aria-label="Play: ${esc(v.marca)}, ${esc(v.formato)}">
       <img class="poster__capa" src="${capa}" alt="" loading="lazy" decoding="async"
            onload="if(this.naturalWidth<400&&!this.dataset.passo){this.dataset.passo=1;this.src='${reserva}'}"
            onerror="if(this.dataset.passo){this.onerror=null;this.src='${ultima}'}else{this.dataset.passo=1;this.src='${reserva}'}">
@@ -1307,6 +1350,8 @@ renderPosters();
     void caixa.offsetWidth;          /* força o recálculo, para a transição valer sempre */
     caixa.classList.add("is-open");
     document.body.style.overflow = "hidden";
+    document.documentElement.classList.add("player-aberto");
+    const cursor = $("#cursor"); if (cursor) cursor.classList.add("sumiu");
     $("#playerFechar").focus();
     document.addEventListener("keydown", tecla);
   }
@@ -1334,6 +1379,8 @@ renderPosters();
     caixa.classList.remove("is-open");
     document.removeEventListener("keydown", tecla);
     document.body.style.overflow = "";
+    document.documentElement.classList.remove("player-aberto");
+    const cursor = $("#cursor"); if (cursor) cursor.classList.remove("sumiu");
     window.setTimeout(function () { moldura.innerHTML = ""; caixa.hidden = true; }, prefersReduced ? 0 : 260);
     if (focoAnterior && focoAnterior.focus) focoAnterior.focus();
   }
@@ -1456,6 +1503,41 @@ navLinks.addEventListener("click", e => {
     burger.setAttribute("aria-expanded", "false");
   }
 });
+
+/* ============================================================
+   CURSOR PRÓPRIO
+   ============================================================ */
+(function ligaCursor() {
+  const fino = window.matchMedia("(pointer: fine)");
+  const el = $("#cursor");
+  if (!el || !fino.matches) return;
+  document.documentElement.classList.add("tem-cursor");
+
+  const anel = el.firstElementChild;
+  let alvoX = window.innerWidth / 2, alvoY = window.innerHeight / 2;
+  let x = alvoX, y = alvoY;
+  const atraso = prefersReduced ? 1 : 0.22;   /* quanto menor, mais macio o rastro */
+
+  function passo() {
+    x += (alvoX - x) * atraso;
+    y += (alvoY - y) * atraso;
+    el.style.transform = "translate(" + x + "px," + y + "px) translate(-50%,-50%)";
+    requestAnimationFrame(passo);
+  }
+  requestAnimationFrame(passo);
+
+  document.addEventListener("mousemove", function (ev) {
+    alvoX = ev.clientX; alvoY = ev.clientY;
+    el.classList.remove("sumiu");
+    const sobre = ev.target.closest('[data-cursor="play"]');
+    const clicavel = ev.target.closest('a, button, .tab, [role="button"]');
+    el.classList.toggle("no-video", !!sobre);
+    el.classList.toggle("no-alvo", !sobre && !!clicavel);
+  }, { passive: true });
+
+  document.addEventListener("mouseleave", () => el.classList.add("sumiu"));
+  document.addEventListener("mouseenter", () => el.classList.remove("sumiu"));
+})();
 
 /* ============================================================
    MENU: marca a seção em que você está
