@@ -510,6 +510,8 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 
 .contact__form { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.8rem; }
 .field { margin-bottom: 1rem; }
+/* dois campos lado a lado, que viram um embaixo do outro no celular */
+.field__par { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
 .field label { display: block; font-size: .8rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: .4rem; }
 .field input, .field textarea {
   width: 100%; background: var(--campo); border: 1px solid var(--line);
@@ -694,6 +696,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 
 @media (max-width: 560px) {
   .nav__icons { display: none; }   /* no celular as redes ficam no rodapé e no contato */
+  .field__par { grid-template-columns: 1fr; }
   .processo__grid { grid-template-columns: 1fr; }
   .services__grid { grid-template-columns: 1fr; }
   .poster { width: 168px; }
@@ -904,28 +907,34 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
       <div class="contact__info">
         <span class="kicker">Contact</span>
         <h2 class="section__title">Let's create together</h2>
-        <p class="contact__lead">Tell me about the campaign. I reply quickly with a proposal and deadlines.</p>
+        <p class="contact__lead">Tell me a bit about your brand and what you want to achieve: how many videos, which formats, when you need them. I reply within 48h.</p>
         <ul class="contact__list" id="contactList"></ul>
       </div>
 
       <form class="contact__form" id="contactForm" novalidate>
-        <div class="field">
-          <label for="cf-nome">Your name</label>
-          <input type="text" id="cf-nome" name="nome" placeholder="Your name" required>
+        <div class="field__par">
+          <div class="field">
+            <label for="cf-nome">Name</label>
+            <input type="text" id="cf-nome" name="nome" placeholder="Your name" required>
+          </div>
+          <div class="field">
+            <label for="cf-email">Email</label>
+            <input type="email" id="cf-email" name="email" placeholder="you@yourbrand.com" required>
+          </div>
         </div>
         <div class="field">
-          <label for="cf-marca">Brand</label>
-          <input type="text" id="cf-marca" name="marca" placeholder="Your brand" required>
+          <label for="cf-marca">Brand / company</label>
+          <input type="text" id="cf-marca" name="marca" placeholder="Brand name" required>
         </div>
         <div class="field">
-          <label for="cf-email">Email</label>
-          <input type="email" id="cf-email" name="email" placeholder="you@yourbrand.com" required>
+          <label for="cf-orcamento">Estimated budget</label>
+          <input type="text" id="cf-orcamento" name="orcamento" placeholder="Ex: $500 to $1,500 CAD">
         </div>
         <div class="field">
-          <label for="cf-msg">Message</label>
-          <textarea id="cf-msg" name="mensagem" rows="4" placeholder="Tell me about the campaign..." required></textarea>
+          <label for="cf-msg">Tell me about the project</label>
+          <textarea id="cf-msg" name="mensagem" rows="4" placeholder="Category, format, how many videos, deadline, campaign goal..." required></textarea>
         </div>
-        <button type="submit" class="btn btn--play btn--full" id="contactSubmit">&#9654; SEND BRIEFING</button>
+        <button type="submit" class="btn btn--play btn--full" id="contactSubmit">&#9654; SEND MESSAGE</button>
         <p class="form__feedback" id="contactFeedback" role="status" aria-live="polite"></p>
       </form>
     </section>
@@ -948,10 +957,6 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
     </div>
     <div class="footer__legal">
       <p>&copy; <span id="year"></span> Cintia Marinho · @ccimarinho · Toronto, Canada. All rights reserved.</p>
-      <p class="footer__disclaimer">
-        Layout inspired only by the <em>visual style</em> of streaming platforms. Independent project,
-        <strong>with no affiliation, sponsorship or connection</strong> to any real streaming service.
-      </p>
     </div>
   </footer>
 
@@ -1244,7 +1249,7 @@ const CONTATOS = [
   { icone:"instagram", texto:"@ccimarinho",             link:"https://instagram.com/ccimarinho" },
   { icone:"tiktok",    texto:"@cimarinhougc",           link:"https://tiktok.com/@cimarinhougc" },
   { icone:"x",         texto:"@Ciimarinho",             link:"https://x.com/Ciimarinho" },
-  { icone:"local",     texto:"Toronto, Canada",         link:"" }
+  { icone:"local",     texto:"Toronto, Canada",         link:"https://maps.google.com/?q=Toronto,+Canada" }
 ];
 
 /* ============================================================
@@ -1684,7 +1689,7 @@ function handleForm(form, btn, feedback, msg) {
   });
 }
 handleForm($("#contactForm"), $("#contactSubmit"), $("#contactFeedback"),
-  "✓ Briefing received! I reply within 24 business hours.");
+  "✓ Message received! I reply within 48h.");
 
 /* ============================================================
    MODAL DE LEAD (7s ou ao sair da página, 1x por sessão)
