@@ -453,10 +453,12 @@ img, svg { display: block; max-width: 100%; }
   transition: border-color .22s;
 }
 .testimonial:hover { border-color: var(--red); }
+/* na faixa de marcas o logo fica num retângulo. Aqui ele vira pílula, para
+   as duas seções não parecerem a mesma coisa. */
 .testimonial__marca {
   align-self: flex-start; display: flex; align-items: center; justify-content: center;
-  height: 40px; min-width: 96px; padding: 5px 10px;
-  background: #fff; border-radius: 6px;
+  height: 40px; min-width: 92px; padding: 6px 16px;
+  background: #fff; border-radius: 999px;
 }
 .testimonial__marca img { max-height: 100%; max-width: 110px; object-fit: contain; }
 .testimonial__text {
@@ -573,7 +575,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 .reveal.is-visible { opacity: 1; transform: none; }
 
 /* ===== CONTEÚDOS DE DESTAQUE ===== */
-#destaques .hl-grid { display: grid; grid-template-columns: repeat(3, minmax(0,300px)); gap: 20px; justify-content: center; align-items: start; }
+#destaques .hl-grid { display: grid; grid-template-columns: repeat(4, minmax(0,250px)); gap: 18px; justify-content: center; align-items: start; }
 #destaques .hl-card { display: block; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 16px; color: inherit; transition: transform .25s var(--ease), border-color .25s; }
 #destaques .hl-card:hover { transform: translateY(-6px); border-color: var(--red); }
 #destaques .hl-thumb { aspect-ratio: 9/16; max-height: 420px; border-radius: 8px; }
@@ -581,6 +583,11 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
 #destaques .hl-rot { display: block; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--red); margin-top: 12px; }
 #destaques .hl-tit { font-size: 16px; font-weight: 700; margin: 8px 0 0; }
 #destaques .hl-sub { font-size: .88rem; color: var(--muted); margin-top: 2px; }
+/* o que a marca escreveu, fechando o caso */
+.caso__citacao { max-width: 62ch; margin: 2.2rem auto 0; text-align: center; }
+.caso__aspas { font-family: "Anton", sans-serif; font-size: 2.4rem; color: var(--red); line-height: .5; display: block; height: 18px; }
+.caso__citacao p { font-style: italic; font-size: 1.06rem; color: var(--text); margin: 0 0 .7rem; }
+.caso__citacao cite { font-style: normal; font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 1100px) {
@@ -762,10 +769,11 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
     <section class="portfolio reveal" id="destaques">
       <div class="section__head">
         <span class="kicker">Case in focus</span>
-        <h2 class="section__title">One brand, three angles</h2>
-        <p class="section__sub">Royal Distribution booked four videos with me. Three of them, each doing a different job. Click a cover to watch.</p>
+        <h2 class="section__title">One brand, four angles</h2>
+        <p class="section__sub">Royal Distribution booked four videos with me. Four angles, four different jobs. Click a cover to watch.</p>
       </div>
       <div class="hl-grid" id="hlGrid"></div>
+      <blockquote class="caso__citacao" id="casoCitacao"></blockquote>
     </section>
 
     <!-- ===== PORTFÓLIO ===== -->
@@ -1057,14 +1065,24 @@ const VIDEOS = [
    Em vez de número de views, cada um diz o que prova para a marca. */
 /* COMEÇA POR AQUI: uma marca só, em três ângulos diferentes.
    Para trocar um vídeo, troque o id pelo final do link do YouTube. */
+/* CASO EM FOCO: uma marca só, em quatro ângulos.
+   Para trocar um vídeo, troque o id pelo final do link do YouTube. */
 const DESTAQUES = [
   { id:"9jFA6OZS3oM", marca:"Royal Distribution", formato:"Before & After",
     titulo:"The proof", contexto:"The result on camera, without promising what the product does not deliver." },
   { id:"atGtKSM7Auk", marca:"Royal Distribution", formato:"Unboxing",
-    titulo:"The first impression", contexto:"The reaction to the package, where desire starts before the product is even used." },
+    titulo:"The first impression", contexto:"The reaction to the package, where desire starts before the first use." },
   { id:"kXsS0omB5N8", marca:"Royal Distribution", formato:"Problem → Solution",
-    titulo:"The argument", contexto:"The pain named out loud and the product arriving as the answer." }
+    titulo:"The argument", contexto:"The pain named out loud and the product arriving as the answer." },
+  { id:"E9XTPUI6CbI", marca:"Royal Distribution", formato:"Aesthetic",
+    titulo:"The mood", contexto:"A shower routine filmed to be felt, for when the product sells by atmosphere." }
 ];
+
+/* O que a Royal escreveu depois da entrega. */
+const CASO_CITACAO = {
+  texto: "Love love love the videos! I don't have any comments to add! Aesthetic is perfect, music, volume, closeup, usage, everything is very cute!",
+  marca: "Royal Distribution"
+};
 
 const SERVICES = [
   { ic: "🎬", title: "UGC video",         desc: "A vertical video with my own script, a strong hook and a clear call to action." },
@@ -1230,6 +1248,14 @@ renderPosters();
 /* ============================================================
    CONTEÚDOS DE DESTAQUE
    ============================================================ */
+(function buildCitacao() {
+  const alvo = $("#casoCitacao");
+  if (!alvo || typeof CASO_CITACAO === "undefined") return;
+  alvo.innerHTML = '<span class="caso__aspas" aria-hidden="true">&#8220;</span>' +
+                   '<p>' + esc(CASO_CITACAO.texto) + '</p>' +
+                   '<cite>' + amp(esc(CASO_CITACAO.marca)) + '</cite>';
+})();
+
 (function buildDestaques() {
   $("#hlGrid").innerHTML = DESTAQUES.map(d => `
     <article class="hl-card">
