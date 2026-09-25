@@ -3716,31 +3716,31 @@ async function pensarGanchos() {
 }
 
 /* modelos da mensagem, no A.C.R. do curso (creator inventada, para nenhum dado real ficar no código) */
-const MODELOS_PITCH = `MODELO 1 (candidatura em plataforma, produto: pó de eletrólitos sabor frutas vermelhas, para ads):
-Most people don't skip hydration because they don't care. They skip it because plain water feels like a chore after a 12-hour shift.
+const MODELOS_PITCH = `MODELO APROVADO PELA CINTIA (a referência principal: siga esta estrutura, esta lógica e este tom). Candidatura, produto: ômega-3 líquido sabor limão:
+Most people don't stop taking omega-3 because they forget. They stop because of the fishy taste that stays in their mouth every morning.
 
-I work night shifts as a nurse, so that 7am exhaustion is my real life, not a script.
+That's my reality too, and the reality of a lot of people, which is exactly the problem a lemon-flavored omega-3 solves.
 
-My video, "Night Shift Reset", opens in the locker room as I say "If you work nights, this is what you should drink after your shift," with "night shift recovery in 10 seconds" on screen. I mix the berry stick into my bottle, take the first sip, and you watch me come back to life on the drive home. It ends with the empty bottle and one line: "the one habit that made my shifts easier."
+With that in mind, I had an idea for a video about the real reason people quit fish oil. It opens with the hook "Do you know why most people quit omega-3 in the first month?" and "the real reason" on screen, which sparks curiosity in anyone who cares about taking their vitamins. From there, I explain in a light, friend-to-friend way that the taste is what makes people give up, that it used to happen to me too, and that it doesn't anymore because now I take NutraSea Lemon, with no unpleasant aftertaste.
 
-I've created content for brands like Vital Proteins and Clinique.
+I've worked with brands like L'Oréal, TC Nutrition and Royal Distribution, and I'm really excited about the chance to work with yours too.
 
-If this fits what you have in mind, I'd love to create it for you, with a second hook you can A/B test. Should I send over my rates? You can see my work here: [portfólio]
+Would you like me to send the full script idea for this video? You can also see my portfolio, with brand feedback, videos I've produced and a feel for my style: [portfólio]
 
-MODELO 2 (e-mail frio, produto: creme para pele sensível):
+MODELO 2 (outra creator, e-mail frio, produto: creme para pele sensível; mesma estrutura):
 ASSUNTO: A redness test for your barrier cream
 MENSAGEM:
 Hello [Marca] team,
 
 Anyone with reactive skin knows the moment: you try a new cream and spend the next hour waiting to see if your face turns red.
 
-I have rosacea, so that hour is how I choose every product I use.
+I have rosacea, so that's my reality every time I try something new, which is exactly why a cream made for sensitive skin matters.
 
-My video, "The Redness Test", opens on a close-up of my cheek as I say "I don't trust new creams, so I test them like this," with "sensitive skin test: day 1" on screen. I apply the cream to one side only and we check in after an hour and the next morning, side by side. It ends on my face in natural light and one line: "the first one I didn't have to worry about."
+With that in mind, I had an idea for a video called "The Redness Test". It opens with "I don't trust new creams, so I test them like this," and "sensitive skin test: day 1" on screen, which stops anyone who has been burned by a product before. From there, I talk through the fear of trying something new like I'd tell a friend, apply your cream to one side of my face, and show the calm, even result the next morning.
 
-I've created content for brands like La Roche-Posay and Cetaphil.
+I've created content for brands like La Roche-Posay and Cetaphil, and I'd love to add yours.
 
-If this fits what you have in mind, I'd love to create it for you. Should I send over my rates? You can see my work here: [portfólio]
+Would you like me to send the full script idea for this video? You can also see my portfolio, with brand feedback and videos I've produced: [portfólio]
 
 Warmly,
 [nome]`;
@@ -3750,13 +3750,13 @@ function instrucaoRedatora() {
   if (F.tipo === "dm") return (TIPOS_ABORDAGEM.find(t => t[0] === "dm") || [])[2];
   if (F.tipo === "followup") return (TIPOS_ABORDAGEM.find(t => t[0] === "followup") || [])[2];
   return (F.tipo === "plataforma" ? "Uma candidatura para a vaga, sem assunto e sem assinatura longa." : "Um e-mail frio, com ASSUNTO curto que cite a ideia ou o produto, saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\", e assinatura \"Warmly,\" + o nome dela.") + "\n\n" +
-    "ESTRUTURA: o método A.C.R. do curso, na ordem dos modelos. Cada parte puxa a próxima:\n" +
-    "1. ATENÇÃO (1 ou 2 frases): uma verdade sobre o cliente da marca, ligada ao herói do produto. Nada sobre ela.\n" +
-    "2. CONEXÃO (1 frase): o fato real dela que a coloca DENTRO desse problema. Ligação direta com a frase anterior. Nada de currículo.\n" +
-    "3. RESULTADO (3 ou 4 frases): \"My video, [nome da ideia], opens...\" com o GANCHO ESCOLHIDO por ela, exatamente: o que aparece, a fala entre aspas e o texto na tela. Depois, em linhas gerais e no tom de conversa com uma amiga: a dor explicada de leve, a virada (o produto e o seu diferencial), e a cena real dela usando o produto. Escreva para dar VONTADE de ver, não como roteiro nem lista técnica: nada de \"label facing camera\", \"close-up on the label\", \"hero moment\", \"measuring spoon\", \"in focus\", tempos ou cena por cena.\n" +
-    "4. CREDENCIAL (1 frase neutra): \"I've created content for brands like...\" com 2 ou 3 marcas, de preferência do mesmo nicho. Nunca ligue a marcas com \"which is why\" ou \"that's why\".\n" +
-    "5. FECHO: uma frase dizendo que ela adoraria criar isso para a marca" + (F.estrategia && F.estrategia.uso === "ads" && F.ganchoB ? " (com um segundo gancho para teste A/B)" : "") + ", uma pergunta de sim ou não sobre o próximo passo (ex.: \"Should I send over my rates?\") e o convite para ver o trabalho dela: " + portfolio + "\n" +
-    "NUNCA entregue o roteiro inteiro nem ofereça mandar o roteiro: mostre só a ideia, o gancho e o caminho do vídeo em linhas gerais, o suficiente para a marca visualizar e querer, não para fazer sem ela.\n\n" +
+    "ESTRUTURA: a do MODELO APROVADO PELA CINTIA, em 5 partes, e cada parte puxa a próxima:\n" +
+    "1. A VERDADE DO CLIENTE (1 ou 2 frases): por que as pessoas desistem ou sofrem, ligada ao herói do produto.\n" +
+    "2. A PONTE (1 ou 2 frases): se for um fato real dela (está no perfil ou no pedido especial), \"that's my reality too\"; e por que o diferencial do produto resolve exatamente esse problema.\n" +
+    "3. A IDEIA (3 ou 4 frases): \"With that in mind, I had an idea for a video about...\" com o GANCHO ESCOLHIDO por ela (a fala entre aspas e o texto na tela), por que ele gera curiosidade em quem é o cliente, e depois, em linhas gerais e no tom de conversa com uma amiga, a dor explicada de leve, a virada com o produto e o seu diferencial, e ela usando na vida real. Nunca como roteiro, cena por cena, tempos ou termos técnicos (\"label facing camera\", \"close-up\", \"hero moment\", \"b-roll\" pode aparecer só de leve).\n" +
+    "4. AS MARCAS + ENTUSIASMO (1 frase): \"I've worked with brands like...\" (2 ou 3, de preferência do mesmo nicho) e que ela está empolgada com a chance de trabalhar com essa marca também. Nunca \"which is why\".\n" +
+    "5. O FECHO: oferecer mandar a ideia completa do roteiro (\"Would you like me to send the full script idea for this video?\")" + (F.estrategia && F.estrategia.uso === "ads" && F.ganchoB ? ", podendo citar que também tem um segundo gancho para teste A/B" : "") + ", e o convite para o portfólio dizendo o que a marca vai encontrar lá (feedback de marcas, vídeos que ela produziu, o estilo dela): " + portfolio + "\n" +
+    "O roteiro inteiro NUNCA vai dentro da mensagem: só a ideia, o gancho e o caminho em linhas gerais.\n\n" +
     "Tamanho: parecido com os modelos, no máximo " + (F.tipo === "plataforma" ? "140" : "160") + " palavras.\n" +
     "Do guia de estilo, use a VOZ, os FATOS dela e a lista do que nunca dizer. A ESTRUTURA é a dos modelos. Imite o ritmo e a lógica dos modelos, nunca as frases nem os produtos deles.\n\n" +
     "=== MODELOS (de outra creator; só para você ver o nível e a estrutura) ===\n" + MODELOS_PITCH;
