@@ -13,6 +13,9 @@
 <link rel="canonical" href="https://cimarinho.com/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- banco de dados do painel (vídeos, formulário e visitas) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/banco.js" defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@1,500;1,600&display=swap" rel="stylesheet">
 <style>
 /* ===== RESET & TOKENS ===== */
@@ -433,6 +436,7 @@ img, svg { display: block; max-width: 100%; }
 .poster__meta { padding: .7rem .2rem 0; display: flex; flex-direction: column; gap: .12rem; }
 .poster__marca { font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
 .poster__formato { font-size: .78rem; color: var(--muted); font-style: italic; }
+.poster__destaque { font-size: .72rem; font-weight: 700; color: var(--red); letter-spacing: .02em; }
 
 /* ===== SERVIÇOS ===== */
 .services { max-width: var(--maxw); margin: 0 auto; padding: 4rem 1.2rem; }
@@ -1057,9 +1061,12 @@ const TABS = [
   { id:"Photos",       label:"Photos" }
 ];
 
-/* VÍDEOS: vieram da sua planilha, na ordem da coluna Ordem, por nicho.
+/* VÍDEOS: agora vêm do seu painel (cimarinho.com/admin), da tabela "videos".
+   Esta lista abaixo é só a RESERVA: aparece se o banco estiver fora do ar,
+   para o site nunca ficar vazio. Para mudar vídeos, use o painel, não aqui.
    id = o trecho final do link do YouTube. tipo: short (vertical) ou video (deitado). */
-const VIDEOS = [
+let VIDEOS = [];
+const VIDEOS_RESERVA = [
   /* ---- Skincare ---- */
   { nicho:"Skincare", ordem: 1, id:"GJiC4yul2_c", marca:"Haruharu Wonder", formato:"Aesthetic", tipo:"short" },
   { nicho:"Skincare", ordem: 2, id:"tVAM3iAPCTw", marca:"Beauty of Joseon", formato:"Testimonial", tipo:"short" },
@@ -1317,11 +1324,22 @@ const comFoto = (img) => img ? " tem-foto" : "";
    ============================================================ */
 let activeTab = "todos";
 
-(function buildTabs() {
-  const wrap = $("#tabs");
-  wrap.innerHTML = TABS.map(t =>
-    `<button class="tab${t.id === "todos" ? " is-active" : ""}" role="tab" aria-selected="${t.id === "todos"}" data-tab="${t.id}">${amp(esc(t.label))}</button>`
+/* as abas seguem os vídeos do painel: nicho sem vídeo some,
+   nicho novo que você criar no painel ganha aba sozinho (antes de Photos) */
+function montaAbas() {
+  const nichos = new Set(VIDEOS.map(v => v.nicho).filter(Boolean));
+  const abas = TABS.filter(t => t.id === "todos" || t.id === "Photos" || nichos.has(t.id));
+  const novos = [...nichos].filter(n => !TABS.some(t => t.id === n)).map(n => ({ id: n, label: n }));
+  const posFotos = abas.findIndex(t => t.id === "Photos");
+  abas.splice(posFotos < 0 ? abas.length : posFotos, 0, ...novos);
+  if (!abas.some(t => t.id === activeTab)) activeTab = "todos";
+  $("#tabs").innerHTML = abas.map(t =>
+    `<button class="tab${t.id === activeTab ? " is-active" : ""}" role="tab" aria-selected="${t.id === activeTab}" data-tab="${esc(t.id)}">${amp(esc(t.label))}</button>`
   ).join("");
+}
+
+(function ligaAbas() {
+  const wrap = $("#tabs");
   wrap.addEventListener("click", e => {
     const btn = e.target.closest(".tab");
     if (!btn) return;
@@ -1358,6 +1376,7 @@ function cartaoVideo(v) {
       <div class="poster__meta">
         <span class="poster__marca">${amp(esc(v.marca))}</span>
         <span class="poster__formato">${amp(esc(v.formato))}</span>
+        ${v.destaque ? `<span class="poster__destaque">${esc(v.destaque)}</span>` : ""}
       </div>
     </article>`;
 }
@@ -1385,7 +1404,87 @@ function renderPosters() {
   const cartoes = itens.map(cartaoVideo).join("");
   row.innerHTML = activeTab === "todos" ? cartoes + FOTOS.map(cartaoFoto).join("") : cartoes;
 }
-renderPosters();
+
+/* ============================================================
+   VÍDEOS DO PAINEL: o site lê a tabela "videos" do Supabase.
+   Mudou no admin, muda aqui na próxima vez que a página abrir.
+   Se o banco não responder em 6 segundos, usa a VIDEOS_RESERVA.
+   ============================================================ */
+function doBanco(v) {
+  const link = String(v.link || "");
+  const achou = link.match(/(?:youtu\.be\/|youtube\.com\/(?:shorts\/|embed\/|live\/|watch\?(?:.*&)?v=))([\w-]{11})/);
+  return {
+    id: achou ? achou[1] : "",
+    nicho: v.nicho || "",
+    marca: v.marca || v.titulo || "",
+    formato: v.formato || "",
+    destaque: v.destaque || "",
+    tipo: /\/shorts\//.test(link) ? "short" : "video"
+  };
+}
+function mostraVideos(lista) {
+  VIDEOS = lista;
+  montaAbas();
+  renderPosters();
+}
+(function carregaVideos() {
+  let pronto = false;
+  const usaReserva = () => { if (pronto) return; pronto = true; mostraVideos(VIDEOS_RESERVA); };
+  const limite = setTimeout(usaReserva, 6000);
+  function busca() {
+    if (!window.banco) { clearTimeout(limite); usaReserva(); return; }
+    banco.from("videos").select("*").eq("visivel", true).order("ordem", { ascending: true })
+      .then(({ data, error }) => {
+        if (pronto) return;
+        clearTimeout(limite);
+        if (error || !Array.isArray(data)) { usaReserva(); return; }
+        pronto = true;
+        mostraVideos(data.map(doBanco).filter(v => v.id));
+      }, () => { clearTimeout(limite); usaReserva(); });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", busca);
+  else busca();
+})();
+
+/* ============================================================
+   REGISTRO DE VISITA: grava só o dia, a página e de onde a pessoa
+   veio. Sem cookie, sem serviço de fora, sem pedir nada.
+   Conta uma vez por visita (aba aberta). Você logada no painel não conta.
+   Dica: no link da bio use cimarinho.com/?utm_source=instagram
+   ============================================================ */
+(function registraVisita() {
+  if (!/^(www\.)?cimarinho\.com$/.test(location.hostname)) return; /* só no site de verdade */
+  try {
+    if (sessionStorage.getItem("visita-contada")) return;
+    sessionStorage.setItem("visita-contada", "1");
+  } catch (e) {}
+  const NOMES = [
+    [/instagram|^ig$/i, "Instagram"], [/tiktok/i, "TikTok"], [/google/i, "Google"], [/bing/i, "Bing"],
+    [/duckduckgo/i, "DuckDuckGo"], [/facebook|^fb(\.com)?$/i, "Facebook"], [/linkedin|lnkd/i, "LinkedIn"],
+    [/^t\.co$|twitter|^x(\.com)?$/i, "X"], [/youtube|youtu\.be/i, "YouTube"], [/pinterest/i, "Pinterest"],
+    [/whatsapp|wa\.me/i, "WhatsApp"], [/mail|outlook/i, "E-mail"], [/linktr|beacons|bio\.link/i, "Link na bio"],
+    [/canva/i, "Canva"]
+  ];
+  const nome = (s) => { const n = NOMES.find(([re]) => re.test(s)); return n ? n[1] : String(s).slice(0, 60); };
+  let origem = "Direto";
+  const params = new URLSearchParams(location.search);
+  const utm = params.get("utm_source") || params.get("ref");
+  if (utm) origem = nome(utm);
+  else {
+    let host = "";
+    try { host = new URL(document.referrer).hostname.replace(/^(www|m|l|lm)\./, ""); } catch (e) {}
+    if (host && host !== location.hostname.replace(/^www\./, "")) origem = nome(host);
+  }
+  function envia() {
+    if (!window.banco) return;
+    banco.auth.getSession().then(({ data }) => {
+      if (data && data.session) return;
+      return banco.from("visitas").insert({ pagina: location.pathname.slice(0, 200), origem });
+    }).catch(() => {});
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", envia);
+  else envia();
+})();
 
 /* ============================================================
    CONTEÚDOS DE DESTAQUE
@@ -1698,6 +1797,28 @@ $$(".reveal").forEach(el => revealObserver.observe(el));
    ============================================================ */
 const DESTINO_FORM = "https://formsubmit.co/ajax/cimarinho.ugc@gmail.com";
 
+/* grava a marca na tabela "marcas" do painel, como Lead */
+async function gravaLead(d) {
+  if (d._honey) return;                                  /* robô: ignora */
+  if (!window.banco) throw new Error("sem banco");
+  const hoje = new Date();
+  const dia = hoje.getFullYear() + "-" + String(hoje.getMonth() + 1).padStart(2, "0") + "-" + String(hoje.getDate()).padStart(2, "0");
+  const obs = [
+    "Veio do formulário do site.",
+    d.name ? "Nome: " + d.name : "",
+    d.budget ? "Orçamento: " + d.budget : "",
+    d.message ? "Mensagem: " + d.message : ""
+  ].filter(Boolean).join("\n");
+  const { error } = await banco.from("marcas").insert({
+    nome: String(d.brand || d.name || "Contato do site").trim().slice(0, 200),
+    email: String(d.email || "").trim().slice(0, 200) || null,
+    situacao: "lead",
+    obs: obs.slice(0, 5000),
+    ultimo_contato: dia
+  });
+  if (error) throw error;
+}
+
 function handleForm(form, btn, feedback, msg) {
   form.addEventListener("submit", async e => {
     e.preventDefault();
@@ -1709,6 +1830,7 @@ function handleForm(form, btn, feedback, msg) {
     feedback.classList.remove("form__feedback--erro");
 
     const dados = Object.fromEntries(new FormData(form).entries());
+    const lead = gravaLead(dados); /* vai para a sua base de Marcas no painel */
 
     /* Assunto diferente a cada envio. Se todos tivessem o mesmo texto, o Gmail
        empilharia as mensagens numa conversa só e uma marca nova entraria
@@ -1722,12 +1844,16 @@ function handleForm(form, btn, feedback, msg) {
     dados._captcha  = "false";
 
     try {
-      const resposta = await fetch(DESTINO_FORM, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify(dados)
-      });
-      if (!resposta.ok) throw new Error(resposta.status);
+      /* o e-mail e a base do painel vão juntos. Se um dos dois chegar, a marca não se perde. */
+      const [porEmail, naBase] = await Promise.allSettled([
+        fetch(DESTINO_FORM, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify(dados)
+        }).then(r => { if (!r.ok) throw new Error(r.status); }),
+        lead
+      ]);
+      if (porEmail.status === "rejected" && naBase.status === "rejected") throw new Error("nada chegou");
       feedback.textContent = msg;
       form.reset();
     } catch (erro) {

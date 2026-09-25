@@ -6,6 +6,7 @@
 
 /* ----- TOM ESPRESSO ----- */
 :root, :root[data-tema="espresso"] {
+  color-scheme: dark;
   --bg: #1b1613;
   --lateral: #14100d;
   --card: #2a221d;
@@ -32,6 +33,7 @@
 
 /* ----- TOM BEGE ----- */
 :root[data-tema="bege"] {
+  color-scheme: light;
   --bg: #efecea;
   --lateral: #e7e0d9;
   --card: #ffffff;
@@ -257,7 +259,7 @@ svg.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor
 
 /* ----- CALENDÁRIO ----- */
 .cal__nav { display: inline-flex; align-items: center; gap: 4px; }
-.cal__mes { font-weight: 700; font-size: 14px; min-width: 150px; text-align: center; text-transform: capitalize; }
+.cal__mes { font-weight: 700; font-size: 14px; min-width: 150px; text-align: center; }
 .cal { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .cal__sem, .cal__grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .cal__sem div { font-size: 11px; color: var(--muted); padding: 7px 8px; border-bottom: 1px solid var(--line); background: var(--card-2); }
@@ -291,7 +293,7 @@ svg.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor
 .dia-lista .cal__item { font-size: 13px; padding: 7px 10px; }
 
 /* ----- CHECKLIST ----- */
-.subabas { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 16px; overflow-x: auto; }
+.subabas { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 16px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .subabas button { height: 36px; padding: 0 12px; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .subabas button.ativo { color: var(--text); font-weight: 600; border-bottom-color: var(--red); }
 .progresso { height: 6px; background: var(--card-2); border-radius: 3px; overflow: hidden; }
@@ -363,6 +365,21 @@ svg.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor
   box-shadow: 0 10px 30px -10px var(--sombra); max-width: calc(100vw - 32px);
 }
 .torrada--erro { background: var(--c-vermelho); color: #fff; }
+
+
+/* pequenos acertos */
+a.btn { text-decoration: none; }
+.mini { display: block; width: 44px; height: 33px; object-fit: cover; border-radius: 4px; background: var(--card-2); }
+.btn--icone.armado { width: auto; padding: 0 8px; font-size: 12px; font-weight: 600; color: var(--c-vermelho); background: color-mix(in srgb, var(--c-vermelho) 12%, transparent); }
+.btn.armado { background: var(--c-vermelho); border-color: var(--c-vermelho); color: #fff; }
+.sanfona__txt { flex: 1; min-width: 0; }
+.sanfona > summary .chevron { margin-left: 0; }
+.bloco__cab h2 .emoji { font-size: 14px; margin-right: 4px; }
+.torrada[hidden] { display: none; }
+.tabela td:first-child b, .tabela td b { white-space: nowrap; }
+.tabela a:not(.link):not(.btn) { text-decoration: none; }
+.tabela a:not(.link):not(.btn):hover { text-decoration: underline; }
+.tabela-caixa { scrollbar-color: var(--line) transparent; }
 
 /* ============================================================
    CELULAR: o menu vira gaveta
