@@ -696,7 +696,9 @@ const B_NICHOS = ["Skincare", "Haircare", "Beauty", "Fashion", "Home & Decor", "
 const bSituacao = (v) => B_SITUACOES.find(s => s[0] === v) || B_SITUACOES[0];
 const bOrigem = (v) => B_ORIGENS.find(o => o[0] === v) || B_ORIGENS[B_ORIGENS.length - 1];
 let bVisao = "semana";
-const bFiltro = { situacao: "", origem: "", nicho: "", favoritas: false };
+const bFiltro = { situacao: "", origem: "", nicho: "", favoritas: false, email: "" };
+const bSelecao = new Set();   /* marcas marcadas na caixinha */
+let bVisiveis = [];
 const bCampanha = { nichos: new Set(), situacoes: new Set(["prospectada", "em_conversa", "ja_trabalhei"]) };
 
 const nichosDaBase = () => Array.from(new Set(B_NICHOS.concat(D.base.map(m => m.nicho).filter(Boolean)))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -715,6 +717,7 @@ function montarBase() {
       '<select class="entrada entrada--sel" id="bFSit"><option value="">Todas as situações</option>' + B_SITUACOES.map(s => '<option value="' + s[0] + '">' + s[1] + "</option>").join("") + "</select>" +
       '<select class="entrada entrada--sel" id="bFOri"><option value="">Todas as origens</option>' + B_ORIGENS.map(o => '<option value="' + o[0] + '">' + o[1] + "</option>").join("") + "</select>" +
       '<select class="entrada entrada--sel" id="bFNic"></select>' +
+      '<select class="entrada entrada--sel" id="bFEmail"><option value="">Com e sem e-mail</option><option value="com">Só com e-mail</option><option value="sem">Só sem e-mail</option></select>' +
       '<button type="button" class="btn btn--linha" id="bFFav" aria-pressed="false">⭐ Só favoritas</button>' +
       '<span class="mudo pequeno" id="bConta"></span><span class="espaco"></span>' +
     "</div>" +
@@ -726,8 +729,12 @@ function montarBase() {
       '<input type="file" id="bArquivo" accept=".csv,.txt,text/csv" hidden>' +
     "</div>" +
     '<div id="bCampanha"></div>' +
+    '<div class="massa escondido" id="bMassa"><b id="bMassaConta"></b><span class="espaco"></span>' +
+      '<button type="button" class="btn" id="bMassaEditar">✏️ Editar em massa</button>' +
+      '<button type="button" class="btn btn--perigo" id="bMassaApagar">🗑️ Apagar selecionadas</button>' +
+      '<button type="button" class="btn btn--linha" id="bMassaLimpar">Limpar seleção</button></div>' +
     '<div class="tabela-caixa"><table class="tabela"><thead><tr>' +
-      "<th></th><th>Marca</th><th>Produto</th><th>Nicho</th><th>Origem</th><th>Situação</th><th>Instagram</th><th>E-mail</th><th>Telefone</th><th>Último contato</th><th></th>" +
+      "<th class=\"curta\"><input type=\"checkbox\" id=\"bTodas\" class=\"caixa\" title=\"Selecionar todas as que estão aparecendo\"></th><th></th><th>Marca</th><th>Produto</th><th>Nicho</th><th>Origem</th><th>Situação</th><th>Instagram</th><th>E-mail</th><th>Telefone</th><th>Último contato</th><th></th>" +
     '</tr></thead><tbody id="bCorpo"></tbody></table></div>';
 
   $("#bVisoes").addEventListener("click", (e) => {
@@ -741,6 +748,23 @@ function montarBase() {
   $("#bFOri").addEventListener("change", () => { bFiltro.origem = $("#bFOri").value; desenharBase(); });
   $("#bFNic").addEventListener("change", () => { bFiltro.nicho = $("#bFNic").value; desenharBase(); });
   $("#bFFav").addEventListener("click", () => { bFiltro.favoritas = !bFiltro.favoritas; desenharBase(); });
+  $("#bFEmail").addEventListener("change", () => { bFiltro.email = $("#bFEmail").value; desenharBase(); });
+  $("#bTodas").addEventListener("change", (e) => {
+    bVisiveis.forEach(id => { if (e.target.checked) bSelecao.add(id); else bSelecao.delete(id); });
+    desenharBase();
+  });
+  $("#bMassaLimpar").addEventListener("click", () => { bSelecao.clear(); desenharBase(); });
+  $("#bMassaEditar").addEventListener("click", editarEmMassa);
+  duploClique($("#bMassaApagar"), async () => {
+    const ids = [...bSelecao];
+    if (!ids.length) return;
+    const { error } = await banco.from("base_marcas").delete().in("id", ids);
+    if (error) { torrada(traduzErro(error, "base_marcas"), true); return; }
+    D.base = D.base.filter(m => !bSelecao.has(m.id));
+    bSelecao.clear();
+    desenharBase();
+    torrada("🗑️ " + plural(ids.length, "marca apagada", "marcas apagadas") + ".");
+  }, "Clique de novo para apagar");
   $("#bNova").addEventListener("click", () => editorBase(null));
   $("#bModelo").addEventListener("click", baixarModelo);
   $("#bImportar").addEventListener("click", () => { if (falhou.base_marcas) { torrada("A tabela base_marcas ainda não existe. Rode o sql-marcas.sql no Supabase.", true); return; } $("#bArquivo").value = ""; $("#bArquivo").click(); });
@@ -755,6 +779,15 @@ function montarBase() {
     if (!tr) return;
     const m = D.base.find(x => x.id === tr.dataset.id);
     if (!m) return;
+    const caixa = e.target.closest("[data-sel]");
+    if (caixa || e.target.closest(".td-sel")) {
+      if (!caixa) { const c = $("[data-sel]", tr); c.checked = !c.checked; }
+      const marcada = $("[data-sel]", tr).checked;
+      if (marcada) bSelecao.add(m.id); else bSelecao.delete(m.id);
+      tr.classList.toggle("selecionada", marcada);
+      atualizaMassa();
+      return;
+    }
     if (e.target.closest("[data-fav]")) {
       const salvo = await salvarLinha("base_marcas", { favorita: !m.favorita }, m.id);
       if (salvo) { troca(D.base, salvo); desenharBase(); }
@@ -829,17 +862,22 @@ function desenharBase() {
       (!bFiltro.origem || m.origem === bFiltro.origem) &&
       (!bFiltro.nicho || m.nicho === bFiltro.nicho) &&
       (!bFiltro.favoritas || m.favorita) &&
+      (!bFiltro.email || (bFiltro.email === "com" ? !!m.email : !m.email)) &&
       (!busca || normaliza([m.nome, m.instagram, m.email, m.obs, m.site, m.produto, m.outros_contatos].join(" ")).includes(busca)));
     /* as favoritas sempre primeiro */
     lista = lista.slice().sort((a, b) => (b.favorita ? 1 : 0) - (a.favorita ? 1 : 0));
   }
   $("#bFFav").classList.toggle("ativo-fav", bFiltro.favoritas);
   $("#bFFav").setAttribute("aria-pressed", String(bFiltro.favoritas));
+  /* a seleção vale só para o que está aparecendo: nunca apaga uma marca escondida pelo filtro */
+  bVisiveis = lista.map(m => m.id);
+  [...bSelecao].forEach(id => { if (!bVisiveis.includes(id)) bSelecao.delete(id); });
+  atualizaMassa();
   $("#bConta").textContent = lista.length === D.base.length ? plural(D.base.length, "marca", "marcas") : lista.length + " de " + D.base.length;
 
   const corpo = $("#bCorpo");
   if (!lista.length) {
-    corpo.innerHTML = '<tr><td colspan="11"><p class="vazio">' + (falhou.base_marcas
+    corpo.innerHTML = '<tr><td colspan="12"><p class="vazio">' + (falhou.base_marcas
       ? "A base ainda não existe no banco. Rode o sql-marcas.sql no Supabase."
       : !D.base.length ? "A base está vazia. Clique em 📥 Importar planilha ou em Adicionar marca."
       : naSemana ? "Nenhuma marca para prospectar agora. 🎉<br>Coloque marcas com situação Quero prospectar para elas aparecerem aqui."
@@ -849,7 +887,8 @@ function desenharBase() {
   corpo.innerHTML = lista.map(m => {
     const s = bSituacao(m.situacao), o = bOrigem(m.origem);
     const ig = arroba(m.instagram), wa = whatsapp(m.telefone);
-    return '<tr class="clica' + (m.favorita ? " favorita" : "") + '" data-id="' + esc(m.id) + '">' +
+    return '<tr class="clica' + (m.favorita ? " favorita" : "") + (bSelecao.has(m.id) ? " selecionada" : "") + '" data-id="' + esc(m.id) + '">' +
+      '<td class="curta td-sel"><input type="checkbox" class="caixa" data-sel' + (bSelecao.has(m.id) ? " checked" : "") + ' aria-label="Selecionar ' + esc(m.nome) + '"></td>' +
       '<td class="curta"><button type="button" class="btn--icone estrela' + (m.favorita ? " ligada" : "") + '" data-fav aria-label="' + (m.favorita ? "Tirar dos favoritos" : "Favoritar") + '">' + ic("estrela") + "</button></td>" +
       "<td><b>" + esc(m.nome) + "</b>" + (m.nao_enviar ? ' <span title="Não enviar campanha">🚫</span>' : "") + pilExemplo(m) +
         (m.site ? '<div class="pequeno"><a class="link" href="' + esc(/^https?:/i.test(m.site) ? m.site : "https://" + m.site) + '" target="_blank" rel="noopener">' + esc(String(m.site).replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "")) + "</a></div>" : "") + "</td>" +
@@ -865,6 +904,50 @@ function desenharBase() {
       '<td style="white-space:nowrap">' + dataBR(m.ultimo_contato) + "</td>" +
       '<td class="curta">' + (m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" data-prospectei title="Marcar como prospectada hoje">📨 Prospectei</button>' : "") + "</td></tr>";
   }).join("");
+}
+
+function atualizaMassa() {
+  const n = bSelecao.size;
+  $("#bMassa").classList.toggle("escondido", !n);
+  $("#bMassaConta").textContent = plural(n, "marca selecionada", "marcas selecionadas");
+  const todas = $("#bTodas");
+  if (todas) {
+    todas.checked = n > 0 && bVisiveis.length > 0 && bVisiveis.every(id => bSelecao.has(id));
+    todas.indeterminate = n > 0 && !todas.checked;
+  }
+}
+
+function editarEmMassa() {
+  const ids = [...bSelecao];
+  if (!ids.length) return;
+  const NAO = [["", "não mudar"]];
+  editor({
+    titulo: "✏️ Editar " + plural(ids.length, "marca", "marcas") + " de uma vez",
+    topo: '<p class="mudo pequeno" style="margin-bottom:12px">Só muda o que você preencher. O que ficar em branco ou em "não mudar" continua como está em cada marca.</p>',
+    valores: {},
+    campos: [
+      { nome: "situacao", rot: "Situação", tipo: "select", opcoes: NAO.concat(B_SITUACOES.map(s => [s[0], s[1]])) },
+      { nome: "origem", rot: "De onde veio o contato", tipo: "select", opcoes: NAO.concat(B_ORIGENS) },
+      { nome: "nicho", rot: "Nicho", lista: nichosDaBase(), dica: "em branco = não mudar" },
+      { nome: "produto", rot: "Produto", lista: Array.from(new Set(D.base.map(m => m.produto).filter(Boolean))), dica: "em branco = não mudar" },
+      { nome: "favorita", rot: "⭐ Favorita", tipo: "select", opcoes: NAO.concat([["sim", "Sim, favoritar"], ["nao", "Não, tirar dos favoritos"]]) },
+      { nome: "nao_enviar", rot: "🚫 Não enviar campanha", tipo: "select", opcoes: NAO.concat([["sim", "Sim, não enviar"], ["nao", "Não, pode enviar"]]) }
+    ],
+    aoSalvar: async (d, erro) => {
+      const patch = {};
+      ["situacao", "origem", "nicho", "produto"].forEach(k => { if (d[k]) patch[k] = d[k]; });
+      if (d.favorita) patch.favorita = d.favorita === "sim";
+      if (d.nao_enviar) patch.nao_enviar = d.nao_enviar === "sim";
+      if (!Object.keys(patch).length) { erro("Escolha pelo menos uma coisa para mudar."); return false; }
+      const { data, error } = await banco.from("base_marcas").update(patch).in("id", ids).select();
+      if (error) { erro(traduzErro(error, "base_marcas")); return false; }
+      (data || []).forEach(m => troca(D.base, m));
+      bSelecao.clear();
+      desenharBase();
+      torrada("✅ " + plural((data || []).length, "marca atualizada", "marcas atualizadas") + ".");
+      return true;
+    }
+  });
 }
 
 function editorBase(m, padrao) {

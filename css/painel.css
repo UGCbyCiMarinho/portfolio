@@ -463,6 +463,10 @@ a.btn { text-decoration: none; }
 .imp__planilha .tabela td .pil { white-space: nowrap; }
 .imp__planilha input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--red); }
 .btn.ativo-fav { background: var(--suave); border-color: var(--red); color: var(--text); }
+.massa { position: sticky; top: 8px; z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 10px;
+  background: var(--card); border: 1px solid var(--red); border-radius: var(--radius); box-shadow: 0 10px 24px -14px var(--sombra); font-size: 13px; }
+.caixa { width: 16px; height: 16px; accent-color: var(--red); cursor: pointer; vertical-align: middle; }
+.tabela tr.selecionada td { background: var(--suave); }
 .rot__relogio { display: inline-block; animation: girando 2s linear infinite; }
 @keyframes girando { to { transform: rotate(360deg); } }
 .rot__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; }
