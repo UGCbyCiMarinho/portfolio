@@ -3251,9 +3251,9 @@ function registrarAbordagens() {
 const OPENROUTER = "https://openrouter.ai/api/v1";
 const MODELOS_IA = [["anthropic/claude-sonnet-5", "Claude Sonnet 5 (rápido, uns US$ 0,01 por mensagem)"], ["anthropic/claude-opus-5.5", "Claude Opus 5.5 (caprichado, uns US$ 0,02)"]];
 const TIPOS_ABORDAGEM = [
-  ["email", "✉️ E-mail", "Um e-mail frio de primeiro contato seguindo o método A.C.R. do guia: ASSUNTO funcional citando o produto; saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\"; Atenção (algo específico da marca), Conexão (um fato real da vida dela), Resultado (a ideia com nome, o gancho literal entre aspas e os takes com o produto como herói), uma ou duas frases sobre quem ela é, e um CTA de sim ou não. Curto, no máximo uns 150 palavras. Assinatura \"Warmly,\" + nome + portfólio."],
-  ["dm", "💬 DM", "Uma DM fria de Instagram, no máximo 4 linhas: um elogio específico a algo real da marca (post, Reel ou produto), dizer que teve uma ideia de vídeo pensada só para aquele produto e perguntar se pode mandar (ou qual o melhor e-mail). Sem apresentar a ideia inteira, sem assunto, sem links."],
-  ["plataforma", "🧩 Plataforma", "Uma candidatura para uma vaga de UGC numa plataforma (InSense, Billo, JoinBrands...): A.C.R. completo que se lê em 30 segundos, usando as palavras exatas do briefing, com uma ideia menos óbvia que a do briefing (de preferência com pessoa e história), confirmando que entrega o que foi pedido. De 90 a 160 palavras, sem assunto, sem assinatura longa."],
+  ["email", "✉️ E-mail", "Um e-mail frio de primeiro contato no método A.C.R. ASSUNTO funcional citando o produto. Saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\". 1) Atenção: a primeira frase fala do CLIENTE da marca (uma dor, um desejo, um momento) ou de algo específico do produto ou de um post, nunca da Cintia. 2) Resultado: a ideia de vídeo com NOME entre aspas, o GANCHO literal entre aspas (o que aparece e o que ela fala nos primeiros segundos) e a sequência curta de takes com o produto como herói. 3) Conexão: um fato REAL da vida dela que prova que ela é a cliente. 4) Uma frase sobre quem ela é e 3 marcas relevantes. 5) CTA: uma pergunta de sim ou não. No máximo 150 palavras. Assinatura \"Warmly,\" + nome + portfólio."],
+  ["dm", "💬 DM", "Uma DM fria de Instagram, no máximo 4 linhas: um elogio ESPECÍFICO a algo real da marca (post, Reel ou produto), dizer que teve uma ideia de vídeo pensada só para aquele produto e perguntar se pode mandar (ou qual o melhor e-mail). Sem apresentar a ideia inteira, sem assunto, sem links."],
+  ["plataforma", "🧩 Plataforma", "Uma candidatura para uma vaga de UGC numa plataforma (InSense, Billo, JoinBrands...). A marca já quer contratar, então venda a IDEIA, não o processo. 1) Atenção: a primeira frase fala do CLIENTE da marca (a dor ou a objeção que o produto resolve), usando as palavras da brief. Nunca comece com \"I read the brief\", \"I love\", \"I noticed\" ou falando dela. 2) Resultado: uma ideia menos óbvia que a da brief, com NOME entre aspas, o GANCHO literal entre aspas e 2 ou 3 takes com o produto como herói, respeitando TUDO que a brief proíbe ou exige. 3) Conexão: um fato REAL dela que prova que ela é a cliente. 4) Uma frase de quem ela é com 3 marcas relevantes. 5) CTA: uma pergunta de sim ou não (ex.: roteiro com tempo de cada take para aprovação). NÃO liste formatos, proporções (9:16, 1:1), prazos nem entregáveis: isso é óbvio e a plataforma já sabe. De 90 a 150 palavras, sem assunto, sem assinatura longa."],
   ["followup", "🔁 Follow-up", "Um follow-up de 2 ou 3 linhas para um e-mail sem resposta há 48 a 72 horas, na mesma conversa: retoma a ideia ou traz um ângulo novo, urgência suave de agenda, e um CTA de sim ou não. Nunca cobrar, nunca repetir o primeiro e-mail. Sem assunto."]
 ];
 let abTipo = "email";
@@ -3577,6 +3577,15 @@ function pedidoAbordagem(ajuste) {
     "- Nunca use travessão. Use vírgula ou ponto.\n" +
     "- Soe como gente de verdade: específica, direta, sem frase pronta de propaganda e sem bajulação.\n" +
     "- Escreva em " + $("#abIdioma").value + ".\n\n" +
+    "=== ANTES DE RESPONDER, CONFIRA (e reescreva se falhar em qualquer item) ===\n" +
+    "1. A primeira frase fala do cliente da marca ou de algo específico do produto, e não da Cintia.\n" +
+    "2. Não abre com \"I read\", \"I noticed\", \"I love\", \"I'm a UGC creator\" nem \"I came across\" sozinho.\n" +
+    "3. Tem uma ideia de vídeo com nome e o gancho literal entre aspas (menos na DM e no follow-up).\n" +
+    "4. Usa pelo menos um fato REAL da lista \"Quem ela é\" ou do guia, e nenhum fato inventado.\n" +
+    "5. Não repete o óbvio (formatos, proporções, prazos, \"I'll deliver\").\n" +
+    "6. Termina com uma pergunta de sim ou não.\n" +
+    "7. Está no tamanho pedido, sem travessão, sem palavras vagas (authentic, natural, creative, relatable).\n" +
+    "8. Tem a mesma qualidade e especificidade dos EXEMPLOS REAIS do guia.\n\n" +
     "=== FORMATO DA RESPOSTA ===\n" +
     (abTipo === "email" ? "ASSUNTO: (uma linha)\nMENSAGEM:\n(o texto)\n" : "MENSAGEM:\n(o texto)\n") +
     "Não escreva nada antes nem depois disso.";
@@ -3609,7 +3618,7 @@ async function gerarAbordagem(ajuste) {
     const r = await fetch(OPENROUTER + "/chat/completions", {
       method: "POST",
       headers: { Authorization: "Bearer " + D.config.openrouter_api_key, "Content-Type": "application/json", "HTTP-Referer": "https://cimarinho.com", "X-Title": "Admin Ci Marinho" },
-      body: JSON.stringify({ model: D.config.abordagem_modelo || MODELOS_IA[0][0], messages: pedidoAbordagem(ajuste), temperature: 0.8, max_tokens: 900 })
+      body: JSON.stringify({ model: D.config.abordagem_modelo || MODELOS_IA[0][0], messages: pedidoAbordagem(ajuste), temperature: 0.7, max_tokens: 900 })
     });
     const j = await r.json().catch(() => ({}));
     if (r.status === 401 || r.status === 403) erro = "O OpenRouter não aceitou a chave. Confira no quadro 🔑 IA.";
