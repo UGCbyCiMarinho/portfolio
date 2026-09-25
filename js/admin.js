@@ -3365,6 +3365,7 @@ function montarAbordar() {
   });
   desenharAbordar();
   atualizaResumoIA();
+  carregaFluxo();
 }
 
 async function saldoOpenRouter() {
@@ -3617,182 +3618,284 @@ function checaAntes() {
 }
 const precisaIdeia = () => abTipo === "email" || abTipo === "plataforma";
 
-/* ----- botão Gerar: e-mail e plataforma passam pela estrategista; DM e follow-up vão direto ----- */
-async function gerarAbordagem(ajuste) {
-  if (!checaAntes()) return;
-  if (ajuste || !precisaIdeia()) return escreverAbordagem(ajuste);
-  return pensarIdeias();
+/* ============================================================
+   O FLUXO: estratégia → ideia (ela escolhe) → gancho (ela escolhe)
+   → versões da mensagem (ela comenta e a IA refaz). Tudo fica na tela
+   como uma linha do tempo e é guardado neste navegador.
+   ============================================================ */
+let F = null;   /* { tipo, marca, estrategia, ideias, ideia, ganchos, gancho, ganchoB, versoes: [{assunto, mensagem, nota, quando}] } */
+let abOcupado = false;
+const guardaFluxo = () => { try { if (F) F.form = Object.assign(leForm(), { briefPDF: abBriefPDF }); localStorage.setItem("admin-fluxo", JSON.stringify(F)); } catch (e) {} };
+const CAMPOS_FORM = ["abMarca", "abProduto", "abLink", "abBrief", "abPost", "abIdioma", "abUso", "abExtra"];
+const leForm = () => Object.fromEntries(CAMPOS_FORM.map(id => [id, $("#" + id) ? $("#" + id).value : ""]));
+function carregaFluxo() {
+  try { F = JSON.parse(localStorage.getItem("admin-fluxo") || "null"); } catch (e) { F = null; }
+  if (F && F.form) {
+    /* devolve a marca, a brief e o resto do formulário, para refazer com os mesmos dados */
+    CAMPOS_FORM.forEach(id => { if ($("#" + id) && F.form[id] != null) $("#" + id).value = F.form[id]; });
+    abBriefPDF = F.form.briefPDF || "";
+    abTipo = F.tipo || abTipo;
+    const m = D.base.find(x => chaveNome(x.nome) === chaveNome(F.form.abMarca || ""));
+    abMarcaId = m ? m.id : null;
+    desenharAbordar();
+  }
+  if (F && F.versoes && F.versoes.length) abResultado = F.versoes[F.versoes.length - 1];
+  desenhaSaida();
+}
+const ultimaVersao = () => (F && F.versoes && F.versoes.length ? F.versoes[F.versoes.length - 1] : null);
+
+/* tipos de gancho: cada um prende de um jeito diferente */
+const GANCHO_TIPOS = [
+  ["Dor na lata", "nomeia a dor de quem assiste, em segunda pessoa. Ex.: \"Still [dor] every [momento]? It's not you.\""],
+  ["Filtro de público", "chama um tipo de pessoa. Ex.: \"If this is you, keep watching.\" / \"If you're the type who [comportamento], watch this.\""],
+  ["Pergunta", "uma pergunta que o cérebro responde sozinho e cria micro-conexão. Ex.: \"Do you actually need [X]?\" / \"Does anyone else hate [X] this much?\""],
+  ["Quebra de crença", "o hábito comum é o erro. Ex.: \"You [hábito], and that's exactly why [problema].\" / \"You guys might disagree but [X].\""],
+  ["Clickbait ético", "afirmação forte que obriga a parar, e o vídeo entrega o que promete. Ex.: \"Why is nobody talking about [X]?\" / \"I'm not gatekeeping this any longer.\""],
+  ["Jeito antigo x novo (comparativo)", "troca de método ou categoria, sem citar concorrente. Ex.: \"I ditched [antigo] when I found [categoria].\" / \"Stop [antigo]. Do this instead.\""],
+  ["Antes x depois", "a transformação ou a reação aparece no segundo zero. Ex.: \"How I went from this to this.\" / \"This is what [uma ação] does to [área].\""],
+  ["Como fazer (valor imediato)", "promete uma solução prática que a pessoa salva. Ex.: \"No fluff formula for [X].\" / \"If you want to [resultado], you need to try this.\""],
+  ["Objeção primeiro", "antecipa o ceticismo. Ex.: \"Another [categoria] that promises [X]? Here's the test.\""],
+  ["Depoimento disfarçado", "parece relato espontâneo de quem testou (vale como fala do VÍDEO, porque ela vai testar o produto; no pitch nunca afirme que ela já testou). Ex.: \"I only meant to film a quick test, but the result was absurd.\" / \"I bought this with zero expectations.\""],
+  ["Storytelling / fato inusitado", "começa como uma história curta ou um fato curioso, usando só fatos REAIS dela. Ex.: \"Things in my [lugar] that just make sense.\""]
+];
+
+/* ----- botão Gerar ----- */
+async function gerarAbordagem() {
+  if (abOcupado || !checaAntes()) return;
+  F = { tipo: abTipo, marca: $("#abMarca").value.trim(), estrategia: null, ideias: [], ideia: null, ganchos: [], gancho: null, ganchoB: null, versoes: [] };
+  abResultado = null;
+  guardaFluxo();
+  if (precisaIdeia()) return pensarIdeias();
+  return escrever();
 }
 
-/* PASSO 1: a estrategista pensa antes de escrever e traz 3 ideias */
-let abIdeias = null, abIdeia = null, abEstrategia = null;
+function carregando(texto) { abOcupado = true; desenhaSaida(texto); }
+function pronto() { abOcupado = false; guardaFluxo(); desenhaSaida(); atualizaResumoIA(); }
+function falhou2(erro) { abOcupado = false; desenhaSaida(); $("#abSaida").insertAdjacentHTML("beforeend", '<div class="faixa" style="margin-top:12px">⚠️ ' + esc(erro) + "</div>"); }
+const lerJSON = (t) => { try { return JSON.parse(String(t).replace(/^[\s\S]*?(\{)/, "$1").replace(/\}[^}]*$/, "}")); } catch (e) { return null; } };
+const limpaObj = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k, typeof v === "string" ? semTravessao(v) : v]));
+
+/* PASSO 1: estratégia + 3 ideias */
 async function pensarIdeias() {
-  const botao = $("#abGerar");
-  botao.disabled = true; botao.textContent = "🧠 Pensando nas ideias...";
-  abResultado = null; abIdeia = null;
-  $("#abSaida").innerHTML = '<div class="bloco abordar__saida"><p class="mudo"><span class="rot__relogio">⏳</span> Estudando a brief e o produto, e pensando em 3 ideias de vídeo... leva uns 30 a 60 segundos.</p></div>';
-  const sistema = "Você é uma estrategista criativa de UGC que ajuda uma creator a ganhar trabalhos. Antes de qualquer texto, você pensa como a MARCA: o que faria um gerente de marketing parar tudo e querer ver esse vídeo.\n\n" + contextoDela();
-  const pedido = dadosDaMarca() + "\n\n" +
-    "Tarefa (" + (abTipo === "plataforma" ? "candidatura para uma vaga de UGC numa plataforma" : "e-mail frio para a marca") + "):\n" +
-    "1. Descubra o HERÓI do produto: o diferencial mais vendável que aparece no nome, no link ou na brief (sabor, textura, formato, resultado, praticidade...).\n" +
-    "2. Descubra a OBJEÇÃO ou o DESEJO principal do cliente que esse herói resolve.\n" +
-    "3. Decida o USO do vídeo (ads ou orgânico), pelo que ela informou ou pela brief.\n" +
-    "4. Crie 3 ideias de vídeo BEM diferentes entre si, fugindo do óbvio da brief, que respeitem tudo o que a brief exige ou proíbe, e que só ela poderia fazer por causa de fatos REAIS da vida dela. Cada ideia precisa fazer a marca ENXERGAR o vídeo.\n" +
-    "5. O GANCHO é o que mais vende a ideia. Ele tem 3 camadas que acontecem juntas nos primeiros 3 segundos: VISUAL (o que aparece: o produto ou o problema já no primeiro segundo), FALADO (a frase exata) e TEXTO NA TELA (para quem assiste sem som). Regra: em 3 segundos quem assiste precisa saber DO QUE é o vídeo (a categoria do produto ou a dor) e sentir tensão ou curiosidade. Proibido gancho genérico de rotina (\"here's my morning routine\", \"a day in my life\") que não diz o assunto. Para ads: problema ou produto já no primeiro segundo, direto na dor ou no desejo. Para orgânico: pode ser mais lifestyle, mas o assunto continua claro. O gancho falado fala com quem assiste ou usa um fato REAL dela; nunca invente uma experiência que ela não contou (ex.: \"eu já desisti três vezes\").\n" +
-    "6. Se o uso for ads, crie também um SEGUNDO gancho (falado e texto na tela) com outro ângulo, para a marca testar A/B.\n\n" +
-    "Responda SOMENTE com um JSON válido, sem nada antes ou depois, neste formato (textos em português do Brasil, menos o gancho, que vai no idioma da mensagem: " + $("#abIdioma").value + "):\n" +
-    '{"heroi":"...","objecao_ou_desejo":"...","uso":"ads ou organico","ideias":[{"nome":"nome curto e marcante","gancho_visual":"o que aparece no primeiro segundo","gancho":"a frase falada exata dos primeiros 3 segundos","gancho_texto":"o texto na tela","gancho_b":"segundo gancho falado para teste A/B (só se for ads, senão vazio)","gancho_b_texto":"texto na tela do segundo gancho (ou vazio)","cena":"2 ou 3 frases descrevendo o resto do vídeo, com o momento em que o produto brilha","fato_dela":"o fato real dela que torna a ideia crível","por_que_vende":"1 frase, pensando como a marca"}]}';
+  carregando("🧠 Estudando a brief e o produto e pensando em 3 ideias... uns 30 a 60 segundos.");
+  const sistema = "Você é uma estrategista criativa de UGC que ajuda uma creator a ganhar trabalhos. Você pensa como a MARCA: o que faria um gerente de marketing querer ver esse vídeo.\n\n" + contextoDela();
+  const pedido = dadosDaMarca() + "\n\nTarefa (" + (F.tipo === "plataforma" ? "candidatura para uma vaga de UGC numa plataforma" : "e-mail frio para a marca") + "):\n" +
+    "1. HERÓI do produto: o diferencial mais vendável que aparece no nome, no link ou na brief.\n" +
+    "2. OBJEÇÃO ou DESEJO principal do cliente que esse herói resolve.\n" +
+    "3. USO do vídeo (ads ou orgânico), pelo que ela informou ou pela brief.\n" +
+    "4. 3 ideias de vídeo BEM diferentes entre si, fugindo do óbvio da brief, respeitando tudo o que a brief exige ou proíbe, e que só ela poderia fazer por causa de fatos REAIS dela. Cada ideia vende o produto por uma LENTE diferente (o motivo de status por trás da compra):\n" +
+    "   PODER (controle, decisão, ser a pessoa que resolve), APARÊNCIA (ficar bonita, ser vista de um certo jeito, estética), PERTENCIMENTO (fazer parte de um grupo, \"as mulheres que...\", tradição, comunidade), INTELIGÊNCIA (escolha esperta: rende mais, economiza tempo ou dinheiro, é o melhor).\n" +
+    "   Ainda não escreva o gancho: descreva o conceito.\n\n" +
+    "Responda SOMENTE com um JSON válido, em português do Brasil:\n" +
+    '{"heroi":"...","objecao_ou_desejo":"...","uso":"ads ou organico","ideias":[{"nome":"nome curto e marcante","lente":"Poder, Aparência, Pertencimento ou Inteligência","conceito":"2 ou 3 frases: o que acontece no vídeo e o momento em que o produto brilha","fato_dela":"o fato real dela que torna a ideia crível","por_que_vende":"1 frase, pensando como a marca"}]}';
   const r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "medium", 9000);
-  botao.disabled = false;
-  desenharAbordar();
-  if (r.erro) { $("#abSaida").innerHTML = '<div class="faixa" style="margin-top:12px">⚠️ ' + esc(r.erro) + "</div>"; return; }
-  let dados = null;
-  try { dados = JSON.parse(String(r.texto).replace(/^[\s\S]*?(\{)/, "$1").replace(/\}[^}]*$/, "}")); } catch (e) {}
-  if (!dados || !Array.isArray(dados.ideias) || !dados.ideias.length) { $("#abSaida").innerHTML = '<div class="faixa" style="margin-top:12px">⚠️ A IA não trouxe as ideias no formato certo. Clique em Gerar de novo.</div>'; return; }
-  abEstrategia = { heroi: semTravessao(dados.heroi || ""), objecao: semTravessao(dados.objecao_ou_desejo || ""), uso: /org/i.test(dados.uso || "") ? "organico" : "ads" };
-  abIdeias = dados.ideias.slice(0, 3).map(i => Object.fromEntries(Object.entries(i).map(([k, v]) => [k, semTravessao(v)])));
-  desenhaIdeias();
-  atualizaResumoIA();
-}
-function desenhaIdeias() {
-  $("#abSaida").innerHTML = '<div class="bloco abordar__saida">' +
-    '<div class="bloco__cab"><h2>🧠 Escolha a ideia</h2><span class="espaco"></span><button type="button" class="btn btn--linha" id="abOutrasIdeias">🔄 Outras 3 ideias</button></div>' +
-    '<p class="pequeno"><b>Herói do produto:</b> ' + esc(abEstrategia.heroi) + "<br><b>O que o cliente sente:</b> " + esc(abEstrategia.objecao) +
-      "<br><b>Uso do vídeo:</b> " + (abEstrategia.uso === "organico" ? "orgânico (perfil da marca)" : "anúncio pago (ads)") + "</p>" +
-    '<div class="abordar__ideias">' + abIdeias.map((i, n) =>
-      '<div class="abordar__ideia"><div class="abordar__ideia-nome">' + esc(i.nome) + "</div>" +
-      '<div class="abordar__gancho"><div><b>👀 Visual:</b> ' + esc(i.gancho_visual || "") + "</div>" +
-        '<div><b>🗣️ Fala:</b> "' + esc(String(i.gancho || "").replace(/^"|"$/g, "")) + '"</div>' +
-        '<div><b>🔤 Texto na tela:</b> ' + esc(i.gancho_texto || "") + "</div>" +
-        (i.gancho_b ? '<div class="mudo"><b>🅱️ Gancho B:</b> "' + esc(String(i.gancho_b).replace(/^"|"$/g, "")) + '"' + (i.gancho_b_texto ? " · " + esc(i.gancho_b_texto) : "") + "</div>" : "") + "</div>" +
-      '<p class="pequeno">' + esc(i.cena) + "</p>" +
-      '<p class="mudo pequeno" style="margin-top:6px">✨ ' + esc(i.fato_dela) + "</p>" +
-      '<p class="mudo pequeno">💰 ' + esc(i.por_que_vende) + "</p>" +
-      '<button type="button" class="btn btn--full" data-ideia="' + n + '" style="margin-top:10px">✍️ Escrever com esta ideia</button></div>').join("") + "</div>" +
-    '<p class="mudo pequeno" style="margin-top:8px">Dica: se quiser ajustar uma ideia, escreva no "Pedido especial" (ex.: "use a ideia 2, mas no café da manhã") e clique em Escrever.</p></div>';
-  $("#abOutrasIdeias").addEventListener("click", pensarIdeias);
-  $$("[data-ideia]").forEach(b => b.addEventListener("click", () => { abIdeia = abIdeias[Number(b.dataset.ideia)]; escreverAbordagem(); }));
+  if (r.erro) return falhou2(r.erro);
+  const d = lerJSON(r.texto);
+  if (!d || !Array.isArray(d.ideias) || !d.ideias.length) return falhou2("A IA não trouxe as ideias no formato certo. Clique em Gerar de novo.");
+  F.estrategia = { heroi: semTravessao(d.heroi || ""), objecao: semTravessao(d.objecao_ou_desejo || ""), uso: /org/i.test(d.uso || "") ? "organico" : "ads" };
+  F.ideias = d.ideias.slice(0, 3).map(limpaObj);
+  pronto();
 }
 
-/* PASSO 2: a redatora escreve uma história contínua a partir da ideia escolhida */
-/* dois modelos para a redatora imitar (creator inventada, para nenhum dado real ficar no código) */
-const MODELOS_PITCH = `MODELO 1 (candidatura em plataforma, produto: pó de eletrólitos sabor frutas vermelhas):
+/* PASSO 2: 5 ganchos de tipos diferentes para a ideia escolhida */
+async function pensarGanchos() {
+  carregando("🪝 Criando 5 ganchos para \"" + F.ideia.nome + "\"... uns 20 a 40 segundos.");
+  const sistema = "Você é especialista em ganchos de vídeos curtos de UGC. O gancho são os primeiros 3 segundos e tem 3 camadas ao mesmo tempo: VISUAL (o que aparece no primeiro segundo), FALA (a frase exata) e TEXTO NA TELA (para quem assiste sem som).\n\n" + contextoDela();
+  const pedido = dadosDaMarca() + "\n=== A ESTRATÉGIA ===\nHerói do produto: " + F.estrategia.heroi + "\nO que o cliente sente: " + F.estrategia.objecao + "\nUso: " + (F.estrategia.uso === "organico" ? "orgânico" : "ads") +
+    "\nIdeia escolhida: " + F.ideia.nome + ". " + F.ideia.conceito + (F.ideia.lente ? "\nLente da ideia: " + F.ideia.lente + " (os ganchos devem conversar com esse motivo de compra)" : "") + "\nFato dela: " + F.ideia.fato_dela + "\n\n" +
+    "Crie 5 ganchos para essa ideia, cada um de um TIPO diferente desta lista (os exemplos são só inspiração: adapte ao produto, nunca copie):\n" + GANCHO_TIPOS.map(t => "- " + t[0] + ": " + t[1]).join("\n") + "\n\n" +
+    "Regras de todo gancho: em 3 segundos quem assiste sabe DO QUE é o vídeo (a categoria do produto ou a dor) e sente tensão ou curiosidade (o teste: quem assiste pensa \"eu não sabia disso\" ou \"sou eu\"). A fala tem de 6 a 15 palavras, dita direto para a câmera. O texto na tela tem de 2 a 5 palavras. Para ads, o produto ou o problema aparece já no primeiro segundo. Proibido: gancho genérico de rotina (\"my morning routine\", \"a day in my life\"), abrir com \"hi guys\" ou lendo o rótulo, citar concorrente pelo nome, promessa sem prova e número sem fonte da brief. Nunca invente passado ou experiência dela (\"I ignored this for years\"): use segunda pessoa (\"you\") ou um fato REAL da lista dela. Os 5 ganchos precisam ser de 5 TIPOS diferentes. A fala e o texto na tela vão em " + $("#abIdioma").value + ".\n\n" +
+    'Responda SOMENTE com um JSON válido: {"ganchos":[{"tipo":"...","visual":"o que aparece no primeiro segundo (em português)","fala":"a frase exata","texto":"o texto na tela","por_que":"1 frase em português: por que prende"}]}';
+  const r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "medium", 8000);
+  if (r.erro) return falhou2(r.erro);
+  const d = lerJSON(r.texto);
+  if (!d || !Array.isArray(d.ganchos) || !d.ganchos.length) return falhou2("A IA não trouxe os ganchos no formato certo. Tente de novo.");
+  F.ganchos = d.ganchos.slice(0, 5).map(limpaObj);
+  F.gancho = null; F.ganchoB = null;
+  pronto();
+}
+
+/* modelos da mensagem, no A.C.R. do curso (creator inventada, para nenhum dado real ficar no código) */
+const MODELOS_PITCH = `MODELO 1 (candidatura em plataforma, produto: pó de eletrólitos sabor frutas vermelhas, para ads):
 Most people don't skip hydration because they don't care. They skip it because plain water feels like a chore after a 12-hour shift.
 
-That's where my video starts. It opens on my locker at 7am, scrubs still on, as I say "This is the only thing I drink after a night shift," with "night shift recovery in 10 seconds" on screen. Then I tear the berry stick into my bottle, shake it and take the first sip on camera, before showing it waiting in my bag for the drive home. It closes on the empty bottle and one line: "the one habit that made my shifts easier."
+I work night shifts as a nurse, so that 7am exhaustion is my real life, not a script.
 
-As a nurse who works nights, I live the exact tiredness this product is made for. I've created content for brands like Vital Proteins and Clinique.
+My video, "Night Shift Reset", opens in the locker room as I say "If you work nights, this is what you should drink after your shift," with "night shift recovery in 10 seconds" on screen. I mix the berry stick into my bottle, take the first sip, and you watch me come back to life on the drive home. It ends with the empty bottle and one line: "the one habit that made my shifts easier."
+
+I've created content for brands like Vital Proteins and Clinique.
 
 Want me to send the timed script, plus a second hook you can A/B test? You can see my work here: [portfólio]
 
 MODELO 2 (e-mail frio, produto: creme para pele sensível):
-ASSUNTO: A 30-second redness test for your barrier cream
+ASSUNTO: A redness test for your barrier cream
 MENSAGEM:
 Hello [Marca] team,
 
 Anyone with reactive skin knows the moment: you try a new cream and spend the next hour waiting to see if your face turns red.
 
-That's the tension my video plays with. It opens on a close-up of my cheek as I say "I don't trust new creams, so I test them like this," with "sensitive skin test: day 1" on screen. Then I apply the cream to one side only and we check in after a few minutes, an hour and the next morning, side by side. It closes on my face in natural light and one line: "the first one I didn't have to worry about."
+I have rosacea, so that hour is how I choose every product I use.
 
-I have rosacea, so this test isn't a script for me, it's how I choose every product. I've created content for brands like La Roche-Posay and Cetaphil.
+My video, "The Redness Test", opens on a close-up of my cheek as I say "I don't trust new creams, so I test them like this," with "sensitive skin test: day 1" on screen. I apply the cream to one side only and we check in after an hour and the next morning, side by side. It ends on my face in natural light and one line: "the first one I didn't have to worry about."
 
-Want me to send the timed script for the redness test? You can see my work here: [portfólio]
+I've created content for brands like La Roche-Posay and Cetaphil.
+
+Want me to send the timed script for "The Redness Test"? You can see my work here: [portfólio]
 
 Warmly,
 [nome]`;
 
 function instrucaoRedatora() {
   const portfolio = cfgPerfil().portfolio || "";
-  if (abTipo === "dm") return (TIPOS_ABORDAGEM.find(t => t[0] === "dm") || [])[2];
-  if (abTipo === "followup") return (TIPOS_ABORDAGEM.find(t => t[0] === "followup") || [])[2];
-  return (abTipo === "plataforma" ? "Uma candidatura para a vaga, sem assunto e sem assinatura longa." : "Um e-mail frio, com ASSUNTO curto que cite a ideia ou o produto, saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\", e assinatura \"Warmly,\" + o nome dela.") + "\n\n" +
-    "ESTRUTURA (a mesma dos modelos abaixo, em 4 partes, e cada parte puxa a próxima):\n" +
-    "1. A VERDADE DO CLIENTE (1 ou 2 frases): por que as pessoas desistem ou sofrem, ligada ao herói do produto. Nada sobre ela.\n" +
-    "2. O VÍDEO NA ORDEM EM QUE ACONTECE, ligado à frase anterior (ex.: \"That's where my video starts.\"): como ABRE (o que aparece, a fala exata entre aspas e o texto na tela), o MEIO (o produto sendo usado, o momento em que ele brilha) e como FECHA (a imagem final e uma frase final). Se houver gancho B e o vídeo for para ads, ofereça o teste A/B só no fecho da mensagem.\n" +
-    "3. POR QUE ELA (1 ou 2 frases): UM fato real dela com ligação DIRETA com a verdade do cliente da parte 1 (o fato mostra que ela vive esse problema). Depois, numa frase separada e neutra: \"I've created content for brands like...\" com 2 ou 3 marcas, de preferência do mesmo nicho. NUNCA ligue o fato às marcas com \"which is why\", \"that's why\", \"so brands\".\n" +
-    "4. FECHO: uma pergunta de sim ou não ligada à ideia e, na mesma linha ou na seguinte, o convite para ver o trabalho dela: " + portfolio + "\n\n" +
-    "Tamanho: parecido com os modelos, no máximo " + (abTipo === "plataforma" ? "150" : "170") + " palavras.\n" +
+  if (F.tipo === "dm") return (TIPOS_ABORDAGEM.find(t => t[0] === "dm") || [])[2];
+  if (F.tipo === "followup") return (TIPOS_ABORDAGEM.find(t => t[0] === "followup") || [])[2];
+  return (F.tipo === "plataforma" ? "Uma candidatura para a vaga, sem assunto e sem assinatura longa." : "Um e-mail frio, com ASSUNTO curto que cite a ideia ou o produto, saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\", e assinatura \"Warmly,\" + o nome dela.") + "\n\n" +
+    "ESTRUTURA: o método A.C.R. do curso, na ordem dos modelos. Cada parte puxa a próxima:\n" +
+    "1. ATENÇÃO (1 ou 2 frases): uma verdade sobre o cliente da marca, ligada ao herói do produto. Nada sobre ela.\n" +
+    "2. CONEXÃO (1 frase): o fato real dela que a coloca DENTRO desse problema. Ligação direta com a frase anterior. Nada de currículo.\n" +
+    "3. RESULTADO (3 ou 4 frases): \"My video, [nome da ideia], opens...\" com o GANCHO ESCOLHIDO por ela, exatamente: o que aparece, a fala entre aspas e o texto na tela. Depois o produto em uso e o que a pessoa sente ou vê, e o fecho do vídeo. Escreva para dar VONTADE de ver, não como lista técnica: nada de \"label facing camera\", \"close-up on the label\", \"hero moment\", \"measuring spoon\", \"in focus\".\n" +
+    "4. CREDENCIAL (1 frase neutra): \"I've created content for brands like...\" com 2 ou 3 marcas, de preferência do mesmo nicho. Nunca ligue a marcas com \"which is why\" ou \"that's why\".\n" +
+    "5. FECHO: uma pergunta de sim ou não ligada à ideia" + (F.estrategia && F.estrategia.uso === "ads" && F.ganchoB ? ", oferecendo também o segundo gancho para teste A/B" : "") + ", e o convite para ver o trabalho dela: " + portfolio + "\n\n" +
+    "Tamanho: parecido com os modelos, no máximo " + (F.tipo === "plataforma" ? "140" : "160") + " palavras.\n" +
     "Do guia de estilo, use a VOZ, os FATOS dela e a lista do que nunca dizer. A ESTRUTURA é a dos modelos. Imite o ritmo e a lógica dos modelos, nunca as frases nem os produtos deles.\n\n" +
     "=== MODELOS (de outra creator; só para você ver o nível e a estrutura) ===\n" + MODELOS_PITCH;
 }
-async function escreverAbordagem(ajuste) {
-  if (!checaAntes()) return;
-  const botao = $("#abGerar");
-  botao.disabled = true; botao.textContent = "✍️ Escrevendo...";
-  const guardaIdeias = abIdeias && !ajuste ? $("#abSaida").innerHTML : "";
-  $("#abSaida").innerHTML = '<div class="bloco abordar__saida"><p class="mudo"><span class="rot__relogio">⏳</span> Escrevendo no seu estilo... leva uns 15 a 30 segundos.</p></div>';
-  const sistema = "Você é a redatora de uma creator de UGC e escreve abordagens em nome dela, no estilo dela. Você escreve como gente, com ritmo, e cada frase dá vontade de ler a próxima. Pense como a marca que vai ler.\n\n" + contextoDela() +
+
+/* PASSO 3: escrever (ou reescrever com o comentário dela) */
+async function escrever(comentario, rotulo) {
+  if (abOcupado || !checaAntes()) return;
+  const anterior = ultimaVersao();
+  carregando(comentario ? "🔁 Refazendo com o seu comentário... uns 15 a 30 segundos." : "✍️ Escrevendo no seu estilo... uns 15 a 30 segundos.");
+  const sistema = "Você é a redatora de uma creator de UGC e escreve abordagens em nome dela, no estilo dela, com ritmo de gente de verdade. Pense como a marca que vai ler: cada frase precisa dar vontade de ler a próxima.\n\n" + contextoDela() +
     "- Escreva em " + $("#abIdioma").value + ".\n\n" +
     "=== ANTES DE RESPONDER, RELEIA COMO A MARCA E REESCREVA SE PRECISAR ===\n" +
-    "1. A primeira frase me faz querer ler a segunda?\n2. Eu consigo assistir ao vídeo na ordem: abertura, meio, fecho?\n3. Cada parágrafo continua o anterior, sem frase solta?\n" +
-    "4. O fato dela tem ligação lógica com o problema do cliente? Alguma frase liga coisas que não têm relação (ex.: um hábito dela como motivo de marcas terem trabalhado com ela)? Se sim, corte.\n5. O fecho continua a ideia?\n6. Tem detalhe que se contradiz, palavra em português, travessão, número inventado ou palavra vaga (authentic, natural, creative, relatable)?\n\n" +
-    "=== FORMATO DA RESPOSTA ===\n" + (abTipo === "email" ? "ASSUNTO: (uma linha)\nMENSAGEM:\n(o texto)\n" : "MENSAGEM:\n(o texto)\n") + "Não escreva nada antes nem depois disso.";
+    "1. A primeira frase me faz querer ler a segunda?\n2. Eu consigo assistir ao vídeo lendo, e fico com vontade de ver?\n3. Cada parte continua a anterior, sem frase solta?\n" +
+    "4. O fato dela tem ligação lógica com o problema do cliente? Alguma frase liga coisas sem relação? Se sim, corte.\n5. Tem palavra em português, travessão, número inventado, termo técnico de filmagem ou palavra vaga (authentic, natural, creative, relatable)?\n\n" +
+    "=== FORMATO DA RESPOSTA ===\n" + (F.tipo === "email" ? "ASSUNTO: (uma linha)\nMENSAGEM:\n(o texto)\n" : "MENSAGEM:\n(o texto)\n") + "Não escreva nada antes nem depois disso.";
   let pedido = "Escreva: " + instrucaoRedatora() + "\n\n" + dadosDaMarca();
-  if (abIdeia && abEstrategia) pedido += "\n=== A ESTRATÉGIA ESCOLHIDA POR ELA ===\nHerói do produto: " + abEstrategia.heroi + "\nO que o cliente sente: " + abEstrategia.objecao +
-    "\nUso do vídeo: " + (abEstrategia.uso === "organico" ? "orgânico" : "ads") +
-    "\nIdeia: " + abIdeia.nome + "\nGancho visual: " + (abIdeia.gancho_visual || "") + "\nGancho falado: " + abIdeia.gancho + "\nTexto na tela: " + (abIdeia.gancho_texto || "") +
-    (abIdeia.gancho_b ? "\nGancho B (teste A/B): " + abIdeia.gancho_b + (abIdeia.gancho_b_texto ? " / texto: " + abIdeia.gancho_b_texto : "") : "") +
-    "\nResto da cena: " + abIdeia.cena + "\nFato dela: " + abIdeia.fato_dela + "\nPor que vende: " + abIdeia.por_que_vende + "\n";
-  if (ajuste && abResultado) pedido += "\n=== A VERSÃO ANTERIOR ===\n" + (abResultado.assunto ? "ASSUNTO: " + abResultado.assunto + "\n" : "") + abResultado.mensagem + "\n\nAgora: " + ajuste;
+  if (F.estrategia) pedido += "\n=== A ESTRATÉGIA ===\nHerói do produto: " + F.estrategia.heroi + "\nO que o cliente sente: " + F.estrategia.objecao + "\nUso: " + (F.estrategia.uso === "organico" ? "orgânico" : "ads") + "\n";
+  if (F.ideia) pedido += "\n=== A IDEIA QUE ELA ESCOLHEU ===\n" + F.ideia.nome + ": " + F.ideia.conceito + "\nFato dela: " + F.ideia.fato_dela + "\n";
+  if (F.gancho) pedido += "\n=== O GANCHO QUE ELA APROVOU (use exatamente) ===\nO que aparece: " + F.gancho.visual + "\nFala: \"" + F.gancho.fala + "\"\nTexto na tela: \"" + F.gancho.texto + "\"\n" +
+    (F.ganchoB ? "Segundo gancho para teste A/B: \"" + F.ganchoB.fala + "\" (texto: \"" + F.ganchoB.texto + "\")\n" : "");
+  if (comentario && anterior) pedido += "\n=== A VERSÃO ATUAL ===\n" + (anterior.assunto ? "ASSUNTO: " + anterior.assunto + "\n" : "") + anterior.mensagem +
+    "\n\n=== O COMENTÁRIO DELA SOBRE ESSA VERSÃO ===\n" + comentario + "\n\nReescreva corrigindo EXATAMENTE o que ela apontou. Mantenha o que ela não criticou. Se ela disser que algo não faz sentido, tire ou troque por algo que faça.";
   const r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "low", 6000);
-  botao.disabled = false;
-  desenharAbordar();
-  if (r.erro) { $("#abSaida").innerHTML = (guardaIdeias || "") + '<div class="faixa" style="margin-top:12px">⚠️ ' + esc(r.erro) + "</div>"; return; }
-  const separa = (t) => {
-    const limpo = semTravessao(t).replace(/\*\*/g, "");
-    const a = limpo.match(/ASSUNTO:\s*(.+)/i);
-    const mm = limpo.match(/MENSAGEM:\s*([\s\S]+)/i);
-    return { assunto: a ? a[1].trim() : "", mensagem: (mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim() };
-  };
-  abResultado = separa(r.texto);
-  desenhaSaida();
-  atualizaResumoIA();
+  if (r.erro) return falhou2(r.erro);
+  const limpo = semTravessao(r.texto).replace(/\*\*/g, "");
+  const a = limpo.match(/ASSUNTO:\s*(.+)/i), mm = limpo.match(/MENSAGEM:\s*([\s\S]+)/i);
+  const nova = { assunto: a ? a[1].trim() : "", mensagem: (mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim(), nota: rotulo || (comentario ? "Com o seu comentário: \"" + comentario + "\"" : "Primeira versão"), quando: new Date().toISOString() };
+  F.versoes.push(nova);
+  abResultado = nova;
+  pronto();
   guardaHistorico();
 }
 
-function desenhaSaida() {
+/* ----- a linha do tempo na tela ----- */
+function desenhaSaida(carregandoTexto) {
   const s = $("#abSaida");
-  if (!s || !abResultado) return;
+  if (!s) return;
+  if (!F) { s.innerHTML = ""; return; }
   const m = abMarcaId ? D.base.find(x => x.id === abMarcaId) : null;
-  const palavras = abResultado.mensagem.split(/\s+/).filter(Boolean).length;
-  s.innerHTML = '<div class="bloco abordar__saida">' +
-    '<div class="bloco__cab"><h2>' + (TIPOS_ABORDAGEM.find(t => t[0] === abTipo) || [0, ""])[1] + " pronto</h2><span class=\"mudo pequeno\">" + plural(palavras, "palavra", "palavras") + "</span></div>" +
-    (abTipo === "email" ? '<div class="campo"><label>Assunto</label><input id="abAssunto" value="' + esc(abResultado.assunto) + '"></div>' : "") +
-    '<div class="campo" style="margin-top:8px"><label>Mensagem (dá para editar aqui)</label><textarea id="abTexto" class="entrada" style="height:auto;min-height:260px;padding:12px;line-height:1.6">' + esc(abResultado.mensagem) + "</textarea></div>" +
-    '<div class="rot__chips" style="margin-top:10px">' +
-      [["outra", "🔄 Outra versão"], ["curta", "✂️ Mais curta"], ["direta", "🔥 Mais direta"], ["calorosa", "🤍 Mais calorosa"]].map(x => '<button type="button" class="rot__chip" data-aj="' + x[0] + '">' + x[1] + "</button>").join("") + "</div>" +
-    '<div class="ferramentas" style="margin:10px 0 0">' +
-      '<button type="button" class="btn" id="abCopiar">📋 Copiar</button>' +
-      (abIdeias && precisaIdeia() ? '<button type="button" class="btn btn--linha" id="abVoltarIdeias">⬅️ Voltar às ideias</button>' : "") +
-      (abTipo === "email" || abTipo === "followup" ? '<button type="button" class="btn btn--linha" id="abGmail">✉️ Abrir no Gmail</button>' : "") +
-      (m && m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" id="abProspectei">📨 Prospectei esta marca</button>' : "") +
-    "</div></div>";
-  const atual = () => ({ assunto: $("#abAssunto") ? $("#abAssunto").value : "", mensagem: $("#abTexto").value });
-  $("#abTexto").addEventListener("input", () => { abResultado = atual(); });
-  if ($("#abAssunto")) $("#abAssunto").addEventListener("input", () => { abResultado = atual(); });
-  $(".rot__chips", s).addEventListener("click", (e) => {
-    const b = e.target.closest("[data-aj]");
-    if (!b) return;
-    abResultado = atual();
-    gerarAbordagem({ outra: "escreva uma versão diferente, com outro gancho e outra ideia de conteúdo.", curta: "deixe mais curta, com uns 30% menos palavras, sem perder o gancho.", direta: "deixe mais direta e ousada, com um gancho mais forte na primeira linha.", calorosa: "deixe mais calorosa e próxima, sem perder a objetividade." }[b.dataset.aj]);
+  const passo = (num, titulo, aberto, corpo, extra) => '<details class="linha__passo"' + (aberto ? " open" : "") + '><summary><span class="linha__num">' + num + "</span>" + titulo + (extra || "") + "</summary><div class=\"linha__corpo\">" + corpo + "</div></details>";
+  let html = '<div class="bloco abordar__saida linha">' +
+    '<div class="bloco__cab"><h2>🧭 ' + esc((TIPOS_ABORDAGEM.find(t => t[0] === F.tipo) || [0, ""])[1]) + " · " + esc(F.marca) + '</h2><span class="espaco"></span><button type="button" class="btn btn--linha" id="flZerar">Começar do zero</button></div>';
+  let n = 1;
+  if (F.estrategia) {
+    html += passo(n++, "🧠 Estratégia", !F.ideia,
+      '<p class="pequeno"><b>Herói do produto:</b> ' + esc(F.estrategia.heroi) + "<br><b>O que o cliente sente:</b> " + esc(F.estrategia.objecao) + "<br><b>Uso do vídeo:</b> " + (F.estrategia.uso === "organico" ? "orgânico (perfil da marca)" : "anúncio pago (ads)") + "</p>");
+  }
+  if (F.ideias && F.ideias.length) {
+    const corpo = F.ideia
+      ? '<p class="pequeno"><b>' + esc(F.ideia.nome) + ":</b> " + esc(F.ideia.conceito) + '</p><p class="mudo pequeno">✨ ' + esc(F.ideia.fato_dela) + " · 💰 " + esc(F.ideia.por_que_vende) + '</p><button type="button" class="link pequeno" id="flTrocaIdeia">trocar de ideia</button>'
+      : '<div class="abordar__ideias">' + F.ideias.map((i, k) => '<div class="abordar__ideia"><div class="abordar__ideia-nome">' + esc(i.nome) + "</div>" + (i.lente ? '<span class="pil c-destaque" style="align-self:flex-start;margin-top:4px">🔍 Lente: ' + esc(i.lente) + "</span>" : "") + '<p class="pequeno" style="margin-top:6px">' + esc(i.conceito) + "</p>" +
+          '<p class="mudo pequeno" style="margin-top:6px">✨ ' + esc(i.fato_dela) + "</p><p class=\"mudo pequeno\">💰 " + esc(i.por_que_vende) + "</p>" +
+          '<button type="button" class="btn btn--full" data-fl-ideia="' + k + '" style="margin-top:10px">Escolher esta ideia</button></div>').join("") + "</div>" +
+        '<div class="ferramentas" style="margin:10px 0 0"><button type="button" class="btn btn--linha" id="flOutrasIdeias">🔄 Outras 3 ideias</button></div>';
+    html += passo(n++, "💡 Ideia" + (F.ideia ? ": " + esc(F.ideia.nome) : " · escolha uma"), !F.ideia || !F.gancho, corpo);
+  }
+  if (F.ideia) {
+    let corpo;
+    if (!F.ganchos.length) corpo = '<button type="button" class="btn" id="flGanchos">🪝 Criar 5 ganchos para esta ideia</button>';
+    else if (F.gancho && F.versoes.length) corpo = cartaoGancho(F.gancho) + (F.ganchoB ? '<p class="mudo pequeno" style="margin-top:6px">🅱️ Gancho B: "' + esc(F.ganchoB.fala) + '"</p>' : "") + '<button type="button" class="link pequeno" id="flTrocaGancho">trocar de gancho</button>';
+    else corpo = '<p class="mudo pequeno" style="margin-bottom:8px">Escolha o gancho. Você pode editar as 3 camadas antes de escrever.' + (F.estrategia && F.estrategia.uso === "ads" ? " Para ads, dá para marcar um segundo gancho (B) para a marca testar." : "") + "</p>" +
+      '<div class="abordar__ganchos">' + F.ganchos.map((g, k) => '<label class="abordar__opcao' + (F.gancho && F.gancho._i === k ? " escolhido" : "") + '"><input type="radio" name="flG" value="' + k + '"' + (F.gancho && F.gancho._i === k ? " checked" : "") + "><div>" +
+          '<div class="abordar__ideia-nome" style="font-size:12.5px">' + esc(g.tipo) + "</div>" + cartaoGancho(g) + '<p class="mudo pequeno">' + esc(g.por_que || "") + "</p>" +
+          (F.estrategia && F.estrategia.uso === "ads" ? '<button type="button" class="link pequeno" data-fl-b="' + k + '">' + (F.ganchoB && F.ganchoB._i === k ? "✓ este é o gancho B" : "usar como gancho B") + "</button>" : "") + "</div></label>").join("") + "</div>" +
+      (F.gancho ? '<div class="abordar__editar-gancho"><div class="rotulo">Ajuste o gancho escolhido, se quiser</div>' +
+          '<div class="campo"><label>👀 O que aparece</label><input id="flGV" value="' + esc(F.gancho.visual) + '"></div>' +
+          '<div class="campo"><label>🗣️ Fala</label><input id="flGF" value="' + esc(F.gancho.fala) + '"></div>' +
+          '<div class="campo"><label>🔤 Texto na tela</label><input id="flGT" value="' + esc(F.gancho.texto) + '"></div>' +
+          '<button type="button" class="btn btn--full" id="flEscrever" style="margin-top:10px">✍️ Escrever com este gancho</button></div>' : "") +
+      '<div class="ferramentas" style="margin:10px 0 0"><button type="button" class="btn btn--linha" id="flGanchos">🔄 Outros 5 ganchos</button></div>';
+    html += passo(n++, "🪝 Gancho" + (F.gancho ? ': "' + esc(F.gancho.fala) + '"' : " · escolha um"), !F.versoes.length, corpo);
+  }
+  F.versoes.forEach((v, k) => {
+    const ultima = k === F.versoes.length - 1;
+    const palavras = v.mensagem.split(/\s+/).filter(Boolean).length;
+    const corpo = '<p class="mudo pequeno" style="margin-bottom:6px">' + esc(v.nota || "") + " · " + plural(palavras, "palavra", "palavras") + "</p>" +
+      (F.tipo === "email" ? '<div class="campo"><label>Assunto</label><input data-fl-assunto="' + k + '" value="' + esc(v.assunto) + '"></div>' : "") +
+      '<textarea class="entrada linha__texto" data-fl-texto="' + k + '">' + esc(v.mensagem) + "</textarea>" +
+      '<div class="ferramentas" style="margin:8px 0 0"><button type="button" class="btn" data-fl-copiar="' + k + '">📋 Copiar</button>' +
+        ((F.tipo === "email" || F.tipo === "followup") ? '<button type="button" class="btn btn--linha" data-fl-gmail="' + k + '">✉️ Abrir no Gmail</button>' : "") +
+        (!ultima ? '<button type="button" class="btn btn--linha" data-fl-voltar="' + k + '">↩️ Continuar desta versão</button>' : "") +
+        (ultima && m && m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" id="flProspectei">📨 Prospectei esta marca</button>' : "") + "</div>" +
+      (ultima ? '<div class="linha__comentario"><label class="rotulo" for="flComentario">🗣️ O que não ficou bom? Escreva do seu jeito e a IA refaz</label>' +
+          '<textarea id="flComentario" class="entrada" rows="3" placeholder="Ex.: o fato de cozinhar não tem a ver com a marca; o gancho não diz que é suplemento; a última frase ficou solta..."></textarea>' +
+          '<div class="ferramentas" style="margin:8px 0 0"><button type="button" class="btn" id="flRefazer">🔁 Refazer com o meu comentário</button>' +
+          [["curta", "✂️ Mais curta"], ["direta", "🔥 Mais direta"], ["calorosa", "🤍 Mais calorosa"]].map(x => '<button type="button" class="rot__chip" data-fl-aj="' + x[0] + '">' + x[1] + "</button>").join("") +
+          "</div></div>" : "");
+    html += passo(n++, "✍️ Versão " + (k + 1) + (ultima ? " (atual)" : ""), ultima, corpo);
   });
-  if ($("#abVoltarIdeias")) $("#abVoltarIdeias").addEventListener("click", () => { abResultado = null; desenhaIdeias(); });
-  $("#abCopiar").addEventListener("click", async (e) => {
-    const t = atual();
-    try { await navigator.clipboard.writeText((abTipo === "email" && t.assunto ? "Assunto: " + t.assunto + "\n\n" : "") + t.mensagem); e.target.textContent = "copiado ✓"; }
-    catch (x) { $("#abTexto").select(); e.target.textContent = "use Cmd + C"; }
-    setTimeout(() => { e.target.textContent = "📋 Copiar"; }, 2000);
+  if (carregandoTexto) html += '<p class="mudo" style="margin-top:12px"><span class="rot__relogio">⏳</span> ' + esc(carregandoTexto) + "</p>";
+  html += "</div>";
+  s.innerHTML = html;
+  ligaSaida(m);
+}
+const cartaoGancho = (g) => '<div class="abordar__gancho"><div><b>👀</b> ' + esc(g.visual || "") + '</div><div><b>🗣️</b> "' + esc(String(g.fala || "").replace(/^"|"$/g, "")) + '"</div><div><b>🔤</b> ' + esc(g.texto || "") + "</div></div>";
+
+function ligaSaida(m) {
+  const s = $("#abSaida");
+  const clique = (sel, fn) => $$(sel, s).forEach(b => b.addEventListener("click", (e) => { e.preventDefault(); if (!abOcupado) fn(b, e); }));
+  clique("#flZerar", () => { F = null; abResultado = null; guardaFluxo(); desenhaSaida(); });
+  clique("[data-fl-ideia]", (b) => { F.ideia = F.ideias[Number(b.dataset.flIdeia)]; F.ganchos = []; F.gancho = null; F.ganchoB = null; guardaFluxo(); pensarGanchos(); });
+  clique("#flOutrasIdeias", () => pensarIdeias());
+  clique("#flTrocaIdeia", () => { F.ideia = null; F.ganchos = []; F.gancho = null; F.ganchoB = null; guardaFluxo(); desenhaSaida(); });
+  clique("#flGanchos", () => pensarGanchos());
+  clique("#flTrocaGancho", () => { F.gancho = null; guardaFluxo(); desenhaSaida(); });
+  $$('input[name="flG"]', s).forEach(r => r.addEventListener("change", () => { const k = Number(r.value); F.gancho = Object.assign({ _i: k }, F.ganchos[k]); guardaFluxo(); desenhaSaida(); }));
+  clique("[data-fl-b]", (b) => { const k = Number(b.dataset.flB); F.ganchoB = F.ganchoB && F.ganchoB._i === k ? null : Object.assign({ _i: k }, F.ganchos[k]); guardaFluxo(); desenhaSaida(); });
+  clique("#flEscrever", () => {
+    F.gancho.visual = $("#flGV").value.trim(); F.gancho.fala = $("#flGF").value.trim(); F.gancho.texto = $("#flGT").value.trim();
+    escrever();
   });
-  if ($("#abGmail")) $("#abGmail").addEventListener("click", () => {
-    const t = atual();
-    const para = m && m.email ? m.email : "";
-    window.open("https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(para) + "&su=" + encodeURIComponent(t.assunto || "") + "&body=" + encodeURIComponent(t.mensagem), "_blank", "noopener");
+  $$("[data-fl-texto]", s).forEach(t => t.addEventListener("input", () => { F.versoes[Number(t.dataset.flTexto)].mensagem = t.value; abResultado = ultimaVersao(); guardaFluxo(); }));
+  $$("[data-fl-assunto]", s).forEach(t => t.addEventListener("input", () => { F.versoes[Number(t.dataset.flAssunto)].assunto = t.value; guardaFluxo(); }));
+  clique("[data-fl-copiar]", async (b) => {
+    const v = F.versoes[Number(b.dataset.flCopiar)];
+    try { await navigator.clipboard.writeText((F.tipo === "email" && v.assunto ? "Assunto: " + v.assunto + "\n\n" : "") + v.mensagem); b.textContent = "copiado ✓"; }
+    catch (x) { b.textContent = "use Cmd + C"; }
+    setTimeout(() => { b.textContent = "📋 Copiar"; }, 2000);
   });
-  if ($("#abProspectei")) $("#abProspectei").addEventListener("click", async (e) => {
+  clique("[data-fl-gmail]", (b) => {
+    const v = F.versoes[Number(b.dataset.flGmail)];
+    window.open("https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(m && m.email ? m.email : "") + "&su=" + encodeURIComponent(v.assunto || "") + "&body=" + encodeURIComponent(v.mensagem), "_blank", "noopener");
+  });
+  clique("[data-fl-voltar]", (b) => {
+    const v = F.versoes[Number(b.dataset.flVoltar)];
+    F.versoes.push(Object.assign({}, v, { nota: "Voltei para a versão " + (Number(b.dataset.flVoltar) + 1), quando: new Date().toISOString() }));
+    abResultado = ultimaVersao(); guardaFluxo(); desenhaSaida();
+  });
+  clique("#flRefazer", () => {
+    const c = $("#flComentario").value.trim();
+    if (!c) { torrada("Escreva o que não ficou bom, do seu jeito."); $("#flComentario").focus(); return; }
+    escrever(c);
+  });
+  clique("[data-fl-aj]", (b) => escrever({ curta: "Deixe mais curta, com uns 30% menos palavras, sem perder o gancho nem a lógica.", direta: "Deixe mais direta e ousada, sem perder a lógica.", calorosa: "Deixe mais calorosa e próxima, sem perder a objetividade." }[b.dataset.flAj], b.textContent));
+  clique("#flProspectei", async (b) => {
     const salvo = await salvarLinha("base_marcas", { situacao: "prospectada", ultimo_contato: isoLocal(new Date()) }, m.id);
     if (!salvo) return;
     troca(D.base, salvo); desenharBase(); registrarProspeccao([salvo]);
-    e.target.remove(); torrada("📨 " + m.nome + " marcada como prospectada hoje.");
+    b.remove(); torrada("📨 " + m.nome + " marcada como prospectada hoje.");
   });
 }
 

@@ -496,6 +496,20 @@ a.btn { text-decoration: none; }
 .abordar__ideia { display: flex; flex-direction: column; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card-2); }
 .abordar__ideia .btn { margin-top: auto !important; }
 .abordar__ideia-nome { font-weight: 700; font-size: 14px; }
+.linha { display: flex; flex-direction: column; gap: 8px; }
+.linha__passo { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.linha__passo > summary { cursor: pointer; list-style: none; padding: 10px 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.linha__passo > summary::-webkit-details-marker { display: none; }
+.linha__num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--suave); color: var(--red); font-size: 11.5px; font-weight: 700; flex: none; }
+.linha__corpo { padding: 0 12px 12px; }
+.linha__texto { height: auto; min-height: 240px; padding: 12px; line-height: 1.6; }
+.linha__comentario { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.linha__comentario textarea { height: auto; padding: 10px; margin-top: 6px; }
+.abordar__ganchos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
+.abordar__opcao { display: flex; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card-2); cursor: pointer; }
+.abordar__opcao.escolhido { border-color: var(--red); background: var(--suave); }
+.abordar__opcao input { accent-color: var(--red); margin-top: 3px; flex: none; }
+.abordar__editar-gancho { margin-top: 12px; padding: 12px; border: 1px solid var(--red); border-radius: var(--radius); display: flex; flex-direction: column; gap: 8px; }
 .abordar__gancho { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--red); background: var(--card); border-radius: 0 var(--radius) var(--radius) 0; font-size: 12.5px; line-height: 1.5; }
 .abordar__botoes { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-top: 12px; }
 .abordar__botoes .btn { height: 40px; }
