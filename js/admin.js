@@ -1014,6 +1014,16 @@ function sanfona({ emoji, titulo, sub, direita, corpo, aberta, attrs }) {
 const blocosDeTempo = (lista) => '<div class="blocos">' + (lista || []).map(b =>
   '<div class="blocos__linha"><span class="blocos__t">' + esc(b.t) + "</span><span>" + comDestaque(b.o) + "</span></div>").join("") + "</div>";
 
+/* capa vertical do YouTube; se não carregar, fica o fundo colorido com o emoji */
+function capaRef(r) {
+  const id = idYoutube(r.youtube);
+  if (!id) return "";
+  const base = "https://i.ytimg.com/vi/" + id + "/";
+  return '<img class="ref__img" src="' + base + 'oardefault.jpg" alt="" loading="lazy" decoding="async"' +
+    ' onload="if(this.naturalWidth<400&&!this.dataset.passo){this.dataset.passo=1;this.src=\'' + base + 'maxresdefault.jpg\'}else{this.parentNode.classList.add(\'com-capa\')}"' +
+    ' onerror="if(!this.dataset.passo){this.dataset.passo=1;this.src=\'' + base + 'hqdefault.jpg\'}else{this.remove()}">';
+}
+
 function montarChecklist() {
   const el = $("#aba-checklist");
   if (!B) {
@@ -1043,7 +1053,7 @@ function montarChecklist() {
     /* 2. referências */
     '<div data-painel="referencias"><div class="cartoes">' + refs.map((r, i) =>
       '<button type="button" class="ref cor-' + esc(r.cor) + '" data-ref="' + i + '">' +
-        '<div class="ref__capa"><span>' + esc(r.emoji) + '</span><span class="ref__dur">' + esc(r.duracao) + "</span></div>" +
+        '<div class="ref__capa">' + capaRef(r) + '<span class="ref__emoji">' + esc(r.emoji) + '</span><span class="ref__dur">' + esc(r.duracao) + "</span></div>" +
         '<div class="ref__info"><span class="ref__tit">' + esc(r.titulo) + '</span><span class="ref__meta">' + esc(r.estilo) + " · " + esc(r.marca) + "</span></div>" +
       "</button>").join("") + "</div></div>" +
 
