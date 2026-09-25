@@ -125,7 +125,8 @@ const ESPERADO = {
   marcas: ["nome", "instagram", "email", "telefone", "situacao", "obs", "ultimo_contato"],
   base_marcas: ["nome", "instagram", "email", "telefone", "site", "nicho", "origem", "situacao", "obs", "ultimo_contato", "nao_enviar", "favorita", "produto", "link_produto", "outros_contatos", "fonte"],
   calendario: ["titulo", "marca", "tipo", "data", "status"],
-  campanhas: ["campanha", "cliente", "tipo", "status", "qtd", "valor", "prazo", "pagamento", "ativa", "favorita"],
+  campanhas: ["campanha", "cliente", "tipo", "status", "qtd", "valor", "prazo", "pagamento", "ativa", "favorita", "moeda", "pagamentos", "gift", "nicho", "data_contrato", "vencimento", "canal", "canal_detalhe"],
+  abordagens: ["data", "canal", "quantidade"],
   marcados: ["chave"],
   roteiros: ["fonte", "url", "perfil", "de_quem", "titulo", "transcricao", "legenda", "postado_em", "tags", "obs", "status", "erro", "gancho", "corpo", "cta", "analise", "metricas", "capa"],
   configuracoes: ["chave", "valor"],
@@ -342,10 +343,10 @@ const numero = (rot, val, sub) =>
 /* ============================================================
    4. CARREGAR OS DADOS
    ============================================================ */
-const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], config: {}, marcados: new Set() };
+const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], config: {}, marcados: new Set() };
 const inicio14 = hoje(); inicio14.setDate(inicio14.getDate() - 13);
 
-const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base] = await Promise.all([
+const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens] = await Promise.all([
   ler("videos", q => q.order("ordem", { ascending: true }).order("criado_em", { ascending: true })),
   ler("visitas", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
   ler("marcas", q => q.order("criado_em", { ascending: false })),
@@ -354,9 +355,10 @@ const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, confi
   ler("marcados"),
   ler("roteiros", q => q.order("created_at", { ascending: false })),
   ler("configuracoes"),
-  ler("base_marcas", q => q.order("created_at", { ascending: false }))
+  ler("base_marcas", q => q.order("created_at", { ascending: false })),
+  ler("abordagens", q => q.order("data", { ascending: true }))
 ]);
-Object.assign(D, { videos, visitas, marcas, calendario, campanhas, roteiros, base, marcados: new Set(marcados.map(m => m.chave)) });
+Object.assign(D, { videos, visitas, marcas, calendario, campanhas, roteiros, base, abordagens, marcados: new Set(marcados.map(m => m.chave)) });
 configuracoes.forEach(c => { D.config[c.chave] = c.valor; });
 
 const nomesDeMarcas = () => Array.from(new Set(D.marcas.map(m => m.nome).concat(D.base.map(m => m.nome), D.campanhas.map(c => c.cliente), D.videos.map(v => v.marca)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -794,8 +796,9 @@ function montarBase() {
       return;
     }
     if (e.target.closest("[data-prospectei]")) {
+      const antes = m.situacao;
       const salvo = await salvarLinha("base_marcas", { situacao: "prospectada", ultimo_contato: isoLocal(new Date()) }, m.id);
-      if (salvo) { troca(D.base, salvo); desenharBase(); torrada("📨 Marcada como prospectada hoje."); }
+      if (salvo) { troca(D.base, salvo); desenharBase(); torrada("📨 Marcada como prospectada hoje."); if (antes === "quero_prospectar") registrarProspeccao([salvo]); }
       return;
     }
     editorBase(m);
@@ -939,8 +942,10 @@ function editarEmMassa() {
       if (d.favorita) patch.favorita = d.favorita === "sim";
       if (d.nao_enviar) patch.nao_enviar = d.nao_enviar === "sim";
       if (!Object.keys(patch).length) { erro("Escolha pelo menos uma coisa para mudar."); return false; }
+      const eramParaProspectar = D.base.filter(m => bSelecao.has(m.id) && m.situacao === "quero_prospectar").map(m => m.id);
       const { data, error } = await banco.from("base_marcas").update(patch).in("id", ids).select();
       if (error) { erro(traduzErro(error, "base_marcas")); return false; }
+      if (patch.situacao === "prospectada") registrarProspeccao((data || []).filter(m => eramParaProspectar.includes(m.id)));
       (data || []).forEach(m => troca(D.base, m));
       bSelecao.clear();
       desenharBase();
@@ -977,6 +982,7 @@ function editorBase(m, padrao) {
       if (dados.email) dados.email = dados.email.toLowerCase();
       const salvo = await salvarLinha("base_marcas", dados, m && m.id);
       if (!salvo) return false;
+      if (m && m.situacao === "quero_prospectar" && salvo.situacao === "prospectada") registrarProspeccao([salvo]);
       if (m) troca(D.base, salvo); else D.base.unshift(salvo);
       desenharBase();
       torrada("Marca salva ✓");
@@ -1531,30 +1537,89 @@ function editorCal(c, dataPadrao) {
 }
 
 /* ============================================================
-   8. ABA CAMPANHAS
+   8. ABA CAMPANHAS (os contratos fechados)
    ============================================================ */
 const FUNIL = ["Briefing", "Roteiro", "Aprovação Roteiro", "Gravação", "Edição", "Aprovado", "Entregue"];
 const COR_STATUS = { "Briefing": "c-cinza", "Roteiro": "c-azul", "Aprovação Roteiro": "c-roxo", "Gravação": "c-coral", "Edição": "c-mostarda", "Aprovado": "c-verde", "Entregue": "c-destaque" };
 const COR_TIPO = { "Conteúdo": "c-azul", "Publicidade": "c-coral" };
+const MOEDAS = { CAD: "CA$", USD: "US$", EUR: "€" };
+const VIAS = ["PayPal", "Wise", "Transferência", "Outro"];
+const CANAIS = [
+  ["inbound", "📥 Inbound (portfólio)", "c-verde"],
+  ["plataforma", "🧩 Plataforma", "c-roxo"],
+  ["manual", "🔎 Prospecção manual", "c-azul"],
+  ["instagram_auto", "📸 Instagram automático", "c-coral"],
+  ["onbento", "✉️ onBento", "c-mostarda"],
+  ["indicacao", "🤝 Indicação", "c-destaque"],
+  ["outro", "Outro", "c-cinza"]
+];
+const canalDe = (v) => CANAIS.find(c => c[0] === v) || null;
 const COLUNAS = [
   { k: "favorita", rot: "", titulo: "Favorita", tipo: "fav" },
-  { k: "campanha", rot: "Campanha", tipo: "texto" },
+  { k: "campanha", rot: "Trabalho", tipo: "texto" },
   { k: "cliente", rot: "Cliente", tipo: "texto" },
   { k: "tipo", rot: "Tipo", tipo: "texto" },
   { k: "status", rot: "Status", tipo: "funil" },
   { k: "qtd", rot: "Qtd", tipo: "num", num: true },
-  { k: "valor", rot: "Valor", tipo: "num", num: true },
+  { k: "valor", rot: "Valor", tipo: "cad", num: true },
   { k: "prazo", rot: "Prazo", tipo: "data" },
-  { k: "pagamento", rot: "Pagamento", tipo: "texto" }
+  { k: "pagamento", rot: "Pagamento", tipo: "pag" },
+  { k: "canal", rot: "Por onde fechei", tipo: "texto" }
 ];
 let ordemCamp = { k: "prazo", dir: 1 };
 let filtroCamp = "todas";
+
+/* ----- câmbio: tudo vira CA$ pela cotação do dia (Banco Central Europeu) ----- */
+let cambio = { CAD: 1 };      /* quantos CA$ vale 1 unidade de cada moeda */
+let cambioData = null;
+async function carregaCambio() {
+  try {
+    const guardado = JSON.parse(localStorage.getItem("admin-cambio") || "null");
+    if (guardado && guardado.dia === isoLocal(new Date())) { cambio = guardado.taxas; cambioData = guardado.data; return; }
+  } catch (e) {}
+  try {
+    const r = await fetch("https://api.frankfurter.dev/v1/latest?base=CAD&symbols=USD,EUR");
+    const j = await r.json();
+    if (!j.rates || !j.rates.USD) throw new Error("sem cotação");
+    cambio = { CAD: 1, USD: 1 / j.rates.USD, EUR: 1 / j.rates.EUR };
+    cambioData = j.date;
+    try { localStorage.setItem("admin-cambio", JSON.stringify({ dia: isoLocal(new Date()), taxas: cambio, data: cambioData })); } catch (e) {}
+  } catch (e) {
+    cambio = { CAD: 1 };      /* sem internet: mostra só por moeda */
+  }
+}
+const moedaDe = (c) => MOEDAS[c.moeda] ? c.moeda : "CAD";
+const emCAD = (valor, moeda) => cambio[moeda] ? (Number(valor) || 0) * cambio[moeda] : null;
+const dinheiroEm = (v, moeda) => (MOEDAS[moeda] || "$") + " " + numBR.format(Number(v) || 0);
+function recebidoDe(c) {
+  const r = soma(Array.isArray(c.pagamentos) ? c.pagamentos : [], p => p.valor);
+  return r === 0 && c.pagamento === "pago" && !c.gift ? Number(c.valor) || 0 : r;   /* campanhas antigas marcadas como pagas */
+}
+function situacaoPagamento(c) {
+  if (c.gift) return ["🎁 Gift", "c-roxo"];
+  const total = Number(c.valor) || 0, rec = recebidoDe(c);
+  if (total > 0 && rec >= total - 0.005) return ["Pago", "c-verde"];
+  if (rec > 0) return ["Parcial", "c-azul"];
+  return ["Pendente", "c-amarelo"];
+}
+/* soma por moeda + total em CA$ */
+function somaMoedas(lista, valorDe) {
+  const por = {};
+  lista.forEach(c => { const m = moedaDe(c); por[m] = (por[m] || 0) + (Number(valorDe(c)) || 0); });
+  let total = 0, completo = true;
+  Object.entries(por).forEach(([m, v]) => { const cad = emCAD(v, m); if (cad == null) completo = false; else total += cad; });
+  const partes = Object.entries(por).filter(([, v]) => v).map(([m, v]) => dinheiroEm(v, m));
+  return { total, completo, partes, soCAD: Object.entries(por).filter(([, v]) => v).every(([m]) => m === "CAD") };
+}
 
 function valorOrdem(c, col) {
   const v = c[col.k];
   if (col.tipo === "fav") return v ? 0 : 1;
   if (col.tipo === "funil") { const i = FUNIL.indexOf(v); return i < 0 ? null : i; }
+  if (col.tipo === "cad") return emCAD(c.valor, moedaDe(c));
+  if (col.tipo === "pag") return situacaoPagamento(c)[0];
   if (col.tipo === "num") return v == null || v === "" ? null : Number(v);
+  if (col.k === "canal") return canalDe(v) ? canalDe(v)[1].replace(/^\S+\s/, "") : null;
   if (v == null || v === "") return null;
   return String(v);
 }
@@ -1587,12 +1652,13 @@ function montarCampanhas() {
     '<div class="ferramentas">' +
       '<div class="pilulas" id="kFiltro">' + [["todas", "Todas"], ["ativas", "Ativas"], ["finalizadas", "Finalizadas"]]
         .map(f => '<button type="button" data-f="' + f[0] + '"' + (f[0] === filtroCamp ? ' class="ativo"' : "") + ">" + f[1] + "</button>").join("") + "</div>" +
-      '<input class="entrada" id="kBusca" type="search" placeholder="Buscar campanha ou cliente">' +
+      '<input class="entrada" id="kBusca" type="search" placeholder="Buscar trabalho ou cliente">' +
       '<span class="mudo pequeno" id="kConta"></span><span class="espaco"></span>' +
       '<button class="btn btn--linha" id="kCsv">' + ic("baixar") + " Baixar CSV</button>" +
-      '<button class="btn" id="kNova">' + ic("mais") + " Adicionar campanha</button>" +
+      '<button class="btn" id="kNova">' + ic("mais") + " Novo contrato</button>" +
     "</div>" +
-    '<div class="tabela-caixa"><table class="tabela"><thead><tr id="kCab"></tr></thead><tbody id="kCorpo"></tbody></table></div>';
+    '<div class="tabela-caixa"><table class="tabela"><thead><tr id="kCab"></tr></thead><tbody id="kCorpo"></tbody></table></div>' +
+    '<p class="mudo pequeno" id="kCambio" style="margin-top:8px"></p>';
 
   $("#kFiltro").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-f]");
@@ -1622,27 +1688,41 @@ function montarCampanhas() {
     editorCampanha(c);
   });
   $("#kCsv").addEventListener("click", () => {
-    if (!D.campanhas.length) { torrada("Ainda não tem nenhuma campanha para baixar."); return; }
-    baixarCSV("campanhas", ["Favorita", "Campanha", "Cliente", "Tipo", "Status", "Qtd", "Valor", "Prazo", "Pagamento", "Situação"],
-      D.campanhas.slice().sort(comparaCamp).map(c => [c.favorita ? "sim" : "", c.campanha, c.cliente, c.tipo, c.status, Number(c.qtd) || 0, Number(c.valor) || 0,
-        dataBR(c.prazo), c.pagamento === "pago" ? "Pago" : "Pendente", c.ativa === false ? "Finalizada" : "Ativa"]));
+    if (!D.campanhas.length) { torrada("Ainda não tem nenhum contrato para baixar."); return; }
+    baixarCSV("contratos", ["Favorita", "Trabalho", "Cliente", "Tipo", "Gift", "Nicho", "Status", "Qtd", "Moeda", "Valor", "Recebido", "A receber", "Valor em CA$",
+        "Data do contrato", "Prazo de entrega", "Vencimento", "Pagamento", "Recebido por", "Por onde fechei", "Detalhe", "Situação"],
+      D.campanhas.slice().sort(comparaCamp).map(c => {
+        const m = moedaDe(c), rec = recebidoDe(c), cad = emCAD(c.valor, m);
+        return [c.favorita ? "sim" : "", c.campanha, c.cliente, c.tipo, c.gift ? "sim" : "", c.nicho, c.status, Number(c.qtd) || 0, m, Number(c.valor) || 0, rec,
+          Math.max(0, (Number(c.valor) || 0) - rec), cad == null ? "" : Math.round(cad * 100) / 100,
+          dataBR(c.data_contrato), dataBR(c.prazo), dataBR(c.vencimento), situacaoPagamento(c)[0],
+          Array.from(new Set((c.pagamentos || []).map(p => p.via).filter(Boolean))).join(", "),
+          canalDe(c.canal) ? canalDe(c.canal)[1].replace(/^\S+\s/, "") : "", c.canal_detalhe, c.ativa === false ? "Finalizada" : "Ativa"];
+      }));
   });
+  carregaCambio().then(() => { desenharCampanhas(); if (typeof desenharFunil === "function") desenharFunil(); });
 }
 
 function desenharCampanhas() {
   const todas = D.campanhas;
   const ativas = todas.filter(c => c.ativa !== false);
-  const valorTotal = soma(todas, c => c.valor);
-  const videos = soma(todas, c => c.qtd);
-  const aReceber = soma(todas.filter(c => c.pagamento !== "pago"), c => c.valor);
-  const recebido = soma(todas.filter(c => c.pagamento === "pago"), c => c.valor);
+  const pagas = todas.filter(c => !c.gift);
+  const total = somaMoedas(pagas, c => c.valor);
+  const receber = somaMoedas(pagas, c => Math.max(0, (Number(c.valor) || 0) - recebidoDe(c)));
+  const recebido = somaMoedas(pagas, c => recebidoDe(c));
+  const videos = soma(pagas, c => c.qtd);
+  const fmt = (s) => s.soCAD || !s.completo ? (s.partes.join(" · ") || dinheiroEm(0, "CAD")) : dinheiroEm(s.total, "CAD");
+  const sub = (s, extra) => [(!s.soCAD && s.completo && s.partes.length) ? s.partes.join(" · ") : "", extra].filter(Boolean).join(" · ");
+  const gifts = todas.length - pagas.length;
   $("#kNumeros").innerHTML =
-    numero("Campanhas", inteiro(todas.length)) +
-    numero("Ativas", inteiro(ativas.length)) +
-    numero("Valor total", dinheiro(valorTotal), videos > 0 ? "ticket médio por vídeo: " + dinheiro(valorTotal / videos) : "ticket médio aparece quando houver vídeos") +
-    numero("A receber", dinheiro(aReceber), "já recebido: " + dinheiro(recebido));
+    numero("Contratos", inteiro(todas.length), gifts ? plural(gifts, "gift", "gifts") : "") +
+    numero("Ativos", inteiro(ativas.length)) +
+    numero("Valor total", fmt(total), sub(total, videos > 0 && total.completo ? "ticket por vídeo: " + dinheiroEm(total.total / videos, "CAD") : "")) +
+    numero("A receber", fmt(receber), sub(receber, "já recebido: " + fmt(recebido)));
+  $("#kCambio").textContent = cambioData && Object.keys(cambio).length > 1
+    ? "Totais convertidos para CA$ pela cotação de " + dataBR(cambioData) + ": US$ 1 = CA$ " + numBR.format(cambio.USD) + " · € 1 = CA$ " + numBR.format(cambio.EUR) + "."
+    : (todas.some(c => moedaDe(c) !== "CAD") ? "Sem cotação agora: os totais aparecem separados por moeda." : "");
 
-  /* cabeçalho com setas */
   $("#kCab").innerHTML = COLUNAS.map(col => {
     const ativa = ordemCamp.k === col.k;
     const seta = ativa ? (ordemCamp.dir === 1 ? "▲" : "▼") : "↕";
@@ -1654,59 +1734,153 @@ function desenharCampanhas() {
   const lista = todas.filter(c =>
     (filtroCamp === "todas" || (filtroCamp === "ativas" ? c.ativa !== false : c.ativa === false)) &&
     (!busca || normaliza((c.campanha || "") + " " + (c.cliente || "")).includes(busca))).sort(comparaCamp);
-  $("#kConta").textContent = lista.length === todas.length ? plural(todas.length, "campanha", "campanhas") : lista.length + " de " + todas.length;
+  $("#kConta").textContent = lista.length === todas.length ? plural(todas.length, "contrato", "contratos") : lista.length + " de " + todas.length;
 
   const corpo = $("#kCorpo");
   if (!lista.length) {
-    corpo.innerHTML = '<tr><td colspan="9"><p class="vazio">' +
-      (falhou.campanhas ? "As campanhas não puderam ser carregadas. Veja o aviso lá em cima." : todas.length ? "Nenhuma campanha com esse filtro." : "Nenhuma campanha ainda. Clique em Adicionar campanha.") + "</p></td></tr>";
+    corpo.innerHTML = '<tr><td colspan="10"><p class="vazio">' +
+      (falhou.campanhas ? "Os contratos não puderam ser carregados. Veja o aviso lá em cima." : todas.length ? "Nenhum contrato com esse filtro." : "Nenhum contrato ainda. Clique em Novo contrato.") + "</p></td></tr>";
     return;
   }
   corpo.innerHTML = lista.map(c => {
-    const pago = c.pagamento === "pago";
+    const m = moedaDe(c), pag = situacaoPagamento(c), canal = canalDe(c.canal), rec = recebidoDe(c);
     return '<tr class="clica' + (c.favorita ? " favorita" : "") + '" data-id="' + esc(c.id) + '">' +
       '<td class="curta"><button type="button" class="btn--icone estrela' + (c.favorita ? " ligada" : "") + '" data-estrela aria-label="' + (c.favorita ? "Tirar destaque" : "Destacar") + '">' + ic("estrela") + "</button></td>" +
-      "<td><b>" + esc(c.campanha || "") + "</b>" + pilExemplo(c) + "</td>" +
+      "<td><b>" + esc(c.campanha || "") + "</b>" + pilExemplo(c) + (c.nicho ? '<div class="mudo pequeno">' + esc(c.nicho) + "</div>" : "") + "</td>" +
       "<td>" + esc(c.cliente || "") + "</td>" +
       "<td>" + (c.tipo ? '<span class="pil ' + (COR_TIPO[c.tipo] || "c-cinza") + '">' + esc(c.tipo) + "</span>" : "") + "</td>" +
       "<td>" + (c.status ? '<span class="pil ' + (COR_STATUS[c.status] || "c-cinza") + '">' + esc(c.status) + "</span>" : "") + "</td>" +
       '<td class="num">' + inteiro(c.qtd) + "</td>" +
-      '<td class="num">' + dinheiro(c.valor) + "</td>" +
+      '<td class="num">' + (c.gift ? '<span class="mudo">gift</span>' : dinheiroEm(c.valor, m) +
+        (rec > 0 && rec < (Number(c.valor) || 0) ? '<div class="mudo pequeno">recebido ' + dinheiroEm(rec, m) + "</div>" : "")) + "</td>" +
       '<td style="white-space:nowrap">' + dataBR(c.prazo) + avisoPrazo(c) + "</td>" +
-      '<td><span class="pil ' + (pago ? "c-verde" : "c-amarelo") + '">' + (pago ? "Pago" : "Pendente") + "</span></td></tr>";
+      '<td><span class="pil ' + pag[1] + '">' + pag[0] + "</span>" +
+        (pag[0] !== "Pago" && !c.gift && c.vencimento ? '<div class="mudo pequeno">previsto ' + dataBR(c.vencimento) + "</div>" : "") + "</td>" +
+      "<td>" + (canal ? '<span class="pil ' + canal[2] + '">' + esc(canal[1]) + "</span>" + (c.canal_detalhe ? '<div class="mudo pequeno">' + esc(c.canal_detalhe) + "</div>" : "") : "") + "</td></tr>";
   }).join("");
 }
 
+/* ----- o contrato: janela própria, por causa dos pagamentos em partes ----- */
 function editorCampanha(c) {
-  editor({
-    titulo: c ? "Editar campanha" : "Adicionar campanha",
-    valores: c || { tipo: "Conteúdo", status: "Briefing", qtd: 1, valor: 0, pagamento: "pendente", ativa: true, favorita: false },
-    campos: [
-      { nome: "campanha", rot: "Campanha", obrigatorio: true, inteiro: true },
-      { nome: "cliente", rot: "Cliente", lista: nomesDeMarcas() },
-      { nome: "tipo", rot: "Tipo", tipo: "select", opcoes: ["Conteúdo", "Publicidade"] },
-      { nome: "status", rot: "Status", tipo: "select", opcoes: FUNIL },
-      { nome: "prazo", rot: "Prazo", tipo: "date" },
-      { nome: "qtd", rot: "Quantidade de vídeos", tipo: "number", min: 0, passo: 1 },
-      { nome: "valor", rot: "Valor total", tipo: "number", min: 0, passo: "0.01" },
-      { nome: "pagamento", rot: "Pagamento", tipo: "select", opcoes: [["pendente", "Pendente"], ["pago", "Pago"]] },
-      { nome: "ativa", rot: "Campanha ativa (desmarque quando finalizar)", tipo: "check" },
-      { nome: "favorita", rot: "Destacar com estrela", tipo: "check" }
-    ],
-    aoSalvar: async (dados, erro) => {
-      if (dados.qtd < 0 || dados.valor < 0) { erro("Quantidade e valor não podem ser negativos."); return false; }
-      dados.qtd = Math.round(dados.qtd);
-      const salvo = await salvarLinha("campanhas", dados, c && c.id);
-      if (!salvo) return false;
-      if (c) troca(D.campanhas, salvo); else D.campanhas.unshift(salvo);
-      desenharCampanhas(); desenharCalendario();
-      torrada("Campanha salva.");
-      return true;
-    },
-    aoApagar: c ? async () => {
-      if (!(await apagarLinha("campanhas", c.id))) return false;
-      D.campanhas = D.campanhas.filter(x => x.id !== c.id); desenharCampanhas(); desenharCalendario(); torrada("Campanha apagada."); return true;
-    } : null
+  const v = c ? Object.assign({}, c) : { tipo: "Conteúdo", status: "Briefing", qtd: 1, valor: 0, moeda: "CAD", pagamentos: [], ativa: true, favorita: false, gift: false, data_contrato: isoLocal(new Date()) };
+  let pagamentos = (Array.isArray(v.pagamentos) ? v.pagamentos : []).map(p => Object.assign({}, p));
+  const opc = (lista, atual) => lista.map(o => { const [val, rot] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(val) + '"' + (String(val) === String(atual) ? " selected" : "") + ">" + esc(rot) + "</option>"; }).join("");
+  const j = abrirJanela({
+    titulo: c ? "✏️ Editar contrato" : "📝 Novo contrato", larga: true,
+    corpo: '<form class="grade-form contrato" novalidate>' +
+      '<div class="campo inteiro"><label for="cCliente">Marca / cliente *</label><input id="cCliente" name="cliente" list="cClientes" value="' + esc(v.cliente || "") + '" placeholder="Ex.: Roborock" autocomplete="off">' +
+        '<datalist id="cClientes">' + nomesDeMarcas().map(n => '<option value="' + esc(n) + '">').join("") + "</datalist></div>" +
+      '<div class="campo inteiro"><label for="cTrabalho">Descrição do trabalho *</label><input id="cTrabalho" name="campanha" value="' + esc(v.campanha || "") + '" placeholder="Ex.: 3 Reels + 5 stories" autocomplete="off"></div>' +
+      '<label class="campo campo--check inteiro"><input type="checkbox" name="gift"' + (v.gift ? " checked" : "") + "> 🎁 Colaboração gift (produto, sem pagamento): só conta como trabalho feito</label>" +
+      '<div class="campo"><label>Tipo</label><select name="tipo">' + opc(["Conteúdo", "Publicidade"], v.tipo) + "</select></div>" +
+      '<div class="campo"><label>Status</label><select name="status">' + opc(FUNIL, v.status) + "</select></div>" +
+      '<div class="campo"><label>Quantidade de vídeos</label><input type="number" name="qtd" min="0" step="1" value="' + esc(v.qtd == null ? 1 : v.qtd) + '"></div>' +
+      '<div class="campo"><label>Nicho</label><input name="nicho" list="cNichos" value="' + esc(v.nicho || "") + '" placeholder="Skincare, Haircare..." autocomplete="off"><datalist id="cNichos">' + B_NICHOS.map(n => '<option value="' + esc(n) + '">').join("") + "</datalist></div>" +
+      '<div class="contrato__dinheiro inteiro">' +
+        '<div class="grade-form">' +
+          '<div class="campo"><label>Moeda</label><select name="moeda">' + opc(Object.entries(MOEDAS).map(([k, s]) => [k, k + " · " + s]), moedaDe(v)) + "</select></div>" +
+          '<div class="campo"><label>Valor total do contrato *</label><input type="number" name="valor" min="0" step="0.01" value="' + esc(v.valor == null ? 0 : v.valor) + '"></div>' +
+        "</div>" +
+        '<div class="rotulo" style="margin-top:12px">Pagamentos recebidos</div>' +
+        '<p class="mudo pequeno">Ex.: 50% na assinatura + 50% na entrega. Cada linha guarda a data em que você recebeu e por onde.</p>' +
+        '<div id="cPags"></div>' +
+        '<button type="button" class="btn btn--linha btn--full" id="cMaisPag" style="margin-top:8px">' + ic("mais") + " Adicionar pagamento</button>" +
+        '<div class="contrato__saldo" id="cSaldo"></div>' +
+      "</div>" +
+      '<div class="campo"><label>Data do contrato</label><input type="date" name="data_contrato" value="' + esc(v.data_contrato || "") + '"></div>' +
+      '<div class="campo"><label>Prazo de entrega</label><input type="date" name="prazo" value="' + esc(v.prazo || "") + '"></div>' +
+      '<div class="campo"><label>Vencimento (previsão do restante)</label><input type="date" name="vencimento" value="' + esc(v.vencimento || "") + '"></div>' +
+      '<div class="campo"><label>Por onde fechei</label><select name="canal"><option value="">escolha</option>' + opc(CANAIS.map(x => [x[0], x[1]]), v.canal) + "</select></div>" +
+      '<div class="campo inteiro" id="cDetalheCampo"><label id="cDetalheRot">Detalhe</label><input name="canal_detalhe" value="' + esc(v.canal_detalhe || "") + '" placeholder="Ex.: InSense, Billo, agência..." list="cPlataformas" autocomplete="off">' +
+        '<datalist id="cPlataformas">' + ["InSense", "Billo", "JoinBrands", "Collabstr", "Trend.io", "Upfluence"].map(n => '<option value="' + n + '">').join("") + "</datalist></div>" +
+      '<label class="campo campo--check inteiro"><input type="checkbox" name="ativa"' + (v.ativa !== false ? " checked" : "") + "> Contrato ativo (desmarque quando finalizar)</label>" +
+      '<label class="campo campo--check inteiro"><input type="checkbox" name="favorita"' + (v.favorita ? " checked" : "") + "> ⭐ Destacar com estrela</label>" +
+      '<div class="faixa inteiro escondido" data-erro></div>' +
+    "</form>",
+    rodape: (c ? '<button class="btn btn--perigo" type="button" data-apagar>' + ic("lixo") + " Apagar</button>" : "") +
+      '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Cancelar</button>' +
+      '<button class="btn" type="button" data-salvar>' + (c ? "Salvar" : "Adicionar") + "</button>"
+  });
+  const form = $("form", j);
+  const erro = (t) => { const e = $("[data-erro]", j); e.textContent = t; e.classList.remove("escondido"); };
+
+  function lerPags() {
+    $$("[data-pag]", j).forEach((l, i) => {
+      pagamentos[i] = { valor: Number($("[data-pv]", l).value) || 0, data: $("[data-pd]", l).value || null, via: $("[data-pvia]", l).value };
+    });
+  }
+  function desenhaPags() {
+    const m = form.elements.moeda.value;
+    $("#cPags", j).innerHTML = pagamentos.length
+      ? pagamentos.map((p, i) => '<div class="contrato__pag" data-pag>' +
+          '<input type="number" min="0" step="0.01" data-pv value="' + esc(p.valor || "") + '" placeholder="Valor (' + MOEDAS[m] + ')" aria-label="Valor recebido">' +
+          '<input type="date" data-pd value="' + esc(p.data || "") + '" aria-label="Data em que recebeu">' +
+          '<select data-pvia aria-label="Recebido por">' + opc(VIAS, p.via || "PayPal") + "</select>" +
+          '<button type="button" class="btn--icone" data-tirar="' + i + '" aria-label="Tirar este pagamento">' + ic("fechar") + "</button></div>").join("")
+      : '<p class="mudo pequeno" style="padding:6px 0">Nenhum pagamento ainda. Clique em "Adicionar pagamento" quando receber.</p>';
+    saldo();
+  }
+  function saldo() {
+    lerPags();
+    const m = form.elements.moeda.value, total = Number(form.elements.valor.value) || 0, rec = soma(pagamentos, p => p.valor);
+    $("#cSaldo", j).innerHTML = form.elements.gift.checked
+      ? "🎁 Gift: sem valores a receber."
+      : '<span class="c-verde" style="color:var(--c)">recebido <b>' + dinheiroEm(rec, m) + '</b></span><span class="c-mostarda" style="color:var(--c)">a receber <b>' + dinheiroEm(Math.max(0, total - rec), m) + "</b></span>";
+  }
+  function detalhe() {
+    const canal = form.elements.canal.value;
+    $("#cDetalheRot", j).textContent = canal === "plataforma" ? "Qual plataforma?" : canal === "indicacao" ? "Quem indicou?" : "Detalhe (opcional)";
+  }
+  desenhaPags(); detalhe();
+  $("#cMaisPag", j).addEventListener("click", () => {
+    lerPags();
+    const total = Number(form.elements.valor.value) || 0, rec = soma(pagamentos, p => p.valor);
+    pagamentos.push({ valor: total > rec ? Math.round((total - rec) * 100) / 100 : "", data: isoLocal(new Date()), via: (pagamentos[pagamentos.length - 1] || {}).via || "PayPal" });
+    desenhaPags();
+  });
+  $("#cPags", j).addEventListener("click", (e) => { const b = e.target.closest("[data-tirar]"); if (b) { lerPags(); pagamentos.splice(Number(b.dataset.tirar), 1); desenhaPags(); } });
+  $("#cPags", j).addEventListener("input", saldo);
+  form.addEventListener("input", (e) => { if (e.target.name === "valor" || e.target.name === "gift") saldo(); });
+  form.elements.moeda.addEventListener("change", desenhaPags);
+  form.elements.canal.addEventListener("change", detalhe);
+
+  $("[data-salvar]", j).addEventListener("click", async () => {
+    lerPags();
+    const f = form.elements;
+    const dados = {
+      cliente: f.cliente.value.trim() || null,
+      campanha: f.campanha.value.trim(),
+      gift: f.gift.checked,
+      tipo: f.tipo.value, status: f.status.value,
+      qtd: Math.max(0, Math.round(Number(f.qtd.value) || 0)),
+      nicho: f.nicho.value.trim() || null,
+      moeda: f.moeda.value,
+      valor: f.gift.checked ? 0 : Math.max(0, Number(f.valor.value) || 0),
+      pagamentos: f.gift.checked ? [] : pagamentos.filter(p => Number(p.valor) > 0).map(p => ({ valor: Math.round(Number(p.valor) * 100) / 100, data: p.data, via: p.via })),
+      data_contrato: f.data_contrato.value || null, prazo: f.prazo.value || null, vencimento: f.vencimento.value || null,
+      canal: f.canal.value || null, canal_detalhe: f.canal_detalhe.value.trim() || null,
+      ativa: f.ativa.checked, favorita: f.favorita.checked
+    };
+    if (!dados.cliente) { erro('Preencha "Marca / cliente".'); return; }
+    if (!dados.campanha) { erro('Preencha "Descrição do trabalho".'); return; }
+    if (!dados.gift && !(dados.valor > 0)) { erro("Preencha o valor total do contrato, ou marque 🎁 gift."); return; }
+    const rec = soma(dados.pagamentos, p => p.valor);
+    if (rec > dados.valor + 0.005 && !dados.gift) { erro("Os pagamentos somam mais que o valor total. Confira os valores."); return; }
+    dados.pagamento = dados.gift || (dados.valor > 0 && rec >= dados.valor - 0.005) ? "pago" : "pendente";
+    const b = $("[data-salvar]", j); b.disabled = true; b.textContent = "Salvando...";
+    const salvo = await salvarLinha("campanhas", dados, c && c.id);
+    if (!salvo) { b.disabled = false; b.textContent = c ? "Salvar" : "Adicionar"; return; }
+    if (c) troca(D.campanhas, salvo); else D.campanhas.unshift(salvo);
+    fecharJanela();
+    desenharCampanhas(); desenharCalendario(); if (typeof desenharFunil === "function") desenharFunil();
+    torrada(c ? "Contrato salvo ✓" : "🎉 Contrato adicionado!");
+  });
+  if (c) duploClique($("[data-apagar]", j), async () => {
+    if (!(await apagarLinha("campanhas", c.id))) return;
+    D.campanhas = D.campanhas.filter(x => x.id !== c.id);
+    fecharJanela();
+    desenharCampanhas(); desenharCalendario(); if (typeof desenharFunil === "function") desenharFunil();
+    torrada("Contrato apagado.");
   });
 }
 
@@ -2852,9 +3026,225 @@ async function estudarComClaude() {
 }
 
 /* ============================================================
+   9c. ABA PROSPECTADO × FECHADO
+   Abordagens (tabela abordagens) × contratos (tabela campanhas), por canal.
+   ============================================================ */
+const CANAIS_ABORDAGEM = [
+  ["manual", "🔎 Prospecção manual", "var(--c-azul)"],
+  ["instagram_auto", "📸 Instagram automático", "var(--c-coral)"],
+  ["onbento", "✉️ onBento", "var(--c-mostarda)"],
+  ["plataforma", "🧩 Plataformas", "var(--c-roxo)"],
+  ["outro", "Outro", "var(--c-cinza)"]
+];
+let mesFunil = new Date(); mesFunil.setDate(1); mesFunil.setHours(0, 0, 0, 0);
+let escalaFunil = "dia";
+
+/* conta as abordagens de "📨 Prospectei": uma linha por marca, com a origem dela */
+async function registrarProspeccao(marcas) {
+  const linhas = marcas.map(m => ({ data: isoLocal(new Date()), canal: "manual", quantidade: 1, detalhe: bOrigem(m.origem)[1], marca_id: m.id }));
+  if (!linhas.length || falhou.abordagens) return;
+  const { data, error } = await banco.from("abordagens").insert(linhas).select();
+  if (error) { aviso("abordagens-gravar", "As abordagens não estão sendo contadas: " + traduzErro(error, "abordagens")); return; }
+  (data || []).forEach(a => D.abordagens.push(a));
+  if (typeof desenharFunil === "function") desenharFunil();
+}
+
+function diasDoMes(mes) {
+  const fim = new Date(mes.getFullYear(), mes.getMonth() + 1, 0).getDate();
+  return Array.from({ length: fim }, (_, i) => isoLocal(new Date(mes.getFullYear(), mes.getMonth(), i + 1)));
+}
+/* espalha um registro de período (ex.: a semana toda) pelos dias */
+function porDiaDoRegistro(a) {
+  const ini = deISO(a.data), fim = deISO(a.ate) || ini;
+  if (!ini) return [];
+  const dias = [];
+  for (let d = new Date(ini); d <= fim && dias.length < 400; d.setDate(d.getDate() + 1)) dias.push(isoLocal(d));
+  const q = (Number(a.quantidade) || 0) / (dias.length || 1);
+  return dias.map(d => [d, q]);
+}
+const noMes = (iso, mes) => { const d = deISO(iso); return !!d && d.getFullYear() === mes.getFullYear() && d.getMonth() === mes.getMonth(); };
+const dataDoContrato = (c) => c.data_contrato || String(c.criado_em || c.created_at || "").slice(0, 10);
+
+function montarFunil() {
+  $("#aba-funil").innerHTML =
+    '<div class="ferramentas">' +
+      '<div class="cal__nav"><button class="btn--icone" id="fAnt" aria-label="Mês anterior">' + ic("esq") + '</button>' +
+      '<span class="cal__mes" id="fMes"></span><button class="btn--icone" id="fProx" aria-label="Próximo mês">' + ic("dir") + "</button></div>" +
+      '<button class="btn btn--linha" id="fHoje">Este mês</button><span class="espaco"></span>' +
+      '<button class="btn" id="fRegistrar">' + ic("mais") + " Registrar abordagens</button>" +
+    "</div>" +
+    '<div class="numeros" id="fNumeros"></div>' +
+    '<div class="bloco"><div class="bloco__cab"><h2>Marcas abordadas</h2><span class="espaco"></span>' +
+      '<div class="pilulas" id="fEscala"><button type="button" data-e="dia">Por dia</button><button type="button" data-e="semana">Por semana</button></div></div>' +
+      '<div id="fGrafico"></div><div class="funil__legenda" id="fLegenda"></div></div>' +
+    '<div class="bloco"><div class="bloco__cab"><h2>Por canal</h2></div>' +
+      '<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Canal</th><th class="num">Abordadas</th><th class="num">Contratos</th><th>Conversão</th><th class="num">Valor fechado</th></tr></thead><tbody id="fCanais"></tbody></table></div>' +
+      '<div id="fGap" style="margin-top:12px"></div></div>' +
+    '<div class="bloco"><div class="bloco__cab"><h2>Registros deste mês</h2><span class="mudo pequeno" id="fSync"></span></div><div id="fRegistros"></div></div>' +
+    '<details class="sanfona" id="fConectar"><summary><span class="emoji">⚙️</span><div class="sanfona__txt"><div class="sanfona__tit">Conectar o Instagram automático</div>' +
+      '<div class="sanfona__sub">Para o SocialSellPro mandar sozinho o número de DMs de cada dia</div></div><span class="chevron">' + ic("baixo") + "</span></summary>" +
+      '<div class="sanfona__corpo" id="fConectarCorpo"></div></details>';
+
+  $("#fAnt").addEventListener("click", () => { mesFunil.setMonth(mesFunil.getMonth() - 1); desenharFunil(); });
+  $("#fProx").addEventListener("click", () => { mesFunil.setMonth(mesFunil.getMonth() + 1); desenharFunil(); });
+  $("#fHoje").addEventListener("click", () => { mesFunil = new Date(); mesFunil.setDate(1); mesFunil.setHours(0, 0, 0, 0); desenharFunil(); });
+  $("#fEscala").addEventListener("click", (e) => { const b = e.target.closest("[data-e]"); if (b) { escalaFunil = b.dataset.e; desenharFunil(); } });
+  $("#fRegistrar").addEventListener("click", registrarAbordagens);
+  const senha = D.config.senha_sincronizador;
+  $("#fConectarCorpo").innerHTML = senha
+    ? '<p class="pequeno" style="margin-bottom:8px">Copie a senha abaixo e mande para o Claude. Ele configura o seu Mac. Ela só serve para registrar DMs do Instagram: não lê nem muda mais nada.</p>' +
+      '<div class="rot__chavelinha"><input class="entrada" readonly value="' + esc(senha) + '" id="fSenha"><button type="button" class="btn" id="fCopiarSenha">📋 Copiar senha</button></div>'
+    : '<p class="mudo pequeno">Rode o sql-resultados.sql no Supabase para criar a senha do sincronizador.</p>';
+  if (senha) $("#fCopiarSenha").addEventListener("click", async (e) => {
+    try { await navigator.clipboard.writeText(senha); e.target.textContent = "copiada ✓"; } catch (x) { $("#fSenha").select(); e.target.textContent = "use Cmd + C"; }
+  });
+  $("#fRegistros").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-apagar-reg]");
+    if (!b) return;
+    if (!b.dataset.armado) { b.dataset.armado = "1"; b.classList.add("armado"); b.textContent = "Apagar?"; setTimeout(() => { if (b.isConnected) { delete b.dataset.armado; b.classList.remove("armado"); b.innerHTML = ic("lixo"); } }, 3000); return; }
+    const id = b.dataset.apagarReg;
+    if (await apagarLinha("abordagens", id)) { D.abordagens = D.abordagens.filter(a => a.id !== id); desenharFunil(); torrada("Registro apagado."); }
+  });
+}
+
+function desenharFunil() {
+  if (!$("#fMes")) return;
+  const nomeMes = mesFunil.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  $("#fMes").textContent = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
+  $$("#fEscala button").forEach(b => b.classList.toggle("ativo", b.dataset.e === escalaFunil));
+
+  /* abordagens por dia e por canal */
+  const dias = diasDoMes(mesFunil);
+  const porDia = {};
+  dias.forEach(d => { porDia[d] = {}; });
+  const totalCanal = {};
+  D.abordagens.forEach(a => porDiaDoRegistro(a).forEach(([d, q]) => {
+    if (!(d in porDia)) return;
+    const k = CANAIS_ABORDAGEM.some(c => c[0] === a.canal) ? a.canal : "outro";
+    porDia[d][k] = (porDia[d][k] || 0) + q;
+    totalCanal[k] = (totalCanal[k] || 0) + q;
+  }));
+  const abordadas = Math.round(soma(Object.values(totalCanal), x => x));
+
+  /* contratos do mês, por canal */
+  const contratos = D.campanhas.filter(c => noMes(dataDoContrato(c), mesFunil));
+  const porCanal = {};
+  contratos.forEach(c => { const k = c.canal || "sem"; (porCanal[k] = porCanal[k] || []).push(c); });
+  const valorCAD = (lista) => somaMoedas(lista.filter(c => !c.gift), c => c.valor);
+  const valorMes = valorCAD(contratos);
+  const deProspeccao = contratos.filter(c => ["manual", "instagram_auto", "onbento", "plataforma"].includes(c.canal)).length;
+  const inbound = D.marcas.filter(m => noMes(String(m.criado_em || "").slice(0, 10), mesFunil)).length +
+    D.base.filter(m => m.origem === "portfolio" && noMes(String(m.created_at || "").slice(0, 10), mesFunil)).length;
+
+  $("#fNumeros").innerHTML =
+    numero("Marcas abordadas", inteiro(abordadas)) +
+    numero("Contratos fechados", inteiro(contratos.length), contratos.filter(c => c.gift).length ? plural(contratos.filter(c => c.gift).length, "gift", "gifts") : "") +
+    numero("Conversão da prospecção", deProspeccao && abordadas ? "1 a cada " + inteiro(Math.round(abordadas / deProspeccao)) : "ainda não", deProspeccao && abordadas ? (Math.round(deProspeccao / abordadas * 1000) / 10).toString().replace(".", ",") + "% viraram contrato" : "") +
+    numero("Valor fechado", valorMes.completo && !valorMes.soCAD ? dinheiroEm(valorMes.total, "CAD") : (valorMes.partes.join(" · ") || dinheiroEm(0, "CAD")), !valorMes.soCAD && valorMes.completo ? valorMes.partes.join(" · ") : "") +
+    numero("Inbound recebidos", inteiro(inbound), "marcas que chegaram pelo site");
+
+  /* gráfico empilhado */
+  let barras;
+  if (escalaFunil === "semana") {
+    const semanas = [];
+    dias.forEach(d => {
+      const dt = deISO(d), seg = new Date(dt); seg.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+      const chave = isoLocal(seg);
+      let s = semanas.find(x => x.chave === chave);
+      if (!s) { s = { chave, rot: pad(Math.max(1, seg.getMonth() === mesFunil.getMonth() ? seg.getDate() : 1)) + "/" + pad(mesFunil.getMonth() + 1), v: {} }; semanas.push(s); }
+      Object.entries(porDia[d]).forEach(([k, q]) => { s.v[k] = (s.v[k] || 0) + q; });
+    });
+    barras = semanas.map(s => ({ rot: "sem. " + s.rot, v: s.v, hoje: false }));
+  } else {
+    const hojeISO = isoLocal(hoje());
+    barras = dias.map(d => ({ rot: String(deISO(d).getDate()), v: porDia[d], hoje: d === hojeISO }));
+  }
+  const maior = Math.max(0, ...barras.map(b => soma(Object.values(b.v), x => x)));
+  $("#fGrafico").innerHTML = !abordadas
+    ? '<p class="vazio">Nenhuma abordagem registrada neste mês ainda.<br>Os cliques em 📨 Prospectei, na aba Marcas, e o Instagram automático entram aqui sozinhos. onBento e plataformas você registra no botão ➕ Registrar abordagens.</p>'
+    : '<div class="grafico funil__grafico' + (escalaFunil === "dia" ? " funil__grafico--dia" : "") + '">' + barras.map(b => {
+        const tot = soma(Object.values(b.v), x => x);
+        const titulo = b.rot + ": " + inteiro(Math.round(tot)) + " · " + CANAIS_ABORDAGEM.filter(c => b.v[c[0]]).map(c => c[1].replace(/^\S+\s/, "") + " " + Math.round(b.v[c[0]])).join(", ");
+        return '<div class="grafico__col' + (b.hoje ? " hoje" : "") + '" title="' + esc(titulo) + '">' +
+          '<div class="funil__pilha" style="height:' + (maior ? Math.max(tot ? 2 : 0, tot / maior * 100) : 0) + '%"' + (tot >= 1 ? ' data-v="' + Math.round(tot) + '"' : "") + ">" +
+            CANAIS_ABORDAGEM.filter(c => b.v[c[0]]).map(c => '<span style="flex:' + b.v[c[0]] + ";background:" + c[2] + '"></span>').join("") +
+          "</div>" + '<span class="grafico__dia">' + esc(b.rot) + "</span></div>";
+      }).join("") + "</div>";
+  $("#fLegenda").innerHTML = abordadas ? CANAIS_ABORDAGEM.filter(c => totalCanal[c[0]]).map(c => '<span><i style="background:' + c[2] + '"></i>' + esc(c[1]) + " · " + inteiro(Math.round(totalCanal[c[0]])) + "</span>").join("") : "";
+
+  /* tabela por canal */
+  const linhasCanal = CANAIS.map(([k, rot]) => {
+    const ab = Math.round(totalCanal[k] || 0), ct = (porCanal[k] || []).length;
+    return { k, rot, ab, ct, valor: valorCAD(porCanal[k] || []) };
+  }).concat(porCanal.sem ? [{ k: "sem", rot: "Sem canal informado", ab: 0, ct: porCanal.sem.length, valor: valorCAD(porCanal.sem) }] : [])
+    .filter(l => l.ab || l.ct);
+  $("#fCanais").innerHTML = linhasCanal.length ? linhasCanal.map(l => {
+    const temAbordagem = CANAIS_ABORDAGEM.some(c => c[0] === l.k);
+    const conv = !temAbordagem ? '<span class="mudo pequeno">' + (l.k === "inbound" ? "chegaram sozinhas" : "sem abordagem contada") + "</span>"
+      : l.ct && l.ab ? "1 a cada " + inteiro(Math.round(l.ab / l.ct)) : l.ab ? '<span class="mudo">nenhum contrato ainda</span>' : "";
+    return "<tr><td>" + esc(l.rot) + '</td><td class="num">' + (temAbordagem ? inteiro(l.ab) : "·") + '</td><td class="num">' + inteiro(l.ct) + "</td><td>" + conv + '</td><td class="num">' +
+      (l.valor.partes.length ? (l.valor.completo && !l.valor.soCAD ? dinheiroEm(l.valor.total, "CAD") : l.valor.partes.join(" · ")) : "·") + "</td></tr>";
+  }).join("") : '<tr><td colspan="5"><p class="vazio">Nada neste mês ainda.</p></td></tr>';
+
+  /* onde está o gap: leitura simples */
+  const dicas = [];
+  CANAIS_ABORDAGEM.forEach(([k, rot]) => {
+    const ab = Math.round(totalCanal[k] || 0), ct = (porCanal[k] || []).length;
+    if (ab >= 50 && !ct) dicas.push("🔍 <b>" + esc(rot) + "</b>: " + inteiro(ab) + " abordagens e nenhum contrato no mês. Vale revisar a mensagem ou a lista de marcas desse canal.");
+  });
+  const melhores = linhasCanal.filter(l => CANAIS_ABORDAGEM.some(c => c[0] === l.k) && l.ct && l.ab).sort((a, b) => a.ab / a.ct - b.ab / b.ct);
+  if (melhores.length > 1) dicas.push("⭐ O canal que mais converte este mês é <b>" + esc(melhores[0].rot) + "</b> (1 contrato a cada " + inteiro(Math.round(melhores[0].ab / melhores[0].ct)) + ").");
+  if (porCanal.sem) dicas.push("✏️ " + plural(porCanal.sem.length, "contrato está", "contratos estão") + " sem \"Por onde fechei\". Preencha na aba Campanhas para a conta ficar certa.");
+  $("#fGap").innerHTML = dicas.map(d => '<p class="faixa faixa--aviso" style="margin-bottom:6px">' + d + "</p>").join("");
+
+  /* registros do mês (os que não vieram de um clique em Prospectei) */
+  const regs = D.abordagens.filter(a => !a.marca_id && (noMes(a.data, mesFunil) || (a.ate && noMes(a.ate, mesFunil))))
+    .sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  $("#fRegistros").innerHTML = regs.length
+    ? '<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Período</th><th>Canal</th><th>Detalhe</th><th class="num">Quantidade</th><th></th></tr></thead><tbody>' +
+      regs.map(a => "<tr><td>" + dataBR(a.data) + (a.ate && a.ate !== a.data ? " a " + dataBR(a.ate) : "") + "</td><td>" + esc((CANAIS_ABORDAGEM.find(c => c[0] === a.canal) || [0, a.canal])[1]) + "</td><td>" +
+        esc(a.detalhe || "") + (a.obs ? ' <span class="mudo">· ' + esc(a.obs) + "</span>" : "") + '</td><td class="num">' + inteiro(a.quantidade) +
+        '</td><td class="curta"><button type="button" class="btn--icone" data-apagar-reg="' + esc(a.id) + '" aria-label="Apagar registro">' + ic("lixo") + "</button></td></tr>").join("") +
+      "</tbody></table></div>"
+    : '<p class="mudo pequeno">Nenhum registro de onBento, plataformas ou Instagram automático neste mês.</p>';
+  const ultimoIG = D.abordagens.filter(a => a.canal === "instagram_auto" && a.chave).map(a => a.data).sort().pop();
+  $("#fSync").textContent = ultimoIG ? "📸 Instagram automático sincronizado até " + dataBR(ultimoIG) : "📸 Instagram automático ainda não conectado";
+}
+
+function registrarAbordagens() {
+  const hojeD = hoje(), seg = new Date(hojeD); seg.setDate(hojeD.getDate() - ((hojeD.getDay() + 6) % 7));
+  editor({
+    titulo: "➕ Registrar abordagens",
+    topo: '<p class="mudo pequeno" style="margin-bottom:12px">Para o que o admin não conta sozinho: onBento e plataformas. Pode ser um dia só ou o total da semana. Ex.: onBento, de 22/09 a 28/09, 45 marcas.</p>',
+    valores: { canal: "onbento", data: isoLocal(seg), ate: isoLocal(hojeD) },
+    campos: [
+      { nome: "canal", rot: "Canal", tipo: "select", opcoes: CANAIS_ABORDAGEM.map(c => [c[0], c[1]]) },
+      { nome: "quantidade", rot: "Quantas marcas foram abordadas", tipo: "number", min: 0, passo: 1, obrigatorio: true },
+      { nome: "data", rot: "De", tipo: "date", obrigatorio: true },
+      { nome: "ate", rot: "Até (deixe igual para um dia só)", tipo: "date" },
+      { nome: "detalhe", rot: "Detalhe", inteiro: true, dica: "Ex.: Billo, InSense...", lista: ["InSense", "Billo", "JoinBrands", "Collabstr", "Trend.io"] },
+      { nome: "obs", rot: "Observação", tipo: "textarea", inteiro: true }
+    ],
+    aoSalvar: async (d, erro) => {
+      if (!(d.quantidade > 0)) { erro("Coloque quantas marcas foram abordadas."); return false; }
+      if (d.ate && d.ate < d.data) { erro("A data final é antes da inicial. Confira as datas."); return false; }
+      if (d.ate === d.data) d.ate = null;
+      d.quantidade = Math.round(d.quantidade);
+      const salvo = await salvarLinha("abordagens", d);
+      if (!salvo) return false;
+      D.abordagens.push(salvo);
+      const dt = deISO(salvo.data); mesFunil = new Date(dt.getFullYear(), dt.getMonth(), 1);
+      desenharFunil();
+      torrada("✅ " + plural(salvo.quantidade, "abordagem registrada", "abordagens registradas") + ".");
+      return true;
+    }
+  });
+}
+
+/* ============================================================
    10. MENU, GAVETA E SAIR
    ============================================================ */
-const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo" };
+const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo" };
 const lateral = $("#lateral"), cortina = $("#cortina");
 const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classList.remove("aberta"); };
 function irPara(aba) {
@@ -2891,6 +3281,7 @@ seguro("Inbound", () => { montarMarcas(); desenharMarcas(); });
 seguro("Marcas", () => { montarBase(); desenharBase(); });
 seguro("Calendário", () => { montarCalendario(); desenharCalendario(); });
 seguro("Campanhas", () => { montarCampanhas(); desenharCampanhas(); });
+seguro("Prospectado × Fechado", () => { montarFunil(); desenharFunil(); });
 seguro("Checklist", montarChecklist);
 seguro("Roteiros", montarRoteiros);
 
