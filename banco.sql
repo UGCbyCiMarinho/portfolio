@@ -304,4 +304,28 @@ select * from (values
 where not exists (select 1 from public.videos);
 
 
+-- ------------------------------------------------------------
+-- 5. TRANSCRIÇÕES (vídeos que você gosta, com roteiro e observações)
+-- ------------------------------------------------------------
+create table if not exists public.transcricoes (
+  id          uuid primary key default gen_random_uuid(),
+  titulo      text,
+  link        text not null,
+  plataforma  text,                       -- YouTube, Instagram, TikTok ou Outro
+  criador     text,                       -- quem fez o vídeo
+  transcricao text,                       -- o roteiro
+  obs         text,                       -- as suas observações
+  criado_em   timestamptz not null default now()
+);
+
+alter table public.transcricoes enable row level security;
+
+drop policy if exists "dona faz tudo" on public.transcricoes;
+create policy "dona faz tudo" on public.transcricoes
+  for all to authenticated using (public.eh_dona()) with check (public.eh_dona());
+
+revoke all on public.transcricoes from anon;
+grant select, insert, update, delete on public.transcricoes to authenticated;
+
+
 -- Pronto! Se apareceu "Success. No rows returned", deu tudo certo.

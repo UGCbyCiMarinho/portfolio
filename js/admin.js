@@ -126,6 +126,7 @@ const ESPERADO = {
   calendario: ["titulo", "marca", "tipo", "data", "status"],
   campanhas: ["campanha", "cliente", "tipo", "status", "qtd", "valor", "prazo", "pagamento", "ativa", "favorita"],
   marcados: ["chave"],
+  transcricoes: ["titulo", "link", "plataforma", "criador", "transcricao", "obs"],
   visitas: ["data", "pagina", "origem"]
 };
 function confereCampos(tabela, linhas) {
@@ -324,18 +325,19 @@ const numero = (rot, val, sub) =>
 /* ============================================================
    4. CARREGAR OS DADOS
    ============================================================ */
-const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], marcados: new Set() };
+const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], transcricoes: [], marcados: new Set() };
 const inicio14 = hoje(); inicio14.setDate(inicio14.getDate() - 13);
 
-const [videos, visitas, marcas, calendario, campanhas, marcados] = await Promise.all([
+const [videos, visitas, marcas, calendario, campanhas, marcados, transcricoes] = await Promise.all([
   ler("videos", q => q.order("ordem", { ascending: true }).order("criado_em", { ascending: true })),
   ler("visitas", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
   ler("marcas", q => q.order("criado_em", { ascending: false })),
   ler("calendario", q => q.order("data", { ascending: true })),
   ler("campanhas", q => q.order("criado_em", { ascending: false })),
-  ler("marcados")
+  ler("marcados"),
+  ler("transcricoes", q => q.order("criado_em", { ascending: false }))
 ]);
-Object.assign(D, { videos, visitas, marcas, calendario, campanhas, marcados: new Set(marcados.map(m => m.chave)) });
+Object.assign(D, { videos, visitas, marcas, calendario, campanhas, transcricoes, marcados: new Set(marcados.map(m => m.chave)) });
 
 const nomesDeMarcas = () => Array.from(new Set(D.marcas.map(m => m.nome).concat(D.campanhas.map(c => c.cliente), D.videos.map(v => v.marca)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
 
@@ -1182,9 +1184,219 @@ function progressoChecklist() {
 }
 
 /* ============================================================
+   9b. ABA TRANSCRIÇÕES
+   Vídeos que você gosta, com o roteiro e as suas observações.
+   A transcrição vem do TokScript: o botão abre o vídeo lá,
+   você copia o texto e cola aqui.
+   ============================================================ */
+let transAberta = null;      /* id da transcrição aberta, ou "nova" */
+let timerTrans = null;
+let pendenteTrans = null;    /* salvamento esperando: roda antes de trocar de vídeo ou sair */
+function salvaPendente() {
+  clearTimeout(timerTrans);
+  const f = pendenteTrans;
+  pendenteTrans = null;
+  if (f) f();
+}
+window.addEventListener("pagehide", salvaPendente);
+
+function plataformaDe(link) {
+  const l = String(link || "").toLowerCase();
+  if (/youtube\.com|youtu\.be/.test(l)) return "YouTube";
+  if (/instagram\.com/.test(l)) return "Instagram";
+  if (/tiktok\.com/.test(l)) return "TikTok";
+  return l ? "Outro" : "";
+}
+const COR_PLAT = { YouTube: "c-vermelho", Instagram: "c-roxo", TikTok: "c-azul", Outro: "c-cinza" };
+
+/* endereço para o vídeo tocar dentro do painel */
+function embedDe(link) {
+  const l = String(link || "");
+  const yt = idYoutube(l);
+  if (yt) return { src: "https://www.youtube.com/embed/" + yt, deitado: !/\/shorts\//.test(l) };
+  const ig = l.match(/instagram\.com\/(?:[\w.]+\/)?(reel|reels|p|tv)\/([\w-]+)/i);
+  if (ig) return { src: "https://www.instagram.com/" + (ig[1].toLowerCase() === "p" ? "p" : "reel") + "/" + ig[2] + "/embed/", deitado: false };
+  const tt = l.match(/tiktok\.com\/.*\/video\/(\d+)/i);
+  if (tt) return { src: "https://www.tiktok.com/embed/v2/" + tt[1], deitado: false };
+  return null;
+}
+
+function montarTranscricoes() {
+  const el = $("#aba-transcricoes");
+  el.innerHTML =
+    '<div class="trans">' +
+      '<div class="trans__lista">' +
+        '<div class="ferramentas" style="margin-bottom:10px">' +
+          '<button class="btn btn--full" id="tNova">' + ic("mais") + " Nova transcrição</button>" +
+          '<input class="entrada" id="tBusca" type="search" placeholder="Buscar no título, criador ou roteiro" style="width:100%">' +
+        "</div>" +
+        '<div id="tItens"></div>' +
+      "</div>" +
+      '<div class="trans__detalhe" id="tDetalhe"></div>' +
+    "</div>";
+  $("#tNova").addEventListener("click", () => abrirTranscricao("nova"));
+  $("#tBusca").addEventListener("input", desenharListaTrans);
+  $("#tItens").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-trans]");
+    if (b) abrirTranscricao(b.dataset.trans);
+  });
+  desenharListaTrans();
+  abrirTranscricao(D.transcricoes.length ? D.transcricoes[0].id : "nova", true);
+}
+
+function desenharListaTrans() {
+  const busca = normaliza($("#tBusca").value.trim());
+  const lista = D.transcricoes.filter(t => !busca || normaliza([t.titulo, t.criador, t.transcricao, t.obs].join(" ")).includes(busca));
+  const alvo = $("#tItens");
+  if (falhou.transcricoes) { alvo.innerHTML = '<p class="vazio">As transcrições não puderam ser carregadas. Veja o aviso lá em cima.</p>'; return; }
+  if (!lista.length) {
+    alvo.innerHTML = '<p class="vazio">' + (D.transcricoes.length ? "Nada encontrado com essa busca." : "Nenhuma transcrição ainda.<br>Clique em Nova transcrição e cole o link de um vídeo que você gosta.") + "</p>";
+    return;
+  }
+  alvo.innerHTML = lista.map(t => {
+    const plat = t.plataforma || plataformaDe(t.link);
+    return '<button type="button" class="trans__item' + (t.id === transAberta ? " ativo" : "") + '" data-trans="' + esc(t.id) + '">' +
+      '<span class="trans__item-tit">' + esc(t.titulo || t.criador || "Sem título") + "</span>" +
+      '<span class="trans__item-meta">' + (plat ? '<span class="pil ' + (COR_PLAT[plat] || "c-cinza") + '">' + esc(plat) + "</span>" : "") +
+      (t.criador && t.titulo ? '<span class="mudo">' + esc(t.criador) + "</span>" : "") +
+      '<span class="mudo">' + dataBR(String(t.criado_em || "").slice(0, 10)) + "</span></span></button>";
+  }).join("");
+}
+
+function abrirTranscricao(id, inicio) {
+  salvaPendente();
+  transAberta = id;
+  const t = id === "nova" ? {} : (D.transcricoes.find(x => x.id === id) || {});
+  const nova = id === "nova";
+  const det = $("#tDetalhe");
+  det.innerHTML =
+    '<div class="bloco">' +
+      '<div class="campo"><label for="tLink">Link do vídeo (YouTube, Instagram ou TikTok) *</label>' +
+        '<div class="trans__link"><input id="tLink" type="url" value="' + esc(t.link || "") + '" placeholder="Cole aqui o link do vídeo" autocomplete="off">' +
+        '<button type="button" class="btn" id="tTok">Transcrever no TokScript</button></div>' +
+        '<p class="mudo pequeno" style="margin-top:4px">O TokScript abre numa aba nova com o vídeo já carregado. Copie o texto de lá e cole no Roteiro abaixo. No plano grátis são 5 por dia.</p>' +
+      "</div>" +
+      '<div class="trans__corpo">' +
+        '<div class="trans__video" id="tVideo"></div>' +
+        '<div class="trans__campos">' +
+          '<div class="grade-form">' +
+            '<div class="campo"><label for="tTitulo">Título</label><input id="tTitulo" value="' + esc(t.titulo || "") + '" placeholder="Do que é o vídeo" autocomplete="off"></div>' +
+            '<div class="campo"><label for="tCriador">Criador</label><input id="tCriador" value="' + esc(t.criador || "") + '" placeholder="@quemfez" autocomplete="off"></div>' +
+          "</div>" +
+          '<div class="campo"><label for="tRoteiro" class="trans__rot">Roteiro (transcrição) <button type="button" class="link" id="tCopiar">copiar</button></label>' +
+            '<textarea id="tRoteiro" class="trans__roteiro" placeholder="Cole aqui o texto que o TokScript gerou">' + esc(t.transcricao || "") + "</textarea></div>" +
+          '<div class="campo"><label for="tObs">Minhas observações</label>' +
+            '<textarea id="tObs" rows="5" placeholder="O que funciona nesse vídeo? Gancho, ritmo, cortes, o que eu quero usar...">' + esc(t.obs || "") + "</textarea></div>" +
+        "</div>" +
+      "</div>" +
+      '<div class="faixa escondido" id="tErro" style="margin-top:12px"></div>' +
+      '<div class="trans__pe">' +
+        (nova ? "" : '<button type="button" class="btn btn--perigo" id="tApagar">' + ic("lixo") + " Apagar</button>") +
+        '<span class="mudo pequeno" id="tStatus"></span><span class="espaco"></span>' +
+        '<button type="button" class="btn" id="tSalvar">Salvar</button>' +
+      "</div>" +
+    "</div>";
+
+  const campo = (x) => $("#" + x, det);
+  const erro = (texto) => { const e = campo("tErro"); e.textContent = texto; e.classList.toggle("escondido", !texto); };
+  const status = (texto) => { campo("tStatus").textContent = texto; };
+
+  function mostraVideo() {
+    const link = campo("tLink").value.trim();
+    const emb = embedDe(link);
+    const caixa = campo("tVideo");
+    if (!link) { caixa.innerHTML = '<div class="trans__sem">O vídeo aparece aqui quando você colar o link.</div>'; return; }
+    if (!emb) {
+      caixa.innerHTML = '<div class="trans__sem">Não consigo mostrar esse vídeo aqui dentro.<br>' +
+        '<a class="link" href="' + esc(link) + '" target="_blank" rel="noopener">Abrir o vídeo</a>' +
+        (/tiktok\.com/i.test(link) ? '<br><span class="pequeno">Dica: no TikTok, use o link completo, com /video/ e um número.</span>' : "") + "</div>";
+      return;
+    }
+    caixa.innerHTML = '<div class="trans__moldura' + (emb.deitado ? " deitado" : "") + '"><iframe src="' + esc(emb.src) + '" allow="autoplay; encrypted-media; picture-in-picture; clipboard-write" allowfullscreen loading="lazy"></iframe></div>' +
+      '<a class="link pequeno" href="' + esc(link) + '" target="_blank" rel="noopener">Abrir no ' + esc(plataformaDe(link)) + "</a>";
+  }
+  mostraVideo();
+
+  let ultimoLink = campo("tLink").value.trim();
+  campo("tLink").addEventListener("input", () => {
+    const l = campo("tLink").value.trim();
+    if (l === ultimoLink) return;
+    ultimoLink = l;
+    mostraVideo();
+  });
+
+  campo("tTok").addEventListener("click", () => {
+    const link = campo("tLink").value.trim();
+    if (!link) { erro("Cole o link do vídeo primeiro."); campo("tLink").focus(); return; }
+    erro("");
+    window.open("https://tokscript.com/" + link, "_blank", "noopener");
+    campo("tRoteiro").focus();
+  });
+
+  campo("tCopiar").addEventListener("click", async (e) => {
+    e.preventDefault();
+    const texto = campo("tRoteiro").value;
+    if (!texto) { torrada("O roteiro ainda está vazio."); return; }
+    try { await navigator.clipboard.writeText(texto); torrada("Roteiro copiado."); }
+    catch (x) { campo("tRoteiro").select(); torrada("Selecionei o texto. Use Cmd + C para copiar."); }
+  });
+
+  async function salvar(sozinho) {
+    pendenteTrans = null;
+    const id = transAberta;   /* guarda agora: pode trocar de vídeo enquanto salva */
+    const dados = {
+      link: campo("tLink").value.trim(),
+      titulo: campo("tTitulo").value.trim() || null,
+      criador: campo("tCriador").value.trim() || null,
+      transcricao: campo("tRoteiro").value.trim() || null,
+      obs: campo("tObs").value.trim() || null
+    };
+    if (!dados.link) { if (!sozinho) { erro("Cole o link do vídeo para poder salvar."); campo("tLink").focus(); } return false; }
+    dados.plataforma = plataformaDe(dados.link);
+    const aqui = () => transAberta === id;
+    if (aqui()) { erro(""); status("Salvando..."); }
+    const eraNova = id === "nova";
+    const salvo = await salvarLinha("transcricoes", dados, eraNova ? null : id);
+    if (!salvo) { if (aqui()) status("Não salvou"); return false; }
+    if (eraNova) D.transcricoes.unshift(salvo);
+    else troca(D.transcricoes, salvo);
+    desenharListaTrans();
+    if (eraNova && aqui()) abrirTranscricao(salvo.id);
+    else if (aqui()) status("Salvo");
+    return true;
+  }
+  campo("tSalvar").addEventListener("click", async () => { if (await salvar(false)) torrada("Transcrição salva."); });
+
+  /* o que já existe salva sozinho um pouquinho depois que você para de digitar */
+  if (!nova) {
+    det.addEventListener("input", () => {
+      status("Alterações não salvas");
+      clearTimeout(timerTrans);
+      pendenteTrans = () => salvar(true);
+      timerTrans = setTimeout(salvaPendente, 1500);
+    });
+    duploClique(campo("tApagar"), async () => {
+      clearTimeout(timerTrans);
+      pendenteTrans = null;
+      if (!(await apagarLinha("transcricoes", t.id))) return;
+      D.transcricoes = D.transcricoes.filter(x => x.id !== t.id);
+      torrada("Transcrição apagada.");
+      desenharListaTrans();
+      abrirTranscricao(D.transcricoes.length ? D.transcricoes[0].id : "nova");
+    });
+  } else {
+    det.addEventListener("input", () => status(campo("tLink").value.trim() ? "Ainda não salva" : ""));
+  }
+
+  desenharListaTrans();
+  if (!inicio && window.matchMedia("(max-width: 900px)").matches) det.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (nova && !inicio && window.matchMedia("(pointer: fine)").matches) campo("tLink").focus();
+}
+
+/* ============================================================
    10. MENU, GAVETA E SAIR
    ============================================================ */
-const TITULOS = { portfolio: "Portfólio", marcas: "Marcas", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio" };
+const TITULOS = { portfolio: "Portfólio", marcas: "Marcas", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", transcricoes: "Transcrições" };
 const lateral = $("#lateral"), cortina = $("#cortina");
 const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classList.remove("aberta"); };
 function irPara(aba) {
@@ -1221,6 +1433,7 @@ seguro("Marcas", () => { montarMarcas(); desenharMarcas(); });
 seguro("Calendário", () => { montarCalendario(); desenharCalendario(); });
 seguro("Campanhas", () => { montarCampanhas(); desenharCampanhas(); });
 seguro("Checklist", montarChecklist);
+seguro("Transcrições", montarTranscricoes);
 
 irPara(location.hash.slice(1));
 document.documentElement.classList.remove("travado");
