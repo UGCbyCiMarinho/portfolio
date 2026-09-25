@@ -3675,20 +3675,45 @@ function desenhaIdeias() {
 }
 
 /* PASSO 2: a redatora escreve uma história contínua a partir da ideia escolhida */
+/* dois modelos para a redatora imitar (creator inventada, para nenhum dado real ficar no código) */
+const MODELOS_PITCH = `MODELO 1 (candidatura em plataforma, produto: pó de eletrólitos sabor frutas vermelhas):
+Most people don't skip hydration because they don't care. They skip it because plain water feels like a chore after a 12-hour shift.
+
+That's where my video starts. It opens on my locker at 7am, scrubs still on, as I say "This is the only thing I drink after a night shift," with "night shift recovery in 10 seconds" on screen. Then I tear the berry stick into my bottle, shake it and take the first sip on camera, before showing it waiting in my bag for the drive home. It closes on the empty bottle and one line: "the one habit that made my shifts easier."
+
+As a nurse who works nights, I live the exact tiredness this product is made for. I've created content for brands like Vital Proteins and Clinique.
+
+Want me to send the timed script, plus a second hook you can A/B test? You can see my work here: [portfólio]
+
+MODELO 2 (e-mail frio, produto: creme para pele sensível):
+ASSUNTO: A 30-second redness test for your barrier cream
+MENSAGEM:
+Hello [Marca] team,
+
+Anyone with reactive skin knows the moment: you try a new cream and spend the next hour waiting to see if your face turns red.
+
+That's the tension my video plays with. It opens on a close-up of my cheek as I say "I don't trust new creams, so I test them like this," with "sensitive skin test: day 1" on screen. Then I apply the cream to one side only and we check in after a few minutes, an hour and the next morning, side by side. It closes on my face in natural light and one line: "the first one I didn't have to worry about."
+
+I have rosacea, so this test isn't a script for me, it's how I choose every product. I've created content for brands like La Roche-Posay and Cetaphil.
+
+Want me to send the timed script for the redness test? You can see my work here: [portfólio]
+
+Warmly,
+[nome]`;
+
 function instrucaoRedatora() {
   const portfolio = cfgPerfil().portfolio || "";
   if (abTipo === "dm") return (TIPOS_ABORDAGEM.find(t => t[0] === "dm") || [])[2];
   if (abTipo === "followup") return (TIPOS_ABORDAGEM.find(t => t[0] === "followup") || [])[2];
-  const limite = abTipo === "plataforma" ? "130" : "150";
-  return "Escreva " + (abTipo === "plataforma" ? "uma candidatura para a vaga, sem assunto e sem assinatura longa" : "um e-mail frio, com ASSUNTO curto que cite a ideia ou o produto (nunca genérico), saudação \"Hi [nome],\" se o nome for conhecido ou \"Hello [Marca] team,\"") +
-    ", como UMA HISTÓRIA CONTÍNUA, nunca em blocos soltos. Cada parágrafo puxa o próximo:\n" +
-    "Parágrafo 1 (1 ou 2 frases): uma verdade sobre o cliente da marca, ligada ao herói do produto, que dá vontade de ler a próxima frase. Nada de falar dela, nada de \"I read\" ou \"I love\".\n" +
-    "Parágrafo 2 (3 ou 4 frases): apresente a ideia pelo nome entre aspas e faça a marca ASSISTIR aos primeiros 3 segundos: o que aparece, a fala exata entre aspas e o texto na tela. Depois, em uma frase, o resto do vídeo e o momento em que o produto brilha. O fato real dela entra DENTRO da cena, não num parágrafo separado.\n" +
-    "Se o vídeo for para ads e houver gancho B: uma frase curta dizendo que ela grava os dois ganchos para a marca testar A/B, citando o segundo entre aspas. Isso mostra que ela pensa em conversão.\n" +
-    "Parágrafo 3 (1 ou 2 frases): por que ela é a pessoa certa PARA ESSA ideia: um diferencial dela ligado à ideia e 2 ou 3 marcas relevantes com quem já trabalhou.\n" +
-    "Fecho (1 ou 2 frases): uma pergunta de sim ou não LIGADA À IDEIA (ex.: \"Want me to send the timed script for [nome da ideia]?\"), e depois uma linha curta convidando para ver os trabalhos dela: " + portfolio + "\n" +
-    (abTipo === "email" ? "Assinatura: \"Warmly,\" e o nome dela.\n" : "") +
-    "No máximo " + limite + " palavras no total. Nada de listar formatos, proporções, prazos ou entregáveis. Nada de repetir as restrições da brief: só respeite. Tudo no idioma pedido, sem nenhuma palavra das instruções.";
+  return (abTipo === "plataforma" ? "Uma candidatura para a vaga, sem assunto e sem assinatura longa." : "Um e-mail frio, com ASSUNTO curto que cite a ideia ou o produto, saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\", e assinatura \"Warmly,\" + o nome dela.") + "\n\n" +
+    "ESTRUTURA (a mesma dos modelos abaixo, em 4 partes, e cada parte puxa a próxima):\n" +
+    "1. A VERDADE DO CLIENTE (1 ou 2 frases): por que as pessoas desistem ou sofrem, ligada ao herói do produto. Nada sobre ela.\n" +
+    "2. O VÍDEO NA ORDEM EM QUE ACONTECE, ligado à frase anterior (ex.: \"That's where my video starts.\"): como ABRE (o que aparece, a fala exata entre aspas e o texto na tela), o MEIO (o produto sendo usado, o momento em que ele brilha) e como FECHA (a imagem final e uma frase final). Se houver gancho B e o vídeo for para ads, ofereça o teste A/B só no fecho da mensagem.\n" +
+    "3. POR QUE ELA (1 ou 2 frases): UM fato real dela com ligação DIRETA com a verdade do cliente da parte 1 (o fato mostra que ela vive esse problema). Depois, numa frase separada e neutra: \"I've created content for brands like...\" com 2 ou 3 marcas, de preferência do mesmo nicho. NUNCA ligue o fato às marcas com \"which is why\", \"that's why\", \"so brands\".\n" +
+    "4. FECHO: uma pergunta de sim ou não ligada à ideia e, na mesma linha ou na seguinte, o convite para ver o trabalho dela: " + portfolio + "\n\n" +
+    "Tamanho: parecido com os modelos, no máximo " + (abTipo === "plataforma" ? "150" : "170") + " palavras.\n" +
+    "Do guia de estilo, use a VOZ, os FATOS dela e a lista do que nunca dizer. A ESTRUTURA é a dos modelos. Imite o ritmo e a lógica dos modelos, nunca as frases nem os produtos deles.\n\n" +
+    "=== MODELOS (de outra creator; só para você ver o nível e a estrutura) ===\n" + MODELOS_PITCH;
 }
 async function escreverAbordagem(ajuste) {
   if (!checaAntes()) return;
@@ -3699,8 +3724,8 @@ async function escreverAbordagem(ajuste) {
   const sistema = "Você é a redatora de uma creator de UGC e escreve abordagens em nome dela, no estilo dela. Você escreve como gente, com ritmo, e cada frase dá vontade de ler a próxima. Pense como a marca que vai ler.\n\n" + contextoDela() +
     "- Escreva em " + $("#abIdioma").value + ".\n\n" +
     "=== ANTES DE RESPONDER, RELEIA COMO A MARCA E REESCREVA SE PRECISAR ===\n" +
-    "1. A primeira frase me faz querer ler a segunda?\n2. Eu consigo enxergar o vídeo?\n3. Os parágrafos se conectam como uma história, sem frase solta?\n" +
-    "4. O fato dela está dentro da ideia, e não num parágrafo de currículo?\n5. O fecho continua a ideia?\n6. Tem algum detalhe que se contradiz, alguma palavra em português, travessão, número inventado ou palavra vaga (authentic, natural, creative, relatable)?\n7. Está no tamanho pedido?\n\n" +
+    "1. A primeira frase me faz querer ler a segunda?\n2. Eu consigo assistir ao vídeo na ordem: abertura, meio, fecho?\n3. Cada parágrafo continua o anterior, sem frase solta?\n" +
+    "4. O fato dela tem ligação lógica com o problema do cliente? Alguma frase liga coisas que não têm relação (ex.: um hábito dela como motivo de marcas terem trabalhado com ela)? Se sim, corte.\n5. O fecho continua a ideia?\n6. Tem detalhe que se contradiz, palavra em português, travessão, número inventado ou palavra vaga (authentic, natural, creative, relatable)?\n\n" +
     "=== FORMATO DA RESPOSTA ===\n" + (abTipo === "email" ? "ASSUNTO: (uma linha)\nMENSAGEM:\n(o texto)\n" : "MENSAGEM:\n(o texto)\n") + "Não escreva nada antes nem depois disso.";
   let pedido = "Escreva: " + instrucaoRedatora() + "\n\n" + dadosDaMarca();
   if (abIdeia && abEstrategia) pedido += "\n=== A ESTRATÉGIA ESCOLHIDA POR ELA ===\nHerói do produto: " + abEstrategia.heroi + "\nO que o cliente sente: " + abEstrategia.objecao +
@@ -3720,15 +3745,6 @@ async function escreverAbordagem(ajuste) {
     return { assunto: a ? a[1].trim() : "", mensagem: (mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim() };
   };
   abResultado = separa(r.texto);
-  /* passou do tamanho? pede para encurtar antes de mostrar */
-  const limite = { plataforma: 130, email: 160, dm: 70, followup: 70 }[abTipo] || 150;
-  const palavras = abResultado.mensagem.split(/\s+/).filter(Boolean).length;
-  if (palavras > limite + 15) {
-    $("#abSaida").innerHTML = '<div class="bloco abordar__saida"><p class="mudo"><span class="rot__relogio">⏳</span> Ficou com ' + palavras + " palavras. Enxugando para no máximo " + limite + "...</p></div>";
-    const r2 = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido + "\n\n=== A VERSÃO QUE VOCÊ ESCREVEU ===\n" + (abResultado.assunto ? "ASSUNTO: " + abResultado.assunto + "\n" : "") + abResultado.mensagem +
-      "\n\nEla tem " + palavras + " palavras e o limite é " + limite + ". Reescreva com no máximo " + limite + " palavras, mantendo a primeira frase, a ideia com o gancho (visual, fala e texto na tela), o fato dela e o fecho. Corte o que for repetido ou óbvio." }], "low", 6000);
-    if (!r2.erro && r2.texto) abResultado = separa(r2.texto);
-  }
   desenhaSaida();
   atualizaResumoIA();
   guardaHistorico();
