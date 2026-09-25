@@ -183,10 +183,10 @@ img, svg { display: block; max-width: 100%; }
 .nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 60;
   transition: background .3s, backdrop-filter .3s, border-color .3s;
-  background: linear-gradient(180deg, rgba(0,0,0,.72), transparent);
+  background: linear-gradient(180deg, rgba(0,0,0,.78) 0%, rgba(0,0,0,.5) 62%, transparent 100%);
   border-bottom: 1px solid transparent;
 }
-:root[data-tema="bege"] .nav { background: linear-gradient(180deg, rgba(239,236,234,.92), transparent); }
+:root[data-tema="bege"] .nav { background: linear-gradient(180deg, rgba(239,236,234,.95) 0%, rgba(239,236,234,.72) 62%, transparent 100%); }
 .nav.is-scrolled { background: var(--bg); backdrop-filter: blur(8px); border-bottom-color: var(--line); }
 .nav__inner {
   max-width: var(--maxw); margin: 0 auto;
@@ -229,9 +229,16 @@ img, svg { display: block; max-width: 100%; }
   transition: color .2s, border-color .2s, background .2s;
 }
 .nav__icon svg { width: 17px; height: 17px; }
+/* em cima da foto do topo, o cinza sumia: ícone claro e uma pastilha discreta atrás */
+.nav:not(.is-scrolled) .nav__icon { color: #f2ece6; background: rgba(0,0,0,.46); }
+:root[data-tema="bege"] .nav:not(.is-scrolled) .nav__icon { color: #3b312a; background: rgba(255,255,255,.74); }
 .nav__icon:hover { color: var(--red); border-color: var(--line); background: var(--card); }
 /* troca de tom, temporária */
 .nav__tema { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px 3px 12px; margin-left: .6rem; }
+.nav:not(.is-scrolled) .nav__tema { background: rgba(0,0,0,.46); border-color: rgba(255,255,255,.3); }
+:root[data-tema="bege"] .nav:not(.is-scrolled) .nav__tema { background: rgba(255,255,255,.74); border-color: rgba(59,49,42,.24); }
+.nav:not(.is-scrolled) .nav__tema-rotulo { color: #f2ece6; }
+:root[data-tema="bege"] .nav:not(.is-scrolled) .nav__tema-rotulo { color: #3b312a; }
 .nav__tema-rotulo { font-size: .58rem; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
 .nav__tema button { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); cursor: pointer; font-size: 0; padding: 0; }
 .nav__tema button[data-tema="bege"] { background: #efecea; }

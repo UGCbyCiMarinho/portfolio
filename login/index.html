@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="espresso">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Entrar · Ci Marinho</title>
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/painel.css">
+<script>
+  /* usa o mesmo tom escolhido no portfólio */
+  try { var t = localStorage.getItem("tema"); if (t === "bege" || t === "espresso") document.documentElement.dataset.tema = t; } catch (e) {}
+</script>
+</head>
+<body>
+<main class="login">
+
+  <!-- ENTRAR -->
+  <form class="login__cartao" id="formEntrar" novalidate>
+    <div class="login__marca">Ci <span>Marinho</span></div>
+    <p class="login__titulo">Entre para abrir o seu painel</p>
+    <div class="faixa escondido" id="faixaEntrar" role="alert"></div>
+    <div class="campo">
+      <label for="email">E-mail</label>
+      <input type="email" id="email" autocomplete="username" required>
+    </div>
+    <div class="campo">
+      <label for="senha">Senha</label>
+      <input type="password" id="senha" autocomplete="current-password" required>
+    </div>
+    <button type="submit" class="btn btn--full" id="btnEntrar">Entrar</button>
+    <div class="login__rodape">
+      <button type="button" class="link" id="btnEsqueci">Esqueci minha senha</button>
+    </div>
+  </form>
+
+  <!-- NOVA SENHA (aparece quando você chega pelo link do e-mail de recuperação) -->
+  <form class="login__cartao escondido" id="formNova" novalidate>
+    <div class="login__marca">Ci <span>Marinho</span></div>
+    <p class="login__titulo">Crie a sua nova senha</p>
+    <div class="faixa escondido" id="faixaNova" role="alert"></div>
+    <div class="campo">
+      <label for="nova">Nova senha (mínimo 8 caracteres)</label>
+      <input type="password" id="nova" autocomplete="new-password" minlength="8" required>
+    </div>
+    <button type="submit" class="btn btn--full" id="btnNova">Salvar nova senha</button>
+  </form>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/banco.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const PAINEL = "../admin/";
+  const recuperando = /type=recovery/.test(location.hash);
+
+  function faixa(el, texto, tipo) {
+    el.textContent = texto;
+    el.className = "faixa" + (tipo ? " faixa--" + tipo : "");
+  }
+
+  if (!window.banco) {
+    faixa($("faixaEntrar"), "Não consegui conectar ao banco. Confira a sua internet e recarregue a página.");
+    $("btnEntrar").disabled = true;
+    return;
+  }
+
+  /* chegou pelo link de recuperação: mostra o cartão de nova senha */
+  function mostraNovaSenha() {
+    $("formEntrar").classList.add("escondido");
+    $("formNova").classList.remove("escondido");
+    $("nova").focus();
+  }
+  banco.auth.onAuthStateChange((evento) => {
+    if (evento === "PASSWORD_RECOVERY") mostraNovaSenha();
+  });
+
+  /* se já tem sessão aberta, vai direto para o painel */
+  if (recuperando) {
+    mostraNovaSenha();
+  } else {
+    banco.auth.getSession().then(({ data }) => {
+      if (data && data.session) location.replace(PAINEL);
+    });
+  }
+
+  /* ENTRAR */
+  $("formEntrar").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("email").value.trim();
+    const senha = $("senha").value;
+    if (!email || !senha) { faixa($("faixaEntrar"), "Preencha o e-mail e a senha."); return; }
+    $("btnEntrar").disabled = true;
+    $("btnEntrar").textContent = "Entrando...";
+    const { error } = await banco.auth.signInWithPassword({ email, password: senha });
+    if (error) {
+      const m = (error.message || "").toLowerCase();
+      let texto = "E-mail ou senha incorretos";
+      if (m.includes("not confirmed")) texto = "Esse e-mail ainda não foi confirmado no Supabase.";
+      else if (m.includes("rate") || m.includes("too many")) texto = "Muitas tentativas seguidas. Espere um minuto e tente de novo.";
+      else if (m.includes("fetch") || m.includes("network")) texto = "Sem conexão com o banco. Confira a sua internet.";
+      faixa($("faixaEntrar"), texto);
+      $("btnEntrar").disabled = false;
+      $("btnEntrar").textContent = "Entrar";
+      return;
+    }
+    location.replace(PAINEL);
+  });
+
+  /* ESQUECI MINHA SENHA */
+  $("btnEsqueci").addEventListener("click", async () => {
+    const email = $("email").value.trim();
+    if (!email) { faixa($("faixaEntrar"), "Escreva o seu e-mail no campo acima e clique de novo em Esqueci minha senha.", "aviso"); $("email").focus(); return; }
+    $("btnEsqueci").disabled = true;
+    const { error } = await banco.auth.resetPasswordForEmail(email, { redirectTo: location.origin + "/login/" });
+    $("btnEsqueci").disabled = false;
+    if (error) {
+      const m = (error.message || "").toLowerCase();
+      faixa($("faixaEntrar"), m.includes("rate") || m.includes("seconds")
+        ? "Um e-mail acabou de ser enviado. Espere um minuto antes de pedir outro."
+        : "Não consegui enviar o e-mail agora. Tente de novo em alguns minutos.");
+      return;
+    }
+    faixa($("faixaEntrar"), "Pronto! Se esse e-mail estiver cadastrado, chega um link para criar uma senha nova. Confira também o spam.", "ok");
+  });
+
+  /* SALVAR NOVA SENHA */
+  $("formNova").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const nova = $("nova").value;
+    if (nova.length < 8) { faixa($("faixaNova"), "A senha precisa ter pelo menos 8 caracteres."); return; }
+    $("btnNova").disabled = true;
+    const { error } = await banco.auth.updateUser({ password: nova });
+    $("btnNova").disabled = false;
+    if (error) {
+      const m = (error.message || "").toLowerCase();
+      faixa($("faixaNova"), m.includes("different")
+        ? "A nova senha precisa ser diferente da antiga."
+        : "O link de recuperação expirou. Volte e peça um novo em Esqueci minha senha.");
+      return;
+    }
+    faixa($("faixaNova"), "Senha nova salva! Abrindo o painel...", "ok");
+    setTimeout(() => location.replace(PAINEL), 900);
+  });
+})();
+</script>
+</body>
+</html>

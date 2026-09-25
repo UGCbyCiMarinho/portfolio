@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="espresso" class="travado">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin · Ci Marinho</title>
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/painel.css">
+<script>
+  /* usa o mesmo tom escolhido no portfólio */
+  try { var t = localStorage.getItem("tema"); if (t === "bege" || t === "espresso") document.documentElement.dataset.tema = t; } catch (e) {}
+</script>
+</head>
+<body>
+
+<!-- MENU LATERAL -->
+<aside class="lateral" id="lateral">
+  <div class="lateral__marca">Ci <span>Marinho</span></div>
+
+  <div class="lateral__secao">meu site</div>
+  <button class="menu__item" data-aba="portfolio">
+    <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>Portfólio
+  </button>
+  <button class="menu__item" data-aba="marcas">
+    <svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Marcas
+  </button>
+
+  <div class="lateral__secao">minha rotina</div>
+  <button class="menu__item" data-aba="calendario">
+    <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Calendário
+  </button>
+  <button class="menu__item" data-aba="campanhas">
+    <svg class="ic" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Campanhas
+  </button>
+  <button class="menu__item" data-aba="checklist">
+    <svg class="ic" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Checklist
+  </button>
+
+  <div class="lateral__pe">
+    <div class="lateral__email" id="meuEmail"></div>
+    <button class="btn btn--linha" id="btnSair">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Sair
+    </button>
+  </div>
+</aside>
+<div class="cortina" id="cortina"></div>
+
+<!-- CONTEÚDO -->
+<main class="principal">
+  <div class="topo">
+    <button class="btn--icone topo__gaveta" id="btnGaveta" aria-label="Abrir menu">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <h1 id="titulo">Portfólio</h1>
+  </div>
+
+  <div id="avisos"></div>
+
+  <section class="aba" id="aba-portfolio"></section>
+  <section class="aba" id="aba-marcas"></section>
+  <section class="aba" id="aba-calendario"></section>
+  <section class="aba" id="aba-campanhas"></section>
+  <section class="aba" id="aba-checklist"></section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/banco.js"></script>
+<script src="../js/biblioteca.js"></script>
+<script src="../js/admin.js"></script>
+</body>
+</html>
