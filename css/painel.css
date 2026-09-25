@@ -484,6 +484,14 @@ a.btn { text-decoration: none; }
 .funil__grafico--dia .funil__pilha[data-v]::before { font-size: 8.5px; }
 .funil__legenda { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .funil__legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+/* abordagens */
+.abordar { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.abordar__lado { display: flex; flex-direction: column; gap: 0; position: sticky; top: 12px; }
+.abordar__campos { display: flex; flex-direction: column; gap: 8px; }
+.abordar__pdf { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: var(--radius); }
+.abordar__pdf.arrastando { border-color: var(--red); background: var(--suave); }
+.abordar__saida { margin-top: 12px; }
+@media (max-width: 1100px) { .abordar { grid-template-columns: 1fr; } .abordar__lado { position: static; } }
 .rot__relogio { display: inline-block; animation: girando 2s linear infinite; }
 @keyframes girando { to { transform: rotate(360deg); } }
 .rot__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; }

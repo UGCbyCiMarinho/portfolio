@@ -790,6 +790,7 @@ function montarBase() {
       atualizaMassa();
       return;
     }
+    if (e.target.closest("[data-abordar]")) { abordarMarca(m); return; }
     if (e.target.closest("[data-fav]")) {
       const salvo = await salvarLinha("base_marcas", { favorita: !m.favorita }, m.id);
       if (salvo) { troca(D.base, salvo); desenharBase(); }
@@ -905,7 +906,8 @@ function desenharBase() {
       '<td class="corta">' + (m.email ? '<a href="mailto:' + esc(m.email) + '">' + esc(m.email) + "</a>" : "") + "</td>" +
       '<td style="white-space:nowrap">' + (m.telefone ? '<span class="contato-links">' + esc(m.telefone) + (wa ? '<a href="' + wa + '" target="_blank" rel="noopener" title="Abrir no WhatsApp">' + ic("whats") + "</a>" : "") + "</span>" : "") + "</td>" +
       '<td style="white-space:nowrap">' + dataBR(m.ultimo_contato) + "</td>" +
-      '<td class="curta">' + (m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" data-prospectei title="Marcar como prospectada hoje">📨 Prospectei</button>' : "") + "</td></tr>";
+      '<td class="curta"><span class="acoes"><button type="button" class="btn btn--linha" data-abordar title="Escrever a abordagem para esta marca">✍️ Abordar</button>' +
+        (m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" data-prospectei title="Marcar como prospectada hoje">📨 Prospectei</button>' : "") + "</span></td></tr>";
   }).join("");
 }
 
@@ -3242,9 +3244,319 @@ function registrarAbordagens() {
 }
 
 /* ============================================================
+   9d. ABA ABORDAGENS (gerador de e-mail, DM, plataforma e follow-up)
+   A IA é o Claude pelo OpenRouter. A chave, os seus dados e o seu guia
+   de estilo ficam na tabela configuracoes (só você lê), nunca no código.
+   ============================================================ */
+const OPENROUTER = "https://openrouter.ai/api/v1";
+const MODELOS_IA = [["anthropic/claude-sonnet-5", "Claude Sonnet 5 (rápido, uns US$ 0,01 por mensagem)"], ["anthropic/claude-opus-5.5", "Claude Opus 5.5 (caprichado, uns US$ 0,02)"]];
+const TIPOS_ABORDAGEM = [
+  ["email", "✉️ E-mail", "Um e-mail de primeiro contato: ASSUNTO curto e específico, saudação \"Hello [Marca] team,\", de 110 a 170 palavras, e a assinatura \"Warmly,\" + nome + link do portfólio."],
+  ["dm", "💬 DM", "Uma DM de Instagram de primeiro contato: sem assunto, de 40 a 80 palavras, gancho forte na primeira linha, termina pedindo o melhor e-mail do time de marketing para mandar o portfólio. Sem links."],
+  ["plataforma", "🧩 Plataforma", "Uma candidatura para uma vaga de UGC numa plataforma (InSense, Billo, JoinBrands...): responde ao brief, mostra por que ela é a creator certa para AQUELE brief, propõe o conceito de vídeo e confirma que entrega o que foi pedido. De 80 a 150 palavras, sem assunto, sem assinatura longa."],
+  ["followup", "🔁 Follow-up", "Um follow-up curto (40 a 80 palavras) de um e-mail que ficou sem resposta: volta ao assunto com uma ideia nova ou um ângulo novo, sem cobrar, sem repetir o primeiro e-mail. Sem assunto (vai na mesma conversa)."]
+];
+let abTipo = "email";
+let abResultado = null;     /* { assunto, mensagem } */
+let abMarcaId = null;
+let abBriefPDF = "";        /* texto tirado do PDF */
+
+const cfgPerfil = () => { try { return JSON.parse(D.config.abordagem_perfil || "{}") || {}; } catch (e) { return {}; } };
+async function salvaConfig(chave, valor) {
+  const { error } = await banco.from("configuracoes").upsert({ chave, valor });
+  if (error) { torrada(traduzErro(error, "configuracoes"), true); return false; }
+  D.config[chave] = valor;
+  return true;
+}
+
+function montarAbordar() {
+  const p = cfgPerfil();
+  const campo = (id, rot, dica, valor, area) => '<div class="campo"><label for="' + id + '">' + rot + "</label>" +
+    (area ? '<textarea id="' + id + '" rows="3" placeholder="' + esc(dica) + '">' + esc(valor || "") + "</textarea>" : '<input id="' + id + '" value="' + esc(valor || "") + '" placeholder="' + esc(dica) + '" autocomplete="off">') + "</div>";
+  $("#aba-abordar").innerHTML =
+    '<p class="rot__frase">Escolha o tipo, a marca e cole a brief. A IA escreve no seu estilo, com os seus dados. Você revisa, ajusta e copia.</p>' +
+    '<div class="abordar">' +
+      /* esquerda: a abordagem */
+      '<div class="abordar__principal">' +
+        '<div class="pilulas" id="abTipos">' + TIPOS_ABORDAGEM.map(t => '<button type="button" data-t="' + t[0] + '">' + t[1] + "</button>").join("") + "</div>" +
+        '<div class="bloco" style="margin-top:12px">' +
+          '<div class="grade-form">' +
+            '<div class="campo inteiro"><label for="abMarca">Marca</label><input id="abMarca" list="abMarcas" placeholder="Escolha da sua lista de Marcas ou digite" autocomplete="off">' +
+              '<datalist id="abMarcas"></datalist><p class="mudo pequeno" id="abMarcaInfo" style="margin-top:4px"></p></div>' +
+            '<div class="campo"><label for="abProduto">Produto</label><input id="abProduto" placeholder="Ex.: aspirador sem fio S9" autocomplete="off"></div>' +
+            '<div class="campo"><label for="abLink">Link do produto</label><input id="abLink" placeholder="https://..." autocomplete="off"></div>' +
+            '<div class="campo inteiro"><label for="abBrief">Brief, ou o que você viu da marca</label>' +
+              '<textarea id="abBrief" rows="6" placeholder="Cole aqui o texto da brief, ou escreva o que chamou a sua atenção no site ou no Instagram da marca."></textarea>' +
+              '<div class="abordar__pdf" id="abPdfZona"><input type="file" id="abPdf" accept=".pdf,.txt,.md" hidden>' +
+                '<button type="button" class="btn btn--linha" id="abPdfBtn">📄 Anexar brief em PDF</button><span class="mudo pequeno" id="abPdfInfo">ou arraste o arquivo para cá</span></div></div>' +
+            '<div class="campo"><label for="abIdioma">Idioma</label><select id="abIdioma"><option value="inglês">Inglês</option><option value="português do Brasil">Português</option></select></div>' +
+            '<div class="campo"><label for="abExtra">Pedido especial (opcional)</label><input id="abExtra" placeholder="Ex.: citar que tenho pele oleosa" autocomplete="off"></div>' +
+          "</div>" +
+          '<button type="button" class="btn btn--full" id="abGerar" style="margin-top:12px;height:40px">✨ Gerar abordagem</button>' +
+        "</div>" +
+        '<div id="abSaida"></div>' +
+      "</div>" +
+      /* direita: meus dados, estilo e chave */
+      '<aside class="abordar__lado">' +
+        '<details class="sanfona" id="abDados"' + (p.nome ? "" : " open") + '><summary><span class="emoji">🙋‍♀️</span><div class="sanfona__txt"><div class="sanfona__tit">Meus dados</div><div class="sanfona__sub">' + esc(p.nome ? p.nome + (p.instagram ? " · " + p.instagram : "") : "Preencha uma vez") + "</div></div><span class=\"chevron\">" + ic("baixo") + "</span></summary>" +
+          '<div class="sanfona__corpo"><div class="abordar__campos">' +
+            campo("pNome", "Nome e assinatura", "Cintia (Ci Marinho) ✨", p.nome) +
+            campo("pInsta", "@ do Instagram", "@ccimarinho", p.instagram) +
+            campo("pPortfolio", "Portfólio", "https://cimarinho.com", p.portfolio) +
+            campo("pCidade", "Cidade", "Toronto, Canadá", p.cidade) +
+            campo("pDif", "Diferenciais", "Bilíngue, 15+ anos em finanças, entrego rápido...", p.diferenciais, true) +
+            campo("pMarcas", "Marcas com quem já trabalhei", "L'Oréal, COSRX, TheraBreath...", p.marcas, true) +
+            campo("pSobre", "Mais sobre mim (opcional)", "Maya, rotina, nichos que vivo de verdade...", p.sobre, true) +
+          '</div><button type="button" class="btn btn--full" id="pSalvar" style="margin-top:10px">Salvar meus dados</button></div></details>' +
+        '<details class="sanfona" id="abEstilo"' + (D.config.abordagem_estilo ? "" : " open") + '><summary><span class="emoji">🎨</span><div class="sanfona__txt"><div class="sanfona__tit">Meu estilo de abordagem</div><div class="sanfona__sub">' +
+          (D.config.abordagem_estilo ? plural(String(D.config.abordagem_estilo).split(/\s+/).length, "palavra", "palavras") + " de regras e exemplos" : "Cole aqui o seu guia") + "</div></div><span class=\"chevron\">" + ic("baixo") + "</span></summary>" +
+          '<div class="sanfona__corpo"><textarea id="abEstiloTxt" rows="12" class="entrada" style="height:auto;padding:10px;line-height:1.5" placeholder="Cole aqui os seus documentos de abordagem: regras de voz, o que nunca dizer, exemplos de mensagens que funcionaram...">' + esc(D.config.abordagem_estilo || "") + "</textarea>" +
+          '<button type="button" class="btn btn--full" id="abEstiloSalvar" style="margin-top:8px">Salvar meu estilo</button></div></details>' +
+        '<details class="sanfona" id="abIA"' + (D.config.openrouter_api_key ? "" : " open") + '><summary><span class="emoji">🔑</span><div class="sanfona__txt"><div class="sanfona__tit">IA (OpenRouter)</div><div class="sanfona__sub" id="abIAResumo"></div></div><span class="chevron">' + ic("baixo") + "</span></summary>" +
+          '<div class="sanfona__corpo"><div class="campo"><label for="abChave">Chave do OpenRouter</label><input id="abChave" type="password" autocomplete="off" placeholder="' +
+            (D.config.openrouter_api_key ? "Salva: ••••" + esc(String(D.config.openrouter_api_key).slice(-4)) + ". Cole outra para trocar." : "sk-or-...") + '"></div>' +
+            '<div class="campo" style="margin-top:8px"><label for="abModelo">Modelo</label><select id="abModelo">' + MODELOS_IA.map(m => '<option value="' + m[0] + '"' + ((D.config.abordagem_modelo || MODELOS_IA[0][0]) === m[0] ? " selected" : "") + ">" + m[1] + "</option>").join("") + "</select></div>" +
+            '<button type="button" class="btn btn--full" id="abChaveSalvar" style="margin-top:8px">Salvar</button>' +
+            '<p class="mudo pequeno" style="margin-top:8px">Pegue a chave em <a class="link" href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a> (Create Key). Ela fica guardada no seu banco, só você vê.</p></div></details>' +
+      "</aside>" +
+    "</div>";
+
+  $("#abTipos").addEventListener("click", (e) => { const b = e.target.closest("[data-t]"); if (b) { abTipo = b.dataset.t; desenharAbordar(); } });
+  $("#abMarca").addEventListener("change", escolheMarca);
+  $("#abMarca").addEventListener("input", () => { if (!$("#abMarca").value) { abMarcaId = null; $("#abMarcaInfo").textContent = ""; } });
+  $("#abGerar").addEventListener("click", () => gerarAbordagem());
+  $("#abPdfBtn").addEventListener("click", () => $("#abPdf").click());
+  $("#abPdf").addEventListener("change", () => { const f = $("#abPdf").files[0]; if (f) lerBrief(f); });
+  const zona = $("#abPdfZona");
+  ["dragover", "dragenter"].forEach(ev => zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("arrastando"); }));
+  ["dragleave", "drop"].forEach(ev => zona.addEventListener(ev, () => zona.classList.remove("arrastando")));
+  zona.addEventListener("drop", (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) lerBrief(f); });
+  $("#pSalvar").addEventListener("click", async () => {
+    const perfil = { nome: $("#pNome").value.trim(), instagram: $("#pInsta").value.trim(), portfolio: $("#pPortfolio").value.trim(), cidade: $("#pCidade").value.trim(),
+      diferenciais: $("#pDif").value.trim(), marcas: $("#pMarcas").value.trim(), sobre: $("#pSobre").value.trim() };
+    if (await salvaConfig("abordagem_perfil", JSON.stringify(perfil))) { $("#abDados").open = false; $("#abDados .sanfona__sub").textContent = perfil.nome + (perfil.instagram ? " · " + perfil.instagram : ""); torrada("Meus dados salvos ✓"); }
+  });
+  $("#abEstiloSalvar").addEventListener("click", async () => {
+    const t = $("#abEstiloTxt").value.trim();
+    if (await salvaConfig("abordagem_estilo", t)) { $("#abEstilo").open = false; $("#abEstilo .sanfona__sub").textContent = plural(t.split(/\s+/).filter(Boolean).length, "palavra", "palavras") + " de regras e exemplos"; torrada("Meu estilo salvo ✓"); }
+  });
+  $("#abChaveSalvar").addEventListener("click", async () => {
+    const nova = $("#abChave").value.trim(), modelo = $("#abModelo").value;
+    if (nova) {
+      const antiga = D.config.openrouter_api_key; D.config.openrouter_api_key = nova;
+      const saldo = await saldoOpenRouter();
+      if (saldo && saldo.erro === "chave") { D.config.openrouter_api_key = antiga; torrada("O OpenRouter não aceitou essa chave. Confira se copiou inteira.", true); return; }
+      if (!(await salvaConfig("openrouter_api_key", nova))) { D.config.openrouter_api_key = antiga; return; }
+    }
+    if (modelo !== D.config.abordagem_modelo) await salvaConfig("abordagem_modelo", modelo);
+    $("#abChave").value = ""; $("#abIA").open = false;
+    atualizaResumoIA(); torrada("IA salva ✓");
+  });
+  desenharAbordar();
+  atualizaResumoIA();
+}
+
+async function saldoOpenRouter() {
+  if (!D.config.openrouter_api_key) return null;
+  try {
+    const r = await fetch(OPENROUTER + "/credits", { headers: { Authorization: "Bearer " + D.config.openrouter_api_key } });
+    if (r.status === 401 || r.status === 403) return { erro: "chave" };
+    const j = await r.json();
+    return j.data || null;
+  } catch (e) { return null; }
+}
+async function atualizaResumoIA() {
+  const el = $("#abIAResumo");
+  if (!el) return;
+  if (!D.config.openrouter_api_key) { el.textContent = "Nenhuma chave salva ainda"; return; }
+  el.textContent = "Chave terminando em " + String(D.config.openrouter_api_key).slice(-4) + " · conferindo o saldo...";
+  const s = await saldoOpenRouter();
+  el.textContent = "Chave terminando em " + String(D.config.openrouter_api_key).slice(-4) +
+    (s && s.total_credits != null ? " · saldo US$ " + numBR.format(Math.max(0, s.total_credits - s.total_usage)) : s && s.erro ? " · chave não aceita" : "");
+}
+
+function desenharAbordar() {
+  $$("#abTipos button").forEach(b => b.classList.toggle("ativo", b.dataset.t === abTipo));
+  $("#abMarcas").innerHTML = D.base.filter(m => !m.exemplo).map(m => '<option value="' + esc(m.nome) + '">').join("");
+  $("#abGerar").textContent = "✨ Gerar " + ({ email: "e-mail", dm: "DM", plataforma: "candidatura", followup: "follow-up" }[abTipo]);
+  desenhaSaida();
+}
+
+function escolheMarca() {
+  const nome = $("#abMarca").value.trim();
+  const m = D.base.find(x => chaveNome(x.nome) === chaveNome(nome));
+  abMarcaId = m ? m.id : null;
+  if (!m) { $("#abMarcaInfo").textContent = nome ? "Marca fora da sua lista: tudo bem, a IA usa só o que você escrever aqui." : ""; return; }
+  if (m.produto && !$("#abProduto").value) $("#abProduto").value = m.produto;
+  if (m.link_produto && !$("#abLink").value) $("#abLink").value = m.link_produto;
+  $("#abMarcaInfo").textContent = "Da sua lista: " + [m.nicho, m.email, m.instagram, m.obs ? "com observação" : ""].filter(Boolean).join(" · ") + ".";
+}
+/* abre a aba já com uma marca escolhida (botão ✍️ Abordar, na aba Marcas) */
+function abordarMarca(m) {
+  irPara("abordar");
+  $("#abMarca").value = m.nome;
+  $("#abProduto").value = m.produto || ""; $("#abLink").value = m.link_produto || "";
+  escolheMarca();
+  if (m.situacao === "em_conversa" || m.situacao === "prospectada") { abTipo = m.situacao === "prospectada" ? "followup" : "email"; desenharAbordar(); }
+}
+
+async function lerBrief(arquivo) {
+  const info = $("#abPdfInfo");
+  info.textContent = "Lendo " + arquivo.name + "...";
+  try {
+    let texto = "";
+    if (/\.pdf$/i.test(arquivo.name) || arquivo.type === "application/pdf") {
+      const pdfjs = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.min.mjs");
+      pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs";
+      const doc = await pdfjs.getDocument({ data: await arquivo.arrayBuffer() }).promise;
+      for (let i = 1; i <= Math.min(doc.numPages, 30); i++) {
+        const pag = await (await doc.getPage(i)).getTextContent();
+        texto += pag.items.map(x => x.str + (x.hasEOL ? "\n" : " ")).join("") + "\n\n";
+      }
+    } else if (/\.(txt|md)$/i.test(arquivo.name)) {
+      texto = await arquivo.text();
+    } else {
+      info.textContent = "Esse tipo de arquivo eu não leio. Salve como PDF ou cole o texto.";
+      return;
+    }
+    texto = texto.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    if (!texto) { info.textContent = "Esse PDF parece ser só imagem, sem texto para ler. Cole o texto da brief no campo acima."; return; }
+    abBriefPDF = texto;
+    info.innerHTML = "✅ <b>" + esc(arquivo.name) + "</b> lido (" + plural(texto.split(/\s+/).length, "palavra", "palavras") + '). <button type="button" class="link" id="abPdfTirar">tirar</button>';
+    $("#abPdfTirar").addEventListener("click", () => { abBriefPDF = ""; $("#abPdf").value = ""; info.textContent = "ou arraste o arquivo para cá"; });
+  } catch (e) {
+    info.textContent = "Não consegui ler esse PDF. Cole o texto da brief no campo acima.";
+  }
+}
+
+/* monta o pedido para a IA */
+function pedidoAbordagem(ajuste) {
+  const p = cfgPerfil();
+  const tipo = TIPOS_ABORDAGEM.find(t => t[0] === abTipo);
+  const m = abMarcaId ? D.base.find(x => x.id === abMarcaId) : null;
+  const marcaNome = $("#abMarca").value.trim();
+  const sistema =
+    "Você escreve abordagens de prospecção para uma creator de UGC, em nome dela, no estilo dela.\n\n" +
+    "=== QUEM ELA É ===\n" +
+    [["Nome e assinatura", p.nome], ["Instagram", p.instagram], ["Portfólio", p.portfolio], ["Cidade", p.cidade], ["Diferenciais", p.diferenciais], ["Marcas com quem já trabalhou", p.marcas], ["Mais sobre ela", p.sobre]]
+      .filter(x => x[1]).map(x => x[0] + ": " + x[1]).join("\n") + "\n\n" +
+    (D.config.abordagem_estilo ? "=== O GUIA DE ESTILO DELA (siga à risca) ===\n" + D.config.abordagem_estilo + "\n\n" : "") +
+    "=== REGRAS QUE VALEM SEMPRE ===\n" +
+    "- Ela é creator de UGC, não influencer: vende conteúdo para a marca usar nos canais e anúncios da marca. Nunca fale de audiência, seguidores ou alcance dela.\n" +
+    "- Nunca invente nome de produto, coleção, campanha, número ou fato da marca que não esteja nos dados abaixo. Na dúvida, use a categoria do produto.\n" +
+    "- Nunca use travessão. Use vírgula ou ponto.\n" +
+    "- Soe como gente de verdade: específica, direta, sem frase pronta de propaganda e sem bajulação.\n" +
+    "- Escreva em " + $("#abIdioma").value + ".\n\n" +
+    "=== FORMATO DA RESPOSTA ===\n" +
+    (abTipo === "email" ? "ASSUNTO: (uma linha)\nMENSAGEM:\n(o texto)\n" : "MENSAGEM:\n(o texto)\n") +
+    "Não escreva nada antes nem depois disso.";
+  const brief = [$("#abBrief").value.trim(), abBriefPDF].filter(Boolean).join("\n\n").slice(0, 15000);
+  let usuario =
+    "Escreva: " + tipo[2] + "\n\n" +
+    "=== A MARCA ===\n" +
+    "Marca: " + (marcaNome || "(não informada)") + "\n" +
+    ($("#abProduto").value.trim() ? "Produto: " + $("#abProduto").value.trim() + "\n" : "") +
+    ($("#abLink").value.trim() ? "Link do produto: " + $("#abLink").value.trim() + "\n" : "") +
+    (m && m.nicho ? "Nicho: " + m.nicho + "\n" : "") +
+    (m && m.instagram ? "Instagram da marca: " + m.instagram + "\n" : "") +
+    (m && m.site ? "Site: " + m.site + "\n" : "") +
+    (m && m.obs ? "Observações dela sobre a marca: " + m.obs + "\n" : "") +
+    (brief ? "\n=== BRIEF / O QUE ELA VIU DA MARCA ===\n" + brief + "\n" : "") +
+    ($("#abExtra").value.trim() ? "\nPedido especial dela: " + $("#abExtra").value.trim() + "\n" : "");
+  if (ajuste && abResultado) usuario += "\n=== A VERSÃO ANTERIOR ===\n" + (abResultado.assunto ? "ASSUNTO: " + abResultado.assunto + "\n" : "") + abResultado.mensagem + "\n\nAgora: " + ajuste;
+  return [{ role: "system", content: sistema }, { role: "user", content: usuario }];
+}
+
+async function gerarAbordagem(ajuste) {
+  if (!D.config.openrouter_api_key) { $("#abIA").open = true; torrada("Falta a chave do OpenRouter, no quadro 🔑 IA aqui do lado.", true); return; }
+  if (!$("#abMarca").value.trim()) { torrada("Escolha ou escreva o nome da marca.", true); $("#abMarca").focus(); return; }
+  if (!cfgPerfil().nome) { $("#abDados").open = true; torrada("Preencha e salve os seus dados primeiro, no quadro 🙋‍♀️ Meus dados.", true); return; }
+  const botao = $("#abGerar");
+  botao.disabled = true; botao.textContent = "✨ Escrevendo...";
+  $("#abSaida").innerHTML = '<div class="bloco abordar__saida"><p class="mudo"><span class="rot__relogio">⏳</span> Escrevendo no seu estilo... leva uns 10 a 20 segundos.</p></div>';
+  let texto = null, erro = null;
+  try {
+    const r = await fetch(OPENROUTER + "/chat/completions", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + D.config.openrouter_api_key, "Content-Type": "application/json", "HTTP-Referer": "https://cimarinho.com", "X-Title": "Admin Ci Marinho" },
+      body: JSON.stringify({ model: D.config.abordagem_modelo || MODELOS_IA[0][0], messages: pedidoAbordagem(ajuste), temperature: 0.8, max_tokens: 900 })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401 || r.status === 403) erro = "O OpenRouter não aceitou a chave. Confira no quadro 🔑 IA.";
+    else if (r.status === 402) erro = "Os créditos do OpenRouter acabaram. Coloque mais em openrouter.ai/credits.";
+    else if (r.status === 429) erro = "Muitos pedidos seguidos. Espere um minutinho e tente de novo.";
+    else if (!r.ok) erro = "A IA não respondeu agora (" + ((j.error && j.error.message) || r.status) + "). Tente de novo.";
+    else texto = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+  } catch (e) { erro = "Sem conexão com a IA. Confira a sua internet."; }
+  botao.disabled = false;
+  desenharAbordar();
+  if (erro || !texto) { $("#abSaida").innerHTML = '<div class="faixa" style="margin-top:12px">⚠️ ' + esc(erro || "A IA voltou sem texto. Tente de novo.") + "</div>"; return; }
+  const limpo = semTravessao(texto).replace(/\*\*/g, "");
+  const a = limpo.match(/ASSUNTO:\s*(.+)/i);
+  const mm = limpo.match(/MENSAGEM:\s*([\s\S]+)/i);
+  abResultado = { assunto: a ? a[1].trim() : "", mensagem: (mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim() };
+  desenhaSaida();
+  atualizaResumoIA();
+  guardaHistorico();
+}
+
+function desenhaSaida() {
+  const s = $("#abSaida");
+  if (!s || !abResultado) return;
+  const m = abMarcaId ? D.base.find(x => x.id === abMarcaId) : null;
+  const palavras = abResultado.mensagem.split(/\s+/).filter(Boolean).length;
+  s.innerHTML = '<div class="bloco abordar__saida">' +
+    '<div class="bloco__cab"><h2>' + (TIPOS_ABORDAGEM.find(t => t[0] === abTipo) || [0, ""])[1] + " pronto</h2><span class=\"mudo pequeno\">" + plural(palavras, "palavra", "palavras") + "</span></div>" +
+    (abTipo === "email" ? '<div class="campo"><label>Assunto</label><input id="abAssunto" value="' + esc(abResultado.assunto) + '"></div>' : "") +
+    '<div class="campo" style="margin-top:8px"><label>Mensagem (dá para editar aqui)</label><textarea id="abTexto" class="entrada" style="height:auto;min-height:260px;padding:12px;line-height:1.6">' + esc(abResultado.mensagem) + "</textarea></div>" +
+    '<div class="rot__chips" style="margin-top:10px">' +
+      [["outra", "🔄 Outra versão"], ["curta", "✂️ Mais curta"], ["direta", "🔥 Mais direta"], ["calorosa", "🤍 Mais calorosa"]].map(x => '<button type="button" class="rot__chip" data-aj="' + x[0] + '">' + x[1] + "</button>").join("") + "</div>" +
+    '<div class="ferramentas" style="margin:10px 0 0">' +
+      '<button type="button" class="btn" id="abCopiar">📋 Copiar</button>' +
+      (abTipo === "email" || abTipo === "followup" ? '<button type="button" class="btn btn--linha" id="abGmail">✉️ Abrir no Gmail</button>' : "") +
+      (m && m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" id="abProspectei">📨 Prospectei esta marca</button>' : "") +
+    "</div></div>";
+  const atual = () => ({ assunto: $("#abAssunto") ? $("#abAssunto").value : "", mensagem: $("#abTexto").value });
+  $("#abTexto").addEventListener("input", () => { abResultado = atual(); });
+  if ($("#abAssunto")) $("#abAssunto").addEventListener("input", () => { abResultado = atual(); });
+  $(".rot__chips", s).addEventListener("click", (e) => {
+    const b = e.target.closest("[data-aj]");
+    if (!b) return;
+    abResultado = atual();
+    gerarAbordagem({ outra: "escreva uma versão diferente, com outro gancho e outra ideia de conteúdo.", curta: "deixe mais curta, com uns 30% menos palavras, sem perder o gancho.", direta: "deixe mais direta e ousada, com um gancho mais forte na primeira linha.", calorosa: "deixe mais calorosa e próxima, sem perder a objetividade." }[b.dataset.aj]);
+  });
+  $("#abCopiar").addEventListener("click", async (e) => {
+    const t = atual();
+    try { await navigator.clipboard.writeText((abTipo === "email" && t.assunto ? "Assunto: " + t.assunto + "\n\n" : "") + t.mensagem); e.target.textContent = "copiado ✓"; }
+    catch (x) { $("#abTexto").select(); e.target.textContent = "use Cmd + C"; }
+    setTimeout(() => { e.target.textContent = "📋 Copiar"; }, 2000);
+  });
+  if ($("#abGmail")) $("#abGmail").addEventListener("click", () => {
+    const t = atual();
+    const para = m && m.email ? m.email : "";
+    window.open("https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(para) + "&su=" + encodeURIComponent(t.assunto || "") + "&body=" + encodeURIComponent(t.mensagem), "_blank", "noopener");
+  });
+  if ($("#abProspectei")) $("#abProspectei").addEventListener("click", async (e) => {
+    const salvo = await salvarLinha("base_marcas", { situacao: "prospectada", ultimo_contato: isoLocal(new Date()) }, m.id);
+    if (!salvo) return;
+    troca(D.base, salvo); desenharBase(); registrarProspeccao([salvo]);
+    e.target.remove(); torrada("📨 " + m.nome + " marcada como prospectada hoje.");
+  });
+}
+
+/* as últimas mensagens ficam só neste navegador, para não perder uma boa versão */
+function guardaHistorico() {
+  try {
+    const h = JSON.parse(localStorage.getItem("admin-abordagens") || "[]");
+    h.unshift({ quando: new Date().toISOString(), tipo: abTipo, marca: $("#abMarca").value.trim(), assunto: abResultado.assunto, mensagem: abResultado.mensagem });
+    localStorage.setItem("admin-abordagens", JSON.stringify(h.slice(0, 20)));
+  } catch (e) {}
+}
+
+/* ============================================================
    10. MENU, GAVETA E SAIR
    ============================================================ */
-const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo" };
+const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", abordar: "✍️ Abordagens", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo" };
 const lateral = $("#lateral"), cortina = $("#cortina");
 const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classList.remove("aberta"); };
 function irPara(aba) {
@@ -3282,6 +3594,7 @@ seguro("Marcas", () => { montarBase(); desenharBase(); });
 seguro("Calendário", () => { montarCalendario(); desenharCalendario(); });
 seguro("Campanhas", () => { montarCampanhas(); desenharCampanhas(); });
 seguro("Prospectado × Fechado", () => { montarFunil(); desenharFunil(); });
+seguro("Abordagens", montarAbordar);
 seguro("Checklist", montarChecklist);
 seguro("Roteiros", montarRoteiros);
 
