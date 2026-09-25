@@ -488,6 +488,7 @@ a.btn { text-decoration: none; }
 .abordar { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
 .abordar__lado { display: flex; flex-direction: column; gap: 0; position: sticky; top: 12px; }
 .abordar__campos { display: flex; flex-direction: column; gap: 8px; }
+.abordar__campos ::placeholder { font-style: italic; opacity: .6; }
 .abordar__pdf { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: var(--radius); }
 .abordar__pdf.arrastando { border-color: var(--red); background: var(--suave); }
 .abordar__saida { margin-top: 12px; }

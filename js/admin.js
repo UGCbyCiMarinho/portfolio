@@ -3306,13 +3306,13 @@ function montarAbordar() {
       '<aside class="abordar__lado">' +
         '<details class="sanfona" id="abDados"' + (p.nome ? "" : " open") + '><summary><span class="emoji">🙋‍♀️</span><div class="sanfona__txt"><div class="sanfona__tit">Meus dados</div><div class="sanfona__sub">' + esc(p.nome ? p.nome + (p.instagram ? " · " + p.instagram : "") : "Preencha uma vez") + "</div></div><span class=\"chevron\">" + ic("baixo") + "</span></summary>" +
           '<div class="sanfona__corpo"><div class="abordar__campos">' +
-            campo("pNome", "Nome e assinatura", "Cintia (Ci Marinho) ✨", p.nome) +
-            campo("pInsta", "@ do Instagram", "@ccimarinho", p.instagram) +
-            campo("pPortfolio", "Portfólio", "https://cimarinho.com", p.portfolio) +
-            campo("pCidade", "Cidade", "Toronto, Canadá", p.cidade) +
-            campo("pDif", "Diferenciais", "Bilíngue, 15+ anos em finanças, entrego rápido...", p.diferenciais, true) +
-            campo("pMarcas", "Marcas com quem já trabalhei", "L'Oréal, COSRX, TheraBreath...", p.marcas, true) +
-            campo("pSobre", "Mais sobre mim (opcional)", "Maya, rotina, nichos que vivo de verdade...", p.sobre, true) +
+            campo("pNome", "Nome e assinatura *", "Escreva aqui. Ex.: Ci Marinho ✨", p.nome) +
+            campo("pInsta", "@ do Instagram", "Escreva aqui. Ex.: @seuperfil", p.instagram) +
+            campo("pPortfolio", "Portfólio", "Escreva aqui. Ex.: https://seusite.com", p.portfolio) +
+            campo("pCidade", "Cidade", "Escreva aqui. Ex.: Toronto, Canada", p.cidade) +
+            campo("pDif", "Diferenciais", "Escreva aqui o que só você é", p.diferenciais, true) +
+            campo("pMarcas", "Marcas com quem já trabalhei", "Escreva aqui as marcas", p.marcas, true) +
+            campo("pSobre", "Mais sobre mim (opcional)", "Escreva aqui, se quiser", p.sobre, true) +
           '</div><button type="button" class="btn btn--full" id="pSalvar" style="margin-top:10px">Salvar meus dados</button></div></details>' +
         '<details class="sanfona" id="abEstilo"' + (D.config.abordagem_estilo ? "" : " open") + '><summary><span class="emoji">🎨</span><div class="sanfona__txt"><div class="sanfona__tit">Meu estilo de abordagem</div><div class="sanfona__sub">' +
           (D.config.abordagem_estilo ? plural(String(D.config.abordagem_estilo).split(/\s+/).length, "palavra", "palavras") + " de regras e exemplos" : "Cole aqui o seu guia") + "</div></div><span class=\"chevron\">" + ic("baixo") + "</span></summary>" +
@@ -3343,6 +3343,7 @@ function montarAbordar() {
   $("#pSalvar").addEventListener("click", async () => {
     const perfil = { nome: $("#pNome").value.trim(), instagram: $("#pInsta").value.trim(), portfolio: $("#pPortfolio").value.trim(), cidade: $("#pCidade").value.trim(),
       diferenciais: $("#pDif").value.trim(), marcas: $("#pMarcas").value.trim(), sobre: $("#pSobre").value.trim() };
+    if (!perfil.nome) { torrada("Falta o seu nome no campo \"Nome e assinatura\". Digite e salve de novo.", true); $("#pNome").focus(); return; }
     if (await salvaConfig("abordagem_perfil", JSON.stringify(perfil))) { $("#abDados").open = false; $("#abDados .sanfona__sub").textContent = perfil.nome + (perfil.instagram ? " · " + perfil.instagram : ""); torrada("Meus dados salvos ✓"); }
   });
   $("#abEstiloSalvar").addEventListener("click", async () => {
@@ -3599,7 +3600,7 @@ function pedidoAbordagem(ajuste) {
 async function gerarAbordagem(ajuste) {
   if (!D.config.openrouter_api_key) { $("#abIA").open = true; torrada("Falta a chave do OpenRouter, no quadro 🔑 IA aqui do lado.", true); return; }
   if (!$("#abMarca").value.trim()) { torrada("Escolha ou escreva o nome da marca.", true); $("#abMarca").focus(); return; }
-  if (!cfgPerfil().nome) { $("#abDados").open = true; torrada("Preencha e salve os seus dados primeiro, no quadro 🙋‍♀️ Meus dados.", true); return; }
+  if (!cfgPerfil().nome) { $("#abDados").open = true; $("#pNome").focus(); torrada("Falta o seu nome no quadro 🙋‍♀️ Meus dados (campo \"Nome e assinatura\"). Digite e clique em Salvar meus dados.", true); return; }
   const botao = $("#abGerar");
   botao.disabled = true; botao.textContent = "✨ Escrevendo...";
   $("#abSaida").innerHTML = '<div class="bloco abordar__saida"><p class="mudo"><span class="rot__relogio">⏳</span> Escrevendo no seu estilo... leva uns 10 a 20 segundos.</p></div>';
