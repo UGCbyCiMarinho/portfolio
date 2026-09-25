@@ -3559,46 +3559,23 @@ async function falaDoVideo(url) {
   return { texto: textoDe(res.corpo).texto };
 }
 
-/* monta o pedido para a IA */
-function pedidoAbordagem(ajuste) {
+/* ----- o que a IA sabe: ela, o guia e a marca ----- */
+function contextoDela() {
   const p = cfgPerfil();
-  const tipo = TIPOS_ABORDAGEM.find(t => t[0] === abTipo);
-  const m = abMarcaId ? D.base.find(x => x.id === abMarcaId) : null;
-  const marcaNome = $("#abMarca").value.trim();
-  const sistema =
-    "Você escreve abordagens de prospecção para uma creator de UGC, em nome dela, no estilo dela.\n\n" +
-    "=== QUEM ELA É ===\n" +
+  return "=== QUEM ELA É ===\n" +
     [["Nome e assinatura", p.nome], ["Instagram", p.instagram], ["Portfólio", p.portfolio], ["Cidade", p.cidade], ["Diferenciais", p.diferenciais], ["Marcas com quem já trabalhou", p.marcas], ["Mais sobre ela", p.sobre]]
       .filter(x => x[1]).map(x => x[0] + ": " + x[1]).join("\n") + "\n\n" +
-    (D.config.abordagem_estilo ? "=== O GUIA DE ESTILO DELA (siga à risca) ===\n" + D.config.abordagem_estilo + "\n\n" : "") +
+    (D.config.abordagem_estilo ? "=== O GUIA DE ESTILO DELA ===\n" + D.config.abordagem_estilo + "\n\n" : "") +
     "=== REGRAS QUE VALEM SEMPRE ===\n" +
     "- Ela é creator de UGC, não influencer: vende conteúdo para a marca usar nos canais e anúncios da marca. Nunca fale de audiência, seguidores ou alcance dela.\n" +
-    "- Nunca invente nome de produto, coleção, campanha, número ou fato da marca que não esteja nos dados abaixo. Na dúvida, use a categoria do produto.\n" +
-    "- Nunca use travessão. Use vírgula ou ponto.\n" +
-    "- Soe como gente de verdade: específica, direta, sem frase pronta de propaganda e sem bajulação.\n" +
-    "- Escreva em " + $("#abIdioma").value + ".\n\n" +
-    "=== ANTES DE RESPONDER, CONFIRA (e reescreva se falhar em qualquer item) ===\n" +
-    "1. A primeira frase fala do cliente da marca ou de algo específico do produto, e não da Cintia.\n" +
-    "2. Não abre com \"I read\", \"I noticed\", \"I love\", \"I'm a UGC creator\" nem \"I came across\" sozinho.\n" +
-    "3. Tem uma ideia de vídeo com nome e o gancho literal entre aspas (menos na DM e no follow-up).\n" +
-    "4. Usa pelo menos um fato REAL da lista \"Quem ela é\" ou do guia, e nenhum fato inventado.\n" +
-    "5. Não repete o óbvio (formatos, proporções, prazos, \"I'll deliver\").\n" +
-    "6. Termina com uma pergunta de sim ou não e, no e-mail e na plataforma, com o convite para ver o portfólio com o link.\n" +
-    "7. Está no tamanho pedido, sem travessão, sem palavras vagas (authentic, natural, creative, relatable).\n" +
-    "8. Tem a mesma qualidade e especificidade dos EXEMPLOS REAIS do guia.\n" +
-    "9. Está 100% no idioma pedido: nenhuma palavra das instruções (como \"gancho\", \"take\", \"A.C.R.\") aparece no texto. O gancho vai só entre aspas, sem rótulo.\n" +
-    "10. Os detalhes não se contradizem (bebida, lugar, horário, ordem dos takes).\n" +
-    "11. Não repete para a marca as restrições da brief (ex.: \"no gym\"): simplesmente respeita.\n" +
-    "12. Se o produto tem um diferencial claro no nome ou na brief (sabor, textura, formato), ele aparece como herói da ideia. Nunca descreva o produto de um jeito negativo.\n" +
-    "13. Quem ela é cabe em UM parágrafo curto. Conte as palavras: respeite o limite do tipo de mensagem.\n\n" +
-    "=== FORMATO DA RESPOSTA ===\n" +
-    (abTipo === "email" ? "ASSUNTO: (uma linha)\nMENSAGEM:\n(o texto)\n" : "MENSAGEM:\n(o texto)\n") +
-    "Não escreva nada antes nem depois disso.";
+    "- Nunca invente nome de produto, coleção, campanha, número ou fato que não esteja nos dados. Fatos sobre ela: só os da lista acima.\n" +
+    "- Nunca use travessão. Use vírgula ou ponto.\n";
+}
+function dadosDaMarca() {
+  const m = abMarcaId ? D.base.find(x => x.id === abMarcaId) : null;
   const brief = [$("#abBrief").value.trim(), abBriefPDF].filter(Boolean).join("\n\n").slice(0, 15000);
-  let usuario =
-    "Escreva: " + tipo[2] + "\n\n" +
-    "=== A MARCA ===\n" +
-    "Marca: " + (marcaNome || "(não informada)") + "\n" +
+  return "=== A MARCA ===\n" +
+    "Marca: " + ($("#abMarca").value.trim() || "(não informada)") + "\n" +
     ($("#abProduto").value.trim() ? "Produto: " + $("#abProduto").value.trim() + "\n" : "") +
     ($("#abLink").value.trim() ? "Link do produto: " + $("#abLink").value.trim() + "\n" : "") +
     (m && m.nicho ? "Nicho: " + m.nicho + "\n" : "") +
@@ -3607,46 +3584,123 @@ function pedidoAbordagem(ajuste) {
     (m && m.obs ? "Observações dela sobre a marca: " + m.obs + "\n" : "") +
     (brief ? "\n=== BRIEF / O QUE ELA VIU DA MARCA ===\n" + brief + "\n" : "") +
     ($("#abExtra").value.trim() ? "\nPedido especial dela: " + $("#abExtra").value.trim() + "\n" : "");
-  if (ajuste && abResultado) usuario += "\n=== A VERSÃO ANTERIOR ===\n" + (abResultado.assunto ? "ASSUNTO: " + abResultado.assunto + "\n" : "") + abResultado.mensagem + "\n\nAgora: " + ajuste;
-  return [{ role: "system", content: sistema }, { role: "user", content: usuario }];
 }
 
-async function gerarAbordagem(ajuste) {
-  if (!D.config.openrouter_api_key) { $("#abIA").open = true; torrada("Falta a chave do OpenRouter, no quadro 🔑 IA aqui do lado.", true); return; }
-  if (!$("#abMarca").value.trim()) { torrada("Escolha ou escreva o nome da marca.", true); $("#abMarca").focus(); return; }
-  if (!cfgPerfil().nome) { $("#abDados").open = true; $("#pNome").focus(); torrada("Falta o seu nome no quadro 🙋‍♀️ Meus dados (campo \"Nome e assinatura\"). Digite e clique em Salvar meus dados.", true); return; }
-  const botao = $("#abGerar");
-  botao.disabled = true; botao.textContent = "✨ Escrevendo...";
-  $("#abSaida").innerHTML = '<div class="bloco abordar__saida"><p class="mudo"><span class="rot__relogio">⏳</span> Escrevendo no seu estilo... leva uns 10 a 20 segundos.</p></div>';
-  let texto = null, erro = null;
+/* ----- chamada à IA ----- */
+async function chamarIA(mensagens, esforco, limite) {
   try {
     const r = await fetch(OPENROUTER + "/chat/completions", {
       method: "POST",
       headers: { Authorization: "Bearer " + D.config.openrouter_api_key, "Content-Type": "application/json", "HTTP-Referer": "https://cimarinho.com", "X-Title": "Admin Ci Marinho" },
-      body: JSON.stringify({ model: D.config.abordagem_modelo || MODELOS_IA[0][0], messages: pedidoAbordagem(ajuste), temperature: 0.7, max_tokens: 5000, reasoning: { effort: "low" } })
+      body: JSON.stringify({ model: D.config.abordagem_modelo || MODELOS_IA[0][0], messages: mensagens, temperature: 0.8, max_tokens: limite || 6000, reasoning: { effort: esforco || "low" } })
     });
     const j = await r.json().catch(() => ({}));
-    if (r.status === 401 || r.status === 403) erro = "O OpenRouter não aceitou a chave. Confira no quadro 🔑 IA.";
-    else if (r.status === 402) erro = "Os créditos do OpenRouter acabaram. Coloque mais em openrouter.ai/credits.";
-    else if (r.status === 429) erro = "Muitos pedidos seguidos. Espere um minutinho e tente de novo.";
-    else if (!r.ok) erro = "A IA não respondeu agora (" + ((j.error && j.error.message) || r.status) + "). Tente de novo.";
-    else {
-      const escolha = (j.choices && j.choices[0]) || {};
-      const c = escolha.message && escolha.message.content;
-      texto = Array.isArray(c) ? c.map(x => x && (x.text || "")).join("") : c;
-      if (!texto && escolha.finish_reason === "length") erro = "A IA pensou demais e não sobrou espaço para escrever. Tente de novo, ou troque para o Sonnet 5 no quadro 🔑.";
-      else if (!texto) {
-        /* detalhe para diagnóstico (nunca inclui a chave) */
-        const det = { modelo: j.model, fim: escolha.finish_reason, erro: (escolha.error && escolha.error.message) || (j.error && j.error.message), provedor: j.provider,
-          tem_raciocinio: !!(escolha.message && escolha.message.reasoning) };
-        erro = "A IA voltou sem texto. Detalhe para o Claude: " + JSON.stringify(det);
-      }
-    }
-  } catch (e) { erro = "Sem conexão com a IA. Confira a sua internet."; }
+    if (r.status === 401 || r.status === 403) return { erro: "O OpenRouter não aceitou a chave. Confira no quadro 🔑 IA." };
+    if (r.status === 402) return { erro: "Os créditos do OpenRouter acabaram. Coloque mais em openrouter.ai/credits." };
+    if (r.status === 429) return { erro: "Muitos pedidos seguidos. Espere um minutinho e tente de novo." };
+    if (!r.ok) return { erro: "A IA não respondeu agora (" + ((j.error && j.error.message) || r.status) + "). Tente de novo." };
+    const escolha = (j.choices && j.choices[0]) || {};
+    const c = escolha.message && escolha.message.content;
+    const texto = Array.isArray(c) ? c.map(x => x && (x.text || "")).join("") : c;
+    if (texto) return { texto };
+    if (escolha.finish_reason === "length") return { erro: "A IA pensou demais e não sobrou espaço para escrever. Tente de novo." };
+    return { erro: "A IA voltou sem texto. Detalhe para o Claude: " + JSON.stringify({ modelo: j.model, fim: escolha.finish_reason, erro: (escolha.error && escolha.error.message) || (j.error && j.error.message), provedor: j.provider }) };
+  } catch (e) { return { erro: "Sem conexão com a IA. Confira a sua internet." }; }
+}
+function checaAntes() {
+  if (!D.config.openrouter_api_key) { $("#abIA").open = true; torrada("Falta a chave do OpenRouter, no quadro 🔑 IA aqui do lado.", true); return false; }
+  if (!$("#abMarca").value.trim()) { torrada("Escolha ou escreva o nome da marca.", true); $("#abMarca").focus(); return false; }
+  if (!cfgPerfil().nome) { $("#abDados").open = true; $("#pNome").focus(); torrada("Falta o seu nome no quadro 🙋‍♀️ Meus dados (campo \"Nome e assinatura\"). Digite e clique em Salvar meus dados.", true); return false; }
+  return true;
+}
+const precisaIdeia = () => abTipo === "email" || abTipo === "plataforma";
+
+/* ----- botão Gerar: e-mail e plataforma passam pela estrategista; DM e follow-up vão direto ----- */
+async function gerarAbordagem(ajuste) {
+  if (!checaAntes()) return;
+  if (ajuste || !precisaIdeia()) return escreverAbordagem(ajuste);
+  return pensarIdeias();
+}
+
+/* PASSO 1: a estrategista pensa antes de escrever e traz 3 ideias */
+let abIdeias = null, abIdeia = null, abEstrategia = null;
+async function pensarIdeias() {
+  const botao = $("#abGerar");
+  botao.disabled = true; botao.textContent = "🧠 Pensando nas ideias...";
+  abResultado = null; abIdeia = null;
+  $("#abSaida").innerHTML = '<div class="bloco abordar__saida"><p class="mudo"><span class="rot__relogio">⏳</span> Estudando a brief e o produto, e pensando em 3 ideias de vídeo... leva uns 30 a 60 segundos.</p></div>';
+  const sistema = "Você é uma estrategista criativa de UGC que ajuda uma creator a ganhar trabalhos. Antes de qualquer texto, você pensa como a MARCA: o que faria um gerente de marketing parar tudo e querer ver esse vídeo.\n\n" + contextoDela();
+  const pedido = dadosDaMarca() + "\n\n" +
+    "Tarefa (" + (abTipo === "plataforma" ? "candidatura para uma vaga de UGC numa plataforma" : "e-mail frio para a marca") + "):\n" +
+    "1. Descubra o HERÓI do produto: o diferencial mais vendável que aparece no nome, no link ou na brief (sabor, textura, formato, resultado, praticidade...).\n" +
+    "2. Descubra a OBJEÇÃO ou o DESEJO principal do cliente que esse herói resolve.\n" +
+    "3. Crie 3 ideias de vídeo BEM diferentes entre si, fugindo do óbvio da brief, que respeitem tudo o que a brief exige ou proíbe, e que só ela poderia fazer por causa de fatos REAIS da vida dela. Cada ideia precisa fazer a marca ENXERGAR o vídeo.\n\n" +
+    "Responda SOMENTE com um JSON válido, sem nada antes ou depois, neste formato (textos em português do Brasil, menos o gancho, que vai no idioma da mensagem: " + $("#abIdioma").value + "):\n" +
+    '{"heroi":"...","objecao_ou_desejo":"...","ideias":[{"nome":"nome curto e marcante","gancho":"a frase exata dos primeiros 3 segundos","cena":"2 ou 3 frases descrevendo o vídeo do começo ao fim, com o momento em que o produto brilha","fato_dela":"o fato real dela que torna a ideia crível","por_que_vende":"1 frase, pensando como a marca"}]}';
+  const r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "medium", 9000);
   botao.disabled = false;
   desenharAbordar();
-  if (erro || !texto) { $("#abSaida").innerHTML = '<div class="faixa" style="margin-top:12px">⚠️ ' + esc(erro || "A IA voltou sem texto. Tente de novo.") + "</div>"; return; }
-  const limpo = semTravessao(texto).replace(/\*\*/g, "");
+  if (r.erro) { $("#abSaida").innerHTML = '<div class="faixa" style="margin-top:12px">⚠️ ' + esc(r.erro) + "</div>"; return; }
+  let dados = null;
+  try { dados = JSON.parse(String(r.texto).replace(/^[\s\S]*?(\{)/, "$1").replace(/\}[^}]*$/, "}")); } catch (e) {}
+  if (!dados || !Array.isArray(dados.ideias) || !dados.ideias.length) { $("#abSaida").innerHTML = '<div class="faixa" style="margin-top:12px">⚠️ A IA não trouxe as ideias no formato certo. Clique em Gerar de novo.</div>'; return; }
+  abEstrategia = { heroi: semTravessao(dados.heroi || ""), objecao: semTravessao(dados.objecao_ou_desejo || "") };
+  abIdeias = dados.ideias.slice(0, 3).map(i => Object.fromEntries(Object.entries(i).map(([k, v]) => [k, semTravessao(v)])));
+  desenhaIdeias();
+  atualizaResumoIA();
+}
+function desenhaIdeias() {
+  $("#abSaida").innerHTML = '<div class="bloco abordar__saida">' +
+    '<div class="bloco__cab"><h2>🧠 Escolha a ideia</h2><span class="espaco"></span><button type="button" class="btn btn--linha" id="abOutrasIdeias">🔄 Outras 3 ideias</button></div>' +
+    '<p class="pequeno"><b>Herói do produto:</b> ' + esc(abEstrategia.heroi) + "<br><b>O que o cliente sente:</b> " + esc(abEstrategia.objecao) + "</p>" +
+    '<div class="abordar__ideias">' + abIdeias.map((i, n) =>
+      '<div class="abordar__ideia"><div class="abordar__ideia-nome">' + esc(i.nome) + "</div>" +
+      '<p class="ficha__gancho" style="font-size:13px!important;margin:6px 0">"' + esc(String(i.gancho).replace(/^"|"$/g, "")) + '"</p>' +
+      '<p class="pequeno">' + esc(i.cena) + "</p>" +
+      '<p class="mudo pequeno" style="margin-top:6px">✨ ' + esc(i.fato_dela) + "</p>" +
+      '<p class="mudo pequeno">💰 ' + esc(i.por_que_vende) + "</p>" +
+      '<button type="button" class="btn btn--full" data-ideia="' + n + '" style="margin-top:10px">✍️ Escrever com esta ideia</button></div>').join("") + "</div>" +
+    '<p class="mudo pequeno" style="margin-top:8px">Dica: se quiser ajustar uma ideia, escreva no "Pedido especial" (ex.: "use a ideia 2, mas no café da manhã") e clique em Escrever.</p></div>';
+  $("#abOutrasIdeias").addEventListener("click", pensarIdeias);
+  $$("[data-ideia]").forEach(b => b.addEventListener("click", () => { abIdeia = abIdeias[Number(b.dataset.ideia)]; escreverAbordagem(); }));
+}
+
+/* PASSO 2: a redatora escreve uma história contínua a partir da ideia escolhida */
+function instrucaoRedatora() {
+  const portfolio = cfgPerfil().portfolio || "";
+  if (abTipo === "dm") return (TIPOS_ABORDAGEM.find(t => t[0] === "dm") || [])[2];
+  if (abTipo === "followup") return (TIPOS_ABORDAGEM.find(t => t[0] === "followup") || [])[2];
+  const limite = abTipo === "plataforma" ? "130" : "150";
+  return "Escreva " + (abTipo === "plataforma" ? "uma candidatura para a vaga, sem assunto e sem assinatura longa" : "um e-mail frio, com ASSUNTO curto que cite a ideia ou o produto (nunca genérico), saudação \"Hi [nome],\" se o nome for conhecido ou \"Hello [Marca] team,\"") +
+    ", como UMA HISTÓRIA CONTÍNUA, nunca em blocos soltos. Cada parágrafo puxa o próximo:\n" +
+    "Parágrafo 1 (1 ou 2 frases): uma verdade sobre o cliente da marca, ligada ao herói do produto, que dá vontade de ler a próxima frase. Nada de falar dela, nada de \"I read\" ou \"I love\".\n" +
+    "Parágrafo 2 (3 ou 4 frases): apresente a ideia pelo nome entre aspas e faça a marca ASSISTIR ao vídeo: o gancho exato entre aspas, o que acontece na tela, o momento em que o produto brilha. O fato real dela entra DENTRO da cena (é por isso que a cena é verdadeira), não num parágrafo separado.\n" +
+    "Parágrafo 3 (1 ou 2 frases): por que ela é a pessoa certa PARA ESSA ideia: um diferencial dela ligado à ideia e 2 ou 3 marcas relevantes com quem já trabalhou.\n" +
+    "Fecho (1 ou 2 frases): uma pergunta de sim ou não LIGADA À IDEIA (ex.: \"Want me to send the timed script for [nome da ideia]?\"), e depois uma linha curta convidando para ver os trabalhos dela: " + portfolio + "\n" +
+    (abTipo === "email" ? "Assinatura: \"Warmly,\" e o nome dela.\n" : "") +
+    "No máximo " + limite + " palavras no total. Nada de listar formatos, proporções, prazos ou entregáveis. Nada de repetir as restrições da brief: só respeite. Tudo no idioma pedido, sem nenhuma palavra das instruções.";
+}
+async function escreverAbordagem(ajuste) {
+  if (!checaAntes()) return;
+  const botao = $("#abGerar");
+  botao.disabled = true; botao.textContent = "✍️ Escrevendo...";
+  const guardaIdeias = abIdeias && !ajuste ? $("#abSaida").innerHTML : "";
+  $("#abSaida").innerHTML = '<div class="bloco abordar__saida"><p class="mudo"><span class="rot__relogio">⏳</span> Escrevendo no seu estilo... leva uns 15 a 30 segundos.</p></div>';
+  const sistema = "Você é a redatora de uma creator de UGC e escreve abordagens em nome dela, no estilo dela. Você escreve como gente, com ritmo, e cada frase dá vontade de ler a próxima. Pense como a marca que vai ler.\n\n" + contextoDela() +
+    "- Escreva em " + $("#abIdioma").value + ".\n\n" +
+    "=== ANTES DE RESPONDER, RELEIA COMO A MARCA E REESCREVA SE PRECISAR ===\n" +
+    "1. A primeira frase me faz querer ler a segunda?\n2. Eu consigo enxergar o vídeo?\n3. Os parágrafos se conectam como uma história, sem frase solta?\n" +
+    "4. O fato dela está dentro da ideia, e não num parágrafo de currículo?\n5. O fecho continua a ideia?\n6. Tem algum detalhe que se contradiz, alguma palavra em português, travessão, número inventado ou palavra vaga (authentic, natural, creative, relatable)?\n7. Está no tamanho pedido?\n\n" +
+    "=== FORMATO DA RESPOSTA ===\n" + (abTipo === "email" ? "ASSUNTO: (uma linha)\nMENSAGEM:\n(o texto)\n" : "MENSAGEM:\n(o texto)\n") + "Não escreva nada antes nem depois disso.";
+  let pedido = "Escreva: " + instrucaoRedatora() + "\n\n" + dadosDaMarca();
+  if (abIdeia && abEstrategia) pedido += "\n=== A ESTRATÉGIA ESCOLHIDA POR ELA ===\nHerói do produto: " + abEstrategia.heroi + "\nO que o cliente sente: " + abEstrategia.objecao +
+    "\nIdeia: " + abIdeia.nome + "\nGancho: " + abIdeia.gancho + "\nCena: " + abIdeia.cena + "\nFato dela: " + abIdeia.fato_dela + "\nPor que vende: " + abIdeia.por_que_vende + "\n";
+  if (ajuste && abResultado) pedido += "\n=== A VERSÃO ANTERIOR ===\n" + (abResultado.assunto ? "ASSUNTO: " + abResultado.assunto + "\n" : "") + abResultado.mensagem + "\n\nAgora: " + ajuste;
+  const r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "low", 6000);
+  botao.disabled = false;
+  desenharAbordar();
+  if (r.erro) { $("#abSaida").innerHTML = (guardaIdeias || "") + '<div class="faixa" style="margin-top:12px">⚠️ ' + esc(r.erro) + "</div>"; return; }
+  const limpo = semTravessao(r.texto).replace(/\*\*/g, "");
   const a = limpo.match(/ASSUNTO:\s*(.+)/i);
   const mm = limpo.match(/MENSAGEM:\s*([\s\S]+)/i);
   abResultado = { assunto: a ? a[1].trim() : "", mensagem: (mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim() };
@@ -3668,6 +3722,7 @@ function desenhaSaida() {
       [["outra", "🔄 Outra versão"], ["curta", "✂️ Mais curta"], ["direta", "🔥 Mais direta"], ["calorosa", "🤍 Mais calorosa"]].map(x => '<button type="button" class="rot__chip" data-aj="' + x[0] + '">' + x[1] + "</button>").join("") + "</div>" +
     '<div class="ferramentas" style="margin:10px 0 0">' +
       '<button type="button" class="btn" id="abCopiar">📋 Copiar</button>' +
+      (abIdeias && precisaIdeia() ? '<button type="button" class="btn btn--linha" id="abVoltarIdeias">⬅️ Voltar às ideias</button>' : "") +
       (abTipo === "email" || abTipo === "followup" ? '<button type="button" class="btn btn--linha" id="abGmail">✉️ Abrir no Gmail</button>' : "") +
       (m && m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" id="abProspectei">📨 Prospectei esta marca</button>' : "") +
     "</div></div>";
@@ -3680,6 +3735,7 @@ function desenhaSaida() {
     abResultado = atual();
     gerarAbordagem({ outra: "escreva uma versão diferente, com outro gancho e outra ideia de conteúdo.", curta: "deixe mais curta, com uns 30% menos palavras, sem perder o gancho.", direta: "deixe mais direta e ousada, com um gancho mais forte na primeira linha.", calorosa: "deixe mais calorosa e próxima, sem perder a objetividade." }[b.dataset.aj]);
   });
+  if ($("#abVoltarIdeias")) $("#abVoltarIdeias").addEventListener("click", () => { abResultado = null; desenhaIdeias(); });
   $("#abCopiar").addEventListener("click", async (e) => {
     const t = atual();
     try { await navigator.clipboard.writeText((abTipo === "email" && t.assunto ? "Assunto: " + t.assunto + "\n\n" : "") + t.mensagem); e.target.textContent = "copiado ✓"; }
