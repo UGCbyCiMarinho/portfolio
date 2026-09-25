@@ -3585,7 +3585,12 @@ function pedidoAbordagem(ajuste) {
     "5. Não repete o óbvio (formatos, proporções, prazos, \"I'll deliver\").\n" +
     "6. Termina com uma pergunta de sim ou não e, no e-mail e na plataforma, com o convite para ver o portfólio com o link.\n" +
     "7. Está no tamanho pedido, sem travessão, sem palavras vagas (authentic, natural, creative, relatable).\n" +
-    "8. Tem a mesma qualidade e especificidade dos EXEMPLOS REAIS do guia.\n\n" +
+    "8. Tem a mesma qualidade e especificidade dos EXEMPLOS REAIS do guia.\n" +
+    "9. Está 100% no idioma pedido: nenhuma palavra das instruções (como \"gancho\", \"take\", \"A.C.R.\") aparece no texto. O gancho vai só entre aspas, sem rótulo.\n" +
+    "10. Os detalhes não se contradizem (bebida, lugar, horário, ordem dos takes).\n" +
+    "11. Não repete para a marca as restrições da brief (ex.: \"no gym\"): simplesmente respeita.\n" +
+    "12. Se o produto tem um diferencial claro no nome ou na brief (sabor, textura, formato), ele aparece como herói da ideia. Nunca descreva o produto de um jeito negativo.\n" +
+    "13. Quem ela é cabe em UM parágrafo curto. Conte as palavras: respeite o limite do tipo de mensagem.\n\n" +
     "=== FORMATO DA RESPOSTA ===\n" +
     (abTipo === "email" ? "ASSUNTO: (uma linha)\nMENSAGEM:\n(o texto)\n" : "MENSAGEM:\n(o texto)\n") +
     "Não escreva nada antes nem depois disso.";
