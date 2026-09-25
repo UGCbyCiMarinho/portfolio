@@ -3294,7 +3294,8 @@ function montarAbordar() {
               '<button type="button" class="btn btn--linha" id="abPuxar">📥 Puxar o post</button></div>' +
               '<p class="mudo pequeno" style="margin-top:4px">A IA fala sobre esse post na abordagem, como na sua DM da Royal. Custa 1 crédito da Supadata.</p><div id="abPostInfo"></div></div>' +
             '<div class="campo"><label for="abIdioma">Idioma</label><select id="abIdioma"><option value="inglês">Inglês</option><option value="português do Brasil">Português</option></select></div>' +
-            '<div class="campo"><label for="abExtra">Pedido especial (opcional)</label><input id="abExtra" placeholder="Ex.: citar que tenho pele oleosa" autocomplete="off"></div>' +
+            '<div class="campo"><label for="abUso">Para que é o vídeo</label><select id="abUso"><option value="">Não sei (a IA deduz pela brief)</option><option value="ads">Anúncio pago (ads)</option><option value="organico">Orgânico (perfil da marca)</option></select></div>' +
+            '<div class="campo inteiro"><label for="abExtra">Pedido especial (opcional)</label><input id="abExtra" placeholder="Um recado só para esta mensagem. Ex.: o herói é o sabor limão" autocomplete="off"></div>' +
           "</div>" +
           '<div class="abordar__botoes"><button type="button" class="btn btn--linha" id="abPesquisar" title="A IA pesquisa a marca na internet e traz fatos com fonte">🔎 Pesquisar a marca</button>' +
           '<button type="button" class="btn" id="abGerar">✨ Gerar abordagem</button></div>' +
@@ -3583,7 +3584,8 @@ function dadosDaMarca() {
     (m && m.site ? "Site: " + m.site + "\n" : "") +
     (m && m.obs ? "Observações dela sobre a marca: " + m.obs + "\n" : "") +
     (brief ? "\n=== BRIEF / O QUE ELA VIU DA MARCA ===\n" + brief + "\n" : "") +
-    ($("#abExtra").value.trim() ? "\nPedido especial dela: " + $("#abExtra").value.trim() + "\n" : "");
+    ($("#abExtra").value.trim() ? "\nPedido especial dela: " + $("#abExtra").value.trim() + "\n" : "") +
+    "\nPara que é o vídeo: " + ({ ads: "anúncio pago (ads), para quem ainda não conhece a marca", organico: "orgânico, para o perfil da marca, que fala com quem já segue" }[$("#abUso").value] || "ela não sabe: deduza pela brief; na dúvida, trate como ads, que é o uso mais comum de UGC") + "\n";
 }
 
 /* ----- chamada à IA ----- */
@@ -3634,9 +3636,12 @@ async function pensarIdeias() {
     "Tarefa (" + (abTipo === "plataforma" ? "candidatura para uma vaga de UGC numa plataforma" : "e-mail frio para a marca") + "):\n" +
     "1. Descubra o HERÓI do produto: o diferencial mais vendável que aparece no nome, no link ou na brief (sabor, textura, formato, resultado, praticidade...).\n" +
     "2. Descubra a OBJEÇÃO ou o DESEJO principal do cliente que esse herói resolve.\n" +
-    "3. Crie 3 ideias de vídeo BEM diferentes entre si, fugindo do óbvio da brief, que respeitem tudo o que a brief exige ou proíbe, e que só ela poderia fazer por causa de fatos REAIS da vida dela. Cada ideia precisa fazer a marca ENXERGAR o vídeo.\n\n" +
+    "3. Decida o USO do vídeo (ads ou orgânico), pelo que ela informou ou pela brief.\n" +
+    "4. Crie 3 ideias de vídeo BEM diferentes entre si, fugindo do óbvio da brief, que respeitem tudo o que a brief exige ou proíbe, e que só ela poderia fazer por causa de fatos REAIS da vida dela. Cada ideia precisa fazer a marca ENXERGAR o vídeo.\n" +
+    "5. O GANCHO é o que mais vende a ideia. Ele tem 3 camadas que acontecem juntas nos primeiros 3 segundos: VISUAL (o que aparece: o produto ou o problema já no primeiro segundo), FALADO (a frase exata) e TEXTO NA TELA (para quem assiste sem som). Regra: em 3 segundos quem assiste precisa saber DO QUE é o vídeo (a categoria do produto ou a dor) e sentir tensão ou curiosidade. Proibido gancho genérico de rotina (\"here's my morning routine\", \"a day in my life\") que não diz o assunto. Para ads: problema ou produto já no primeiro segundo, direto na dor ou no desejo. Para orgânico: pode ser mais lifestyle, mas o assunto continua claro. O gancho falado fala com quem assiste ou usa um fato REAL dela; nunca invente uma experiência que ela não contou (ex.: \"eu já desisti três vezes\").\n" +
+    "6. Se o uso for ads, crie também um SEGUNDO gancho (falado e texto na tela) com outro ângulo, para a marca testar A/B.\n\n" +
     "Responda SOMENTE com um JSON válido, sem nada antes ou depois, neste formato (textos em português do Brasil, menos o gancho, que vai no idioma da mensagem: " + $("#abIdioma").value + "):\n" +
-    '{"heroi":"...","objecao_ou_desejo":"...","ideias":[{"nome":"nome curto e marcante","gancho":"a frase exata dos primeiros 3 segundos","cena":"2 ou 3 frases descrevendo o vídeo do começo ao fim, com o momento em que o produto brilha","fato_dela":"o fato real dela que torna a ideia crível","por_que_vende":"1 frase, pensando como a marca"}]}';
+    '{"heroi":"...","objecao_ou_desejo":"...","uso":"ads ou organico","ideias":[{"nome":"nome curto e marcante","gancho_visual":"o que aparece no primeiro segundo","gancho":"a frase falada exata dos primeiros 3 segundos","gancho_texto":"o texto na tela","gancho_b":"segundo gancho falado para teste A/B (só se for ads, senão vazio)","gancho_b_texto":"texto na tela do segundo gancho (ou vazio)","cena":"2 ou 3 frases descrevendo o resto do vídeo, com o momento em que o produto brilha","fato_dela":"o fato real dela que torna a ideia crível","por_que_vende":"1 frase, pensando como a marca"}]}';
   const r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "medium", 9000);
   botao.disabled = false;
   desenharAbordar();
@@ -3644,7 +3649,7 @@ async function pensarIdeias() {
   let dados = null;
   try { dados = JSON.parse(String(r.texto).replace(/^[\s\S]*?(\{)/, "$1").replace(/\}[^}]*$/, "}")); } catch (e) {}
   if (!dados || !Array.isArray(dados.ideias) || !dados.ideias.length) { $("#abSaida").innerHTML = '<div class="faixa" style="margin-top:12px">⚠️ A IA não trouxe as ideias no formato certo. Clique em Gerar de novo.</div>'; return; }
-  abEstrategia = { heroi: semTravessao(dados.heroi || ""), objecao: semTravessao(dados.objecao_ou_desejo || "") };
+  abEstrategia = { heroi: semTravessao(dados.heroi || ""), objecao: semTravessao(dados.objecao_ou_desejo || ""), uso: /org/i.test(dados.uso || "") ? "organico" : "ads" };
   abIdeias = dados.ideias.slice(0, 3).map(i => Object.fromEntries(Object.entries(i).map(([k, v]) => [k, semTravessao(v)])));
   desenhaIdeias();
   atualizaResumoIA();
@@ -3652,10 +3657,14 @@ async function pensarIdeias() {
 function desenhaIdeias() {
   $("#abSaida").innerHTML = '<div class="bloco abordar__saida">' +
     '<div class="bloco__cab"><h2>🧠 Escolha a ideia</h2><span class="espaco"></span><button type="button" class="btn btn--linha" id="abOutrasIdeias">🔄 Outras 3 ideias</button></div>' +
-    '<p class="pequeno"><b>Herói do produto:</b> ' + esc(abEstrategia.heroi) + "<br><b>O que o cliente sente:</b> " + esc(abEstrategia.objecao) + "</p>" +
+    '<p class="pequeno"><b>Herói do produto:</b> ' + esc(abEstrategia.heroi) + "<br><b>O que o cliente sente:</b> " + esc(abEstrategia.objecao) +
+      "<br><b>Uso do vídeo:</b> " + (abEstrategia.uso === "organico" ? "orgânico (perfil da marca)" : "anúncio pago (ads)") + "</p>" +
     '<div class="abordar__ideias">' + abIdeias.map((i, n) =>
       '<div class="abordar__ideia"><div class="abordar__ideia-nome">' + esc(i.nome) + "</div>" +
-      '<p class="ficha__gancho" style="font-size:13px!important;margin:6px 0">"' + esc(String(i.gancho).replace(/^"|"$/g, "")) + '"</p>' +
+      '<div class="abordar__gancho"><div><b>👀 Visual:</b> ' + esc(i.gancho_visual || "") + "</div>" +
+        '<div><b>🗣️ Fala:</b> "' + esc(String(i.gancho || "").replace(/^"|"$/g, "")) + '"</div>' +
+        '<div><b>🔤 Texto na tela:</b> ' + esc(i.gancho_texto || "") + "</div>" +
+        (i.gancho_b ? '<div class="mudo"><b>🅱️ Gancho B:</b> "' + esc(String(i.gancho_b).replace(/^"|"$/g, "")) + '"' + (i.gancho_b_texto ? " · " + esc(i.gancho_b_texto) : "") + "</div>" : "") + "</div>" +
       '<p class="pequeno">' + esc(i.cena) + "</p>" +
       '<p class="mudo pequeno" style="margin-top:6px">✨ ' + esc(i.fato_dela) + "</p>" +
       '<p class="mudo pequeno">💰 ' + esc(i.por_que_vende) + "</p>" +
@@ -3674,7 +3683,8 @@ function instrucaoRedatora() {
   return "Escreva " + (abTipo === "plataforma" ? "uma candidatura para a vaga, sem assunto e sem assinatura longa" : "um e-mail frio, com ASSUNTO curto que cite a ideia ou o produto (nunca genérico), saudação \"Hi [nome],\" se o nome for conhecido ou \"Hello [Marca] team,\"") +
     ", como UMA HISTÓRIA CONTÍNUA, nunca em blocos soltos. Cada parágrafo puxa o próximo:\n" +
     "Parágrafo 1 (1 ou 2 frases): uma verdade sobre o cliente da marca, ligada ao herói do produto, que dá vontade de ler a próxima frase. Nada de falar dela, nada de \"I read\" ou \"I love\".\n" +
-    "Parágrafo 2 (3 ou 4 frases): apresente a ideia pelo nome entre aspas e faça a marca ASSISTIR ao vídeo: o gancho exato entre aspas, o que acontece na tela, o momento em que o produto brilha. O fato real dela entra DENTRO da cena (é por isso que a cena é verdadeira), não num parágrafo separado.\n" +
+    "Parágrafo 2 (3 ou 4 frases): apresente a ideia pelo nome entre aspas e faça a marca ASSISTIR aos primeiros 3 segundos: o que aparece, a fala exata entre aspas e o texto na tela. Depois, em uma frase, o resto do vídeo e o momento em que o produto brilha. O fato real dela entra DENTRO da cena, não num parágrafo separado.\n" +
+    "Se o vídeo for para ads e houver gancho B: uma frase curta dizendo que ela grava os dois ganchos para a marca testar A/B, citando o segundo entre aspas. Isso mostra que ela pensa em conversão.\n" +
     "Parágrafo 3 (1 ou 2 frases): por que ela é a pessoa certa PARA ESSA ideia: um diferencial dela ligado à ideia e 2 ou 3 marcas relevantes com quem já trabalhou.\n" +
     "Fecho (1 ou 2 frases): uma pergunta de sim ou não LIGADA À IDEIA (ex.: \"Want me to send the timed script for [nome da ideia]?\"), e depois uma linha curta convidando para ver os trabalhos dela: " + portfolio + "\n" +
     (abTipo === "email" ? "Assinatura: \"Warmly,\" e o nome dela.\n" : "") +
@@ -3694,16 +3704,31 @@ async function escreverAbordagem(ajuste) {
     "=== FORMATO DA RESPOSTA ===\n" + (abTipo === "email" ? "ASSUNTO: (uma linha)\nMENSAGEM:\n(o texto)\n" : "MENSAGEM:\n(o texto)\n") + "Não escreva nada antes nem depois disso.";
   let pedido = "Escreva: " + instrucaoRedatora() + "\n\n" + dadosDaMarca();
   if (abIdeia && abEstrategia) pedido += "\n=== A ESTRATÉGIA ESCOLHIDA POR ELA ===\nHerói do produto: " + abEstrategia.heroi + "\nO que o cliente sente: " + abEstrategia.objecao +
-    "\nIdeia: " + abIdeia.nome + "\nGancho: " + abIdeia.gancho + "\nCena: " + abIdeia.cena + "\nFato dela: " + abIdeia.fato_dela + "\nPor que vende: " + abIdeia.por_que_vende + "\n";
+    "\nUso do vídeo: " + (abEstrategia.uso === "organico" ? "orgânico" : "ads") +
+    "\nIdeia: " + abIdeia.nome + "\nGancho visual: " + (abIdeia.gancho_visual || "") + "\nGancho falado: " + abIdeia.gancho + "\nTexto na tela: " + (abIdeia.gancho_texto || "") +
+    (abIdeia.gancho_b ? "\nGancho B (teste A/B): " + abIdeia.gancho_b + (abIdeia.gancho_b_texto ? " / texto: " + abIdeia.gancho_b_texto : "") : "") +
+    "\nResto da cena: " + abIdeia.cena + "\nFato dela: " + abIdeia.fato_dela + "\nPor que vende: " + abIdeia.por_que_vende + "\n";
   if (ajuste && abResultado) pedido += "\n=== A VERSÃO ANTERIOR ===\n" + (abResultado.assunto ? "ASSUNTO: " + abResultado.assunto + "\n" : "") + abResultado.mensagem + "\n\nAgora: " + ajuste;
   const r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "low", 6000);
   botao.disabled = false;
   desenharAbordar();
   if (r.erro) { $("#abSaida").innerHTML = (guardaIdeias || "") + '<div class="faixa" style="margin-top:12px">⚠️ ' + esc(r.erro) + "</div>"; return; }
-  const limpo = semTravessao(r.texto).replace(/\*\*/g, "");
-  const a = limpo.match(/ASSUNTO:\s*(.+)/i);
-  const mm = limpo.match(/MENSAGEM:\s*([\s\S]+)/i);
-  abResultado = { assunto: a ? a[1].trim() : "", mensagem: (mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim() };
+  const separa = (t) => {
+    const limpo = semTravessao(t).replace(/\*\*/g, "");
+    const a = limpo.match(/ASSUNTO:\s*(.+)/i);
+    const mm = limpo.match(/MENSAGEM:\s*([\s\S]+)/i);
+    return { assunto: a ? a[1].trim() : "", mensagem: (mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim() };
+  };
+  abResultado = separa(r.texto);
+  /* passou do tamanho? pede para encurtar antes de mostrar */
+  const limite = { plataforma: 130, email: 160, dm: 70, followup: 70 }[abTipo] || 150;
+  const palavras = abResultado.mensagem.split(/\s+/).filter(Boolean).length;
+  if (palavras > limite + 15) {
+    $("#abSaida").innerHTML = '<div class="bloco abordar__saida"><p class="mudo"><span class="rot__relogio">⏳</span> Ficou com ' + palavras + " palavras. Enxugando para no máximo " + limite + "...</p></div>";
+    const r2 = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido + "\n\n=== A VERSÃO QUE VOCÊ ESCREVEU ===\n" + (abResultado.assunto ? "ASSUNTO: " + abResultado.assunto + "\n" : "") + abResultado.mensagem +
+      "\n\nEla tem " + palavras + " palavras e o limite é " + limite + ". Reescreva com no máximo " + limite + " palavras, mantendo a primeira frase, a ideia com o gancho (visual, fala e texto na tela), o fato dela e o fecho. Corte o que for repetido ou óbvio." }], "low", 6000);
+    if (!r2.erro && r2.texto) abResultado = separa(r2.texto);
+  }
   desenhaSaida();
   atualizaResumoIA();
   guardaHistorico();
