@@ -126,7 +126,8 @@ const ESPERADO = {
   calendario: ["titulo", "marca", "tipo", "data", "status"],
   campanhas: ["campanha", "cliente", "tipo", "status", "qtd", "valor", "prazo", "pagamento", "ativa", "favorita"],
   marcados: ["chave"],
-  transcricoes: ["titulo", "link", "plataforma", "criador", "transcricao", "obs"],
+  roteiros: ["fonte", "url", "perfil", "de_quem", "titulo", "transcricao", "legenda", "postado_em", "tags", "obs", "status", "erro"],
+  configuracoes: ["chave", "valor"],
   visitas: ["data", "pagina", "origem"]
 };
 function confereCampos(tabela, linhas) {
@@ -243,7 +244,7 @@ function campoHTML(c, valor) {
       return '<option value="' + esc(ov) + '"' + (String(ov) === String(v) ? " selected" : "") + ">" + esc(ot) + "</option>";
     }).join("") + "</select>";
   } else if (c.tipo === "textarea") {
-    controle = '<textarea id="' + id + '" name="' + c.nome + '" rows="3" placeholder="' + esc(c.dica || "") + '">' + esc(v) + "</textarea>";
+    controle = '<textarea id="' + id + '" name="' + c.nome + '" rows="' + (c.linhas || 3) + '" placeholder="' + esc(c.dica || "") + '">' + esc(v) + "</textarea>";
   } else {
     const lista = c.lista && c.lista.length;
     controle = '<input id="' + id + '" name="' + c.nome + '" type="' + (c.tipo || "text") + '" value="' + esc(v) + '"' +
@@ -266,11 +267,11 @@ function lerCampos(form, campos) {
   return o;
 }
 /* janela de editar/adicionar, igual para todas as abas */
-function editor({ titulo, campos, valores, aoSalvar, aoApagar }) {
+function editor({ titulo, campos, valores, aoSalvar, aoApagar, larga, topo }) {
   valores = valores || {};
   const j = abrirJanela({
-    titulo,
-    corpo: '<form class="grade-form" novalidate>' + campos.map(c => campoHTML(c, valores[c.nome])).join("") +
+    titulo, larga,
+    corpo: (topo || "") + '<form class="grade-form" novalidate>' + campos.map(c => campoHTML(c, valores[c.nome])).join("") +
            '<div class="faixa inteiro escondido" data-erro></div></form>',
     rodape: (aoApagar ? '<button class="btn btn--perigo" type="button" data-apagar>' + ic("lixo") + " Apagar</button>" : "") +
             '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Cancelar</button>' +
@@ -325,19 +326,21 @@ const numero = (rot, val, sub) =>
 /* ============================================================
    4. CARREGAR OS DADOS
    ============================================================ */
-const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], transcricoes: [], marcados: new Set() };
+const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], roteiros: [], config: {}, marcados: new Set() };
 const inicio14 = hoje(); inicio14.setDate(inicio14.getDate() - 13);
 
-const [videos, visitas, marcas, calendario, campanhas, marcados, transcricoes] = await Promise.all([
+const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, configuracoes] = await Promise.all([
   ler("videos", q => q.order("ordem", { ascending: true }).order("criado_em", { ascending: true })),
   ler("visitas", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
   ler("marcas", q => q.order("criado_em", { ascending: false })),
   ler("calendario", q => q.order("data", { ascending: true })),
   ler("campanhas", q => q.order("criado_em", { ascending: false })),
   ler("marcados"),
-  ler("transcricoes", q => q.order("criado_em", { ascending: false }))
+  ler("roteiros", q => q.order("created_at", { ascending: false })),
+  ler("configuracoes")
 ]);
-Object.assign(D, { videos, visitas, marcas, calendario, campanhas, transcricoes, marcados: new Set(marcados.map(m => m.chave)) });
+Object.assign(D, { videos, visitas, marcas, calendario, campanhas, roteiros, marcados: new Set(marcados.map(m => m.chave)) });
+configuracoes.forEach(c => { D.config[c.chave] = c.valor; });
 
 const nomesDeMarcas = () => Array.from(new Set(D.marcas.map(m => m.nome).concat(D.campanhas.map(c => c.cliente), D.videos.map(v => v.marca)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
 
@@ -1184,219 +1187,536 @@ function progressoChecklist() {
 }
 
 /* ============================================================
-   9b. ABA TRANSCRIÇÕES
-   Vídeos que você gosta, com o roteiro e as suas observações.
-   A transcrição vem do TokScript: o botão abre o vídeo lá,
-   você copia o texto e cola aqui.
+   9b. ABA ROTEIROS
+   Transcreve reels do Instagram, TikTok e YouTube pela Supadata
+   e guarda numa biblioteca. A chave fica na tabela configuracoes,
+   nunca no código.
    ============================================================ */
-let transAberta = null;      /* id da transcrição aberta, ou "nova" */
-let timerTrans = null;
-let pendenteTrans = null;    /* salvamento esperando: roda antes de trocar de vídeo ou sair */
-function salvaPendente() {
-  clearTimeout(timerTrans);
-  const f = pendenteTrans;
-  pendenteTrans = null;
-  if (f) f();
-}
-window.addEventListener("pagehide", salvaPendente);
+const SUPADATA = "https://api.supadata.ai/v1";
+const CHAVE_SUPADATA = "supadata_api_key";
+const FONTES = {
+  instagram: { nome: "Instagram", emoji: "📸", cor: "c-roxo" },
+  tiktok: { nome: "TikTok", emoji: "🎵", cor: "c-azul" },
+  youtube: { nome: "YouTube", emoji: "▶️", cor: "c-vermelho" },
+  manual: { nome: "Escrito na mão", emoji: "✍️", cor: "c-cinza" }
+};
+const QUEM = { minha: { nome: "Meu", cor: "c-destaque" }, outra: { nome: "De outra", cor: "c-verde" } };
+const emAndamento = new Set();   /* linhas sendo transcritas nesta aba aberta */
+let filtroQuem = "todos", filtroTag = null;
+let saldo = null;                /* { plan, maxCredits, usedCredits } ou { erro } */
 
-function plataformaDe(link) {
-  const l = String(link || "").toLowerCase();
-  if (/youtube\.com|youtu\.be/.test(l)) return "YouTube";
-  if (/instagram\.com/.test(l)) return "Instagram";
-  if (/tiktok\.com/.test(l)) return "TikTok";
-  return l ? "Outro" : "";
-}
-const COR_PLAT = { YouTube: "c-vermelho", Instagram: "c-roxo", TikTok: "c-azul", Outro: "c-cinza" };
+const espera = (ms) => new Promise(r => setTimeout(r, ms));
 
-/* endereço para o vídeo tocar dentro do painel */
-function embedDe(link) {
-  const l = String(link || "");
-  const yt = idYoutube(l);
-  if (yt) return { src: "https://www.youtube.com/embed/" + yt, deitado: !/\/shorts\//.test(l) };
-  const ig = l.match(/instagram\.com\/(?:[\w.]+\/)?(reel|reels|p|tv)\/([\w-]+)/i);
-  if (ig) return { src: "https://www.instagram.com/" + (ig[1].toLowerCase() === "p" ? "p" : "reel") + "/" + ig[2] + "/embed/", deitado: false };
-  const tt = l.match(/tiktok\.com\/.*\/video\/(\d+)/i);
-  if (tt) return { src: "https://www.tiktok.com/embed/v2/" + tt[1], deitado: false };
+/* ----- o link: limpar, descobrir a fonte, o perfil e o vídeo ----- */
+function fonteDe(url) {
+  const u = String(url || "").toLowerCase();
+  if (/(^|\.)instagram\.com\//.test(u)) return "instagram";
+  if (/(^|\.)tiktok\.com\//.test(u)) return "tiktok";
+  if (/youtube\.com\/|youtu\.be\//.test(u)) return "youtube";
   return null;
 }
+function limpaLink(bruto) {
+  let t = String(bruto || "").trim();
+  if (!/^https?:\/\//i.test(t)) return null;
+  let u;
+  try { u = new URL(t); } catch (e) { return null; }
+  u.hash = "";
+  const fonte = fonteDe(u.href);
+  if (fonte === "instagram") {
+    u.pathname = u.pathname.replace(/\/reels\//i, "/reel/");
+    u.search = "";                              /* tira ?igsh=... e o resto */
+  } else if (fonte === "tiktok") {
+    u.search = "";
+  } else if (fonte === "youtube") {
+    const v = u.searchParams.get("v");
+    u.search = v ? "?v=" + v : "";              /* fica só o que identifica o vídeo */
+  } else {
+    [...u.searchParams.keys()].forEach(k => { if (/^utm_/i.test(k) || k === "igsh") u.searchParams.delete(k); });
+  }
+  return u.href;
+}
+function perfilDe(url) {
+  const ig = String(url || "").match(/instagram\.com\/([\w.]+)\/(?:reel|reels|p|tv)\//i);
+  if (ig && !/^(reel|reels|p|tv|stories|explore)$/i.test(ig[1])) return ig[1];
+  const tt = String(url || "").match(/tiktok\.com\/@([\w.]+)/i);
+  return tt ? tt[1] : null;
+}
+function embedRoteiro(url) {
+  const u = String(url || "");
+  const ig = u.match(/instagram\.com\/(?:[\w.]+\/)?(reel|reels|p|tv)\/([\w-]+)/i);
+  if (ig) return { src: "https://www.instagram.com/" + (ig[1].toLowerCase() === "p" ? "p" : "reel") + "/" + ig[2] + "/embed" };
+  const yt = idYoutube(u);
+  if (yt) return { src: "https://www.youtube.com/embed/" + yt, deitado: /watch\?|youtu\.be\//.test(u) };
+  const tt = u.match(/tiktok\.com\/.*\/video\/(\d+)/i);
+  if (tt) return { src: "https://www.tiktok.com/embed/v2/" + tt[1] };
+  return null;
+}
+const comArroba = (p) => p ? "@" + String(p).replace(/^@/, "") : "";
 
-function montarTranscricoes() {
-  const el = $("#aba-transcricoes");
-  el.innerHTML =
-    '<div class="trans">' +
-      '<div class="trans__lista">' +
-        '<div class="ferramentas" style="margin-bottom:10px">' +
-          '<button class="btn btn--full" id="tNova">' + ic("mais") + " Nova transcrição</button>" +
-          '<input class="entrada" id="tBusca" type="search" placeholder="Buscar no título, criador ou roteiro" style="width:100%">' +
-        "</div>" +
-        '<div id="tItens"></div>' +
-      "</div>" +
-      '<div class="trans__detalhe" id="tDetalhe"></div>' +
-    "</div>";
-  $("#tNova").addEventListener("click", () => abrirTranscricao("nova"));
-  $("#tBusca").addEventListener("input", desenharListaTrans);
-  $("#tItens").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-trans]");
-    if (b) abrirTranscricao(b.dataset.trans);
-  });
-  desenharListaTrans();
-  abrirTranscricao(D.transcricoes.length ? D.transcricoes[0].id : "nova", true);
+/* ----- conversa com a Supadata ----- */
+async function supadata(caminho) {
+  const chave = D.config[CHAVE_SUPADATA];
+  let r;
+  try { r = await fetch(SUPADATA + caminho, { headers: { "x-api-key": chave } }); }
+  catch (e) { return { rede: true, status: 0, corpo: {} }; }
+  let corpo = {};
+  try { corpo = await r.json(); } catch (e) {}
+  return { status: r.status, corpo: corpo || {} };
+}
+/* traduz a resposta de erro para uma frase simples */
+function erroSupadata(res) {
+  if (res.rede) return "Não consegui falar com o serviço de transcrição. Confira a sua internet e tente de novo.";
+  const c = res.corpo || {};
+  const cod = String(c.error || "").toLowerCase();
+  const det = String(c.details || c.message || "").toLowerCase();
+  if (res.status === 401 || res.status === 403 || cod === "unauthorized" || cod === "forbidden")
+    return "A chave da Supadata não foi aceita. Confira se você copiou ela inteira, no campo Chave da Supadata aqui em cima.";
+  if (res.status === 429 || cod === "limit-exceeded") {
+    if (det.includes("plan")) return "Acabaram os créditos deste mês na Supadata. Eles voltam sozinhos no próximo ciclo, ou dá para aumentar o plano no site deles.";
+    if (det.includes("rate")) return "Foram muitos pedidos seguidos. Espere 1 minuto e tente de novo.";
+    return "A Supadata pediu uma pausa. Espere 1 minuto e tente de novo.";
+  }
+  if (res.status === 402 || cod === "upgrade-required") return "Esse vídeo só pode ser transcrito num plano pago da Supadata.";
+  if (res.status === 404 || res.status === 400 || cod === "not-found" || cod === "invalid-request")
+    return "Não consegui abrir esse vídeo. Confira se o link está certo e se o perfil é público.";
+  if (res.status >= 500) return "O serviço de transcrição teve um problema do lado deles. Tente de novo daqui a alguns minutos.";
+  return "A transcrição não deu certo. Tente de novo daqui a pouco.";
+}
+const SEM_FALA = "Não achei fala nesse vídeo. Costuma ser reel só com música ou só com texto na tela.";
+/* tira o texto da resposta, venha como texto ou como lista de trechos */
+function textoDe(corpo) {
+  const c = corpo && corpo.content;
+  if (typeof c === "string") return { texto: c.trim(), segmentos: null };
+  if (Array.isArray(c)) return { texto: c.map(x => x && x.text ? x.text : "").join(" ").replace(/\s+/g, " ").trim(), segmentos: c };
+  return { texto: "", segmentos: null };
 }
 
-function desenharListaTrans() {
-  const busca = normaliza($("#tBusca").value.trim());
-  const lista = D.transcricoes.filter(t => !busca || normaliza([t.titulo, t.criador, t.transcricao, t.obs].join(" ")).includes(busca));
-  const alvo = $("#tItens");
-  if (falhou.transcricoes) { alvo.innerHTML = '<p class="vazio">As transcrições não puderam ser carregadas. Veja o aviso lá em cima.</p>'; return; }
-  if (!lista.length) {
-    alvo.innerHTML = '<p class="vazio">' + (D.transcricoes.length ? "Nada encontrado com essa busca." : "Nenhuma transcrição ainda.<br>Clique em Nova transcrição e cole o link de um vídeo que você gosta.") + "</p>";
+async function atualizaSaldo() {
+  if (!D.config[CHAVE_SUPADATA]) { saldo = null; desenharChave(); return; }
+  const r = await supadata("/me");
+  saldo = r.status === 200 ? r.corpo : { erro: erroSupadata(r) };
+  desenharChave();
+}
+
+/* ----- a tela ----- */
+function montarRoteiros() {
+  const el = $("#aba-roteiros");
+  el.innerHTML =
+    '<p class="rot__frase">Cole o link de um reel e eu transcrevo. Serve pros seus e pros das outras, com etiqueta pra você separar.</p>' +
+    '<details class="sanfona rot__chave" id="rChave"><summary><span class="emoji">🔑</span><div class="sanfona__txt"><div class="sanfona__tit">Chave da Supadata</div>' +
+      '<div class="sanfona__sub" id="rChaveResumo"></div></div><span class="chevron">' + ic("baixo") + "</span></summary>" +
+      '<div class="sanfona__corpo" id="rChaveCorpo"></div></details>' +
+    '<div class="rot__barra">' +
+      '<input class="entrada" id="rLink" type="url" placeholder="Cole aqui: instagram.com/reel/... · tiktok.com/... · youtube.com/..." autocomplete="off">' +
+      '<select class="entrada entrada--sel" id="rQuem"><option value="outra">De outra pessoa</option><option value="minha">Meu</option></select>' +
+      '<button class="btn" id="rTranscrever">🎧 Transcrever</button>' +
+      '<button class="btn btn--linha" id="rMao">+ Escrever na mão</button>' +
+    "</div>" +
+    '<div id="rAviso" class="rot__aviso escondido" role="status" aria-live="polite"></div>' +
+    '<div class="bloco__cab rot__bibcab"><h2>📚 Biblioteca</h2><span class="mudo pequeno" id="rConta"></span>' +
+      '<button class="btn btn--linha" id="rEstudar">🧠 Estudar com o Claude</button></div>' +
+    '<div class="ferramentas"><input class="entrada" id="rBusca" type="search" placeholder="Buscar na transcrição, perfil, título ou notas"></div>' +
+    '<div class="rot__chips" id="rChips"></div>' +
+    '<div class="rot__cartoes" id="rCartoes"></div>';
+
+  $("#rTranscrever").addEventListener("click", clicouTranscrever);
+  $("#rLink").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); clicouTranscrever(); } });
+  $("#rMao").addEventListener("click", () => {
+    const limpo = limpaLink($("#rLink").value);
+    editorRoteiro(null, { url: limpo || null, de_quem: $("#rQuem").value, perfil: perfilDe(limpo) });
+  });
+  $("#rBusca").addEventListener("input", desenharRoteiros);
+  $("#rChips").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-chip]");
+    if (!b) return;
+    const [tipo, valor] = [b.dataset.chip, b.dataset.valor];
+    if (tipo === "quem") filtroQuem = valor;
+    else filtroTag = filtroTag === valor ? null : valor;
+    desenharRoteiros();
+  });
+  $("#rEstudar").addEventListener("click", estudarComClaude);
+  $("#rCartoes").addEventListener("click", cliqueNoCartao);
+
+  if (falhou.configuracoes) aviso("rot-config", "Sem a tabela configuracoes, a chave da Supadata não pode ser guardada. Rode o sql-roteiros.sql no Supabase.");
+  desenharChave();
+  desenharRoteiros();
+  atualizaSaldo();
+}
+
+function mostraAviso(tipo, html) {
+  const a = $("#rAviso");
+  if (!html) { a.classList.add("escondido"); a.innerHTML = ""; return; }
+  a.className = "rot__aviso rot__aviso--" + tipo;
+  a.innerHTML = html;
+}
+
+/* ----- bloco da chave ----- */
+function desenharChave() {
+  const chave = D.config[CHAVE_SUPADATA];
+  const fim = chave ? String(chave).slice(-4) : "";
+  let resumo;
+  if (!chave) resumo = "Nenhuma chave salva ainda. Sem ela eu não consigo transcrever.";
+  else if (!saldo) resumo = "Chave salva, terminando em " + fim + ". Conferindo o saldo...";
+  else if (saldo.erro) resumo = "Chave terminando em " + fim + ". " + saldo.erro;
+  else {
+    const usados = Number(saldo.usedCredits) || 0, max = Number(saldo.maxCredits) || 0;
+    resumo = "Chave terminando em " + fim + " · " + inteiro(usados) + " de " + inteiro(max) + " créditos usados este mês" + (saldo.plan ? " · plano " + saldo.plan : "");
+  }
+  $("#rChaveResumo").textContent = resumo;
+  $("#rChaveCorpo").innerHTML =
+    '<div class="rot__chavelinha"><input class="entrada" id="rChaveCampo" type="password" autocomplete="off" placeholder="' +
+      (chave ? "Salva: ••••" + esc(fim) + ". Cole outra para trocar." : "Cole aqui a sua API key da Supadata") + '">' +
+    '<button class="btn" id="rChaveSalvar">Salvar chave</button></div>' +
+    '<p class="mudo pequeno" style="margin-top:8px">Não tem chave? Crie uma conta grátis em <a class="link" href="https://supadata.ai" target="_blank" rel="noopener">supadata.ai</a> ' +
+    "(100 créditos por mês, sem cartão), copie a API key no painel deles e cole aqui. Ela fica guardada no seu banco, só você vê, e funciona em qualquer computador em que você entrar.</p>";
+  if (!chave) $("#rChave").open = true;
+  $("#rChaveSalvar").addEventListener("click", salvarChave);
+  $("#rChaveCampo").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); salvarChave(); } });
+}
+
+async function salvarChave() {
+  const nova = $("#rChaveCampo").value.trim();
+  if (!nova) { torrada("Cole a chave no campo antes de salvar."); return; }
+  const b = $("#rChaveSalvar");
+  b.disabled = true; b.textContent = "Conferindo...";
+  const antiga = D.config[CHAVE_SUPADATA];
+  D.config[CHAVE_SUPADATA] = nova;
+  const teste = await supadata("/me");
+  if (teste.status === 401 || teste.status === 403) {
+    D.config[CHAVE_SUPADATA] = antiga;
+    b.disabled = false; b.textContent = "Salvar chave";
+    torrada("A Supadata não aceitou essa chave. Confira se copiou ela inteira.", true);
     return;
   }
-  alvo.innerHTML = lista.map(t => {
-    const plat = t.plataforma || plataformaDe(t.link);
-    return '<button type="button" class="trans__item' + (t.id === transAberta ? " ativo" : "") + '" data-trans="' + esc(t.id) + '">' +
-      '<span class="trans__item-tit">' + esc(t.titulo || t.criador || "Sem título") + "</span>" +
-      '<span class="trans__item-meta">' + (plat ? '<span class="pil ' + (COR_PLAT[plat] || "c-cinza") + '">' + esc(plat) + "</span>" : "") +
-      (t.criador && t.titulo ? '<span class="mudo">' + esc(t.criador) + "</span>" : "") +
-      '<span class="mudo">' + dataBR(String(t.criado_em || "").slice(0, 10)) + "</span></span></button>";
-  }).join("");
+  try {
+    const { error } = await banco.from("configuracoes").upsert({ chave: CHAVE_SUPADATA, valor: nova });
+    if (error) throw error;
+  } catch (e) {
+    D.config[CHAVE_SUPADATA] = antiga;
+    b.disabled = false; b.textContent = "Salvar chave";
+    torrada(traduzErro(e, "configuracoes"), true);
+    return;
+  }
+  saldo = teste.status === 200 ? teste.corpo : null;
+  $("#rChave").open = false;
+  desenharChave();
+  if (!saldo) atualizaSaldo();
+  torrada("Chave salva ✓");
+  mostraAviso(null);
 }
 
-function abrirTranscricao(id, inicio) {
-  salvaPendente();
-  transAberta = id;
-  const t = id === "nova" ? {} : (D.transcricoes.find(x => x.id === id) || {});
-  const nova = id === "nova";
-  const det = $("#tDetalhe");
-  det.innerHTML =
-    '<div class="bloco">' +
-      '<div class="campo"><label for="tLink">Link do vídeo (YouTube, Instagram ou TikTok) *</label>' +
-        '<div class="trans__link"><input id="tLink" type="url" value="' + esc(t.link || "") + '" placeholder="Cole aqui o link do vídeo" autocomplete="off">' +
-        '<button type="button" class="btn" id="tTok">Transcrever no TokScript</button></div>' +
-        '<p class="mudo pequeno" style="margin-top:4px">O TokScript abre numa aba nova com o vídeo já carregado. Copie o texto de lá e cole no Roteiro abaixo. No plano grátis são 5 por dia.</p>' +
-      "</div>" +
-      '<div class="trans__corpo">' +
-        '<div class="trans__video" id="tVideo"></div>' +
-        '<div class="trans__campos">' +
-          '<div class="grade-form">' +
-            '<div class="campo"><label for="tTitulo">Título</label><input id="tTitulo" value="' + esc(t.titulo || "") + '" placeholder="Do que é o vídeo" autocomplete="off"></div>' +
-            '<div class="campo"><label for="tCriador">Criador</label><input id="tCriador" value="' + esc(t.criador || "") + '" placeholder="@quemfez" autocomplete="off"></div>' +
-          "</div>" +
-          '<div class="campo"><label for="tRoteiro" class="trans__rot">Roteiro (transcrição) <button type="button" class="link" id="tCopiar">copiar</button></label>' +
-            '<textarea id="tRoteiro" class="trans__roteiro" placeholder="Cole aqui o texto que o TokScript gerou">' + esc(t.transcricao || "") + "</textarea></div>" +
-          '<div class="campo"><label for="tObs">Minhas observações</label>' +
-            '<textarea id="tObs" rows="5" placeholder="O que funciona nesse vídeo? Gancho, ritmo, cortes, o que eu quero usar...">' + esc(t.obs || "") + "</textarea></div>" +
-        "</div>" +
-      "</div>" +
-      '<div class="faixa escondido" id="tErro" style="margin-top:12px"></div>' +
-      '<div class="trans__pe">' +
-        (nova ? "" : '<button type="button" class="btn btn--perigo" id="tApagar">' + ic("lixo") + " Apagar</button>") +
-        '<span class="mudo pequeno" id="tStatus"></span><span class="espaco"></span>' +
-        '<button type="button" class="btn" id="tSalvar">Salvar</button>' +
-      "</div>" +
-    "</div>";
+/* ----- biblioteca ----- */
+function desenharRoteiros() {
+  const todas = D.roteiros;
+  const tags = Array.from(new Set(todas.flatMap(r => Array.isArray(r.tags) ? r.tags : []))).sort((a, b) => a.localeCompare(b, "pt"));
+  if (filtroTag && !tags.includes(filtroTag)) filtroTag = null;
+  const chip = (tipo, valor, rotulo, ativo) => '<button type="button" class="rot__chip' + (ativo ? " ativo" : "") + '" data-chip="' + tipo + '" data-valor="' + esc(valor) + '">' + rotulo + "</button>";
+  $("#rChips").innerHTML =
+    chip("quem", "todos", "Todos", filtroQuem === "todos") +
+    chip("quem", "minha", "🙋‍♀️ Meus", filtroQuem === "minha") +
+    chip("quem", "outra", "👀 De outras", filtroQuem === "outra") +
+    tags.map(t => chip("tag", t, "#" + esc(t), filtroTag === t)).join("");
 
-  const campo = (x) => $("#" + x, det);
-  const erro = (texto) => { const e = campo("tErro"); e.textContent = texto; e.classList.toggle("escondido", !texto); };
-  const status = (texto) => { campo("tStatus").textContent = texto; };
+  const busca = normaliza($("#rBusca").value.trim());
+  const lista = todas.filter(r =>
+    (filtroQuem === "todos" || r.de_quem === filtroQuem) &&
+    (!filtroTag || (r.tags || []).includes(filtroTag)) &&
+    (!busca || normaliza([r.transcricao, r.perfil, r.titulo, r.obs, r.legenda, (r.tags || []).join(" ")].join(" ")).includes(busca)));
+  $("#rConta").textContent = lista.length === todas.length ? plural(todas.length, "roteiro", "roteiros") : lista.length + " de " + todas.length;
 
-  function mostraVideo() {
-    const link = campo("tLink").value.trim();
-    const emb = embedDe(link);
-    const caixa = campo("tVideo");
-    if (!link) { caixa.innerHTML = '<div class="trans__sem">O vídeo aparece aqui quando você colar o link.</div>'; return; }
-    if (!emb) {
-      caixa.innerHTML = '<div class="trans__sem">Não consigo mostrar esse vídeo aqui dentro.<br>' +
-        '<a class="link" href="' + esc(link) + '" target="_blank" rel="noopener">Abrir o vídeo</a>' +
-        (/tiktok\.com/i.test(link) ? '<br><span class="pequeno">Dica: no TikTok, use o link completo, com /video/ e um número.</span>' : "") + "</div>";
+  const alvo = $("#rCartoes");
+  if (falhou.roteiros) { alvo.innerHTML = '<p class="vazio">A biblioteca não pôde ser carregada. Veja o aviso lá em cima.</p>'; return; }
+  if (!lista.length) {
+    alvo.innerHTML = '<p class="vazio">' + (todas.length ? "Nada encontrado com esse filtro." : "📭 A biblioteca está vazia.<br>Cole o link de um reel lá em cima e clique em Transcrever.") + "</p>";
+    return;
+  }
+  alvo.innerHTML = lista.map(cartaoRoteiro).join("");
+}
+
+function cartaoRoteiro(r) {
+  const fonte = FONTES[r.fonte] || FONTES.manual;
+  const quem = QUEM[r.de_quem] || QUEM.outra;
+  const yt = idYoutube(r.url);
+  const emb = embedRoteiro(r.url);
+  const capa = '<div class="rot__capa' + (yt ? " tem-foto" : "") + '"' + (yt ? ' style="background-image:url(\'https://i.ytimg.com/vi/' + yt + '/hqdefault.jpg\')"' : "") + ">" +
+    (yt ? "" : '<span class="rot__capa-emoji">' + fonte.emoji + "</span>") +
+    (emb ? '<button type="button" class="rot__ver" data-ver>▶ ver vídeo</button>' : "") + "</div>";
+  const quando = r.postado_em ? "postado " + dataBR(r.postado_em) : "salvo " + dataBR(String(r.created_at || "").slice(0, 10));
+
+  let meio;
+  if (r.status === "processando") {
+    meio = '<div class="rot__estado"><span class="rot__relogio" aria-hidden="true">⏳</span> ' +
+      (emAndamento.has(r.id)
+        ? "Transcrevendo... pode continuar usando o painel."
+        : 'Ficou pela metade, a página foi fechada antes de terminar. <button type="button" class="btn btn--linha" data-denovo>🔄 Tentar de novo</button>') + "</div>";
+  } else if (r.status === "falhou") {
+    meio = '<div class="rot__estado rot__estado--falhou">⚠️ ' + esc(r.erro || "A transcrição não deu certo.") +
+      '<div class="rot__estado-botoes"><button type="button" class="btn btn--linha" data-abrir>📝 Abrir mesmo assim</button>' +
+      (r.url ? '<button type="button" class="btn btn--linha" data-denovo>🔄 Tentar de novo</button>' : "") + "</div></div>";
+  } else {
+    meio = r.transcricao ? '<p class="rot__texto">' + esc(r.transcricao) + "</p>" : '<p class="rot__texto mudo">Sem transcrição ainda.</p>';
+  }
+
+  return '<article class="rot__cartao" data-id="' + esc(r.id) + '">' + capa +
+    '<div class="rot__info">' +
+      '<h3 class="rot__titulo">' + esc(r.titulo || "Sem título") + "</h3>" +
+      '<div class="rot__meta">' +
+        (r.perfil ? '<span class="rot__perfil">' + esc(comArroba(r.perfil)) + "</span>" : "") +
+        '<span class="pil ' + quem.cor + '">' + quem.nome + "</span>" +
+        '<span class="pil ' + fonte.cor + '">' + fonte.emoji + " " + fonte.nome + "</span>" +
+        (r.tags || []).map(t => '<span class="rot__tag">#' + esc(t) + "</span>").join("") +
+        '<span class="mudo pequeno">' + quando + "</span>" +
+      "</div>" + meio +
+      '<div class="rot__acoes">' +
+        (r.status === "pronto" && r.transcricao ? '<button type="button" class="btn btn--linha" data-copiar>📋 Copiar transcrição</button>' : "") +
+        '<button type="button" class="btn btn--linha" data-editar>✏️ Editar</button>' +
+        '<button type="button" class="btn btn--perigo" data-apagar>🗑️ Apagar</button>' +
+        (r.url ? '<a class="link pequeno" href="' + esc(r.url) + '" target="_blank" rel="noopener">abrir no ' + esc((FONTES[fonteDe(r.url)] || fonte).nome) + "</a>" : "") +
+      "</div>" +
+    "</div></article>";
+}
+
+async function cliqueNoCartao(e) {
+  const cartao = e.target.closest("[data-id]");
+  if (!cartao) return;
+  const r = D.roteiros.find(x => x.id === cartao.dataset.id);
+  if (!r) return;
+  if (e.target.closest("[data-ver]")) {
+    const emb = embedRoteiro(r.url);
+    if (!emb) return;
+    const capa = $(".rot__capa", cartao);
+    capa.className = "rot__capa rot__capa--video" + (emb.deitado ? " deitado" : "");
+    capa.removeAttribute("style");
+    capa.innerHTML = '<iframe src="' + esc(emb.src) + '" allow="autoplay; encrypted-media; picture-in-picture; clipboard-write" allowfullscreen></iframe>';
+    cartao.classList.add("com-video");
+    return;
+  }
+  if (e.target.closest("[data-copiar]")) {
+    const b = e.target.closest("[data-copiar]");
+    try { await navigator.clipboard.writeText(r.transcricao || ""); b.textContent = "copiado ✓"; }
+    catch (x) { b.textContent = "não deu para copiar"; }
+    setTimeout(() => { b.textContent = "📋 Copiar transcrição"; }, 2000);
+    return;
+  }
+  if (e.target.closest("[data-editar], [data-abrir]")) { editorRoteiro(r); return; }
+  if (e.target.closest("[data-denovo]")) { tentarDeNovo(r); return; }
+  const apagar = e.target.closest("[data-apagar]");
+  if (apagar) {
+    if (!apagar.dataset.armado) {
+      apagar.dataset.armado = "1";
+      apagar.classList.add("armado");
+      apagar.textContent = "Clique de novo para apagar";
+      setTimeout(() => { if (apagar.isConnected) { delete apagar.dataset.armado; apagar.classList.remove("armado"); apagar.textContent = "🗑️ Apagar"; } }, 3000);
       return;
     }
-    caixa.innerHTML = '<div class="trans__moldura' + (emb.deitado ? " deitado" : "") + '"><iframe src="' + esc(emb.src) + '" allow="autoplay; encrypted-media; picture-in-picture; clipboard-write" allowfullscreen loading="lazy"></iframe></div>' +
-      '<a class="link pequeno" href="' + esc(link) + '" target="_blank" rel="noopener">Abrir no ' + esc(plataformaDe(link)) + "</a>";
+    if (await apagarLinha("roteiros", r.id)) {
+      D.roteiros = D.roteiros.filter(x => x.id !== r.id);
+      desenharRoteiros();
+      torrada("Roteiro apagado.");
+    }
   }
-  mostraVideo();
+}
 
-  let ultimoLink = campo("tLink").value.trim();
-  campo("tLink").addEventListener("input", () => {
-    const l = campo("tLink").value.trim();
-    if (l === ultimoLink) return;
-    ultimoLink = l;
-    mostraVideo();
+/* ----- editar / escrever na mão ----- */
+function editorRoteiro(r, padrao, topo) {
+  const v = r ? Object.assign({}, r, { tags: (r.tags || []).join(", "), perfil: r.perfil ? comArroba(r.perfil) : "" }) : Object.assign({ de_quem: "outra" }, padrao || {});
+  if (!r && v.perfil) v.perfil = comArroba(v.perfil);
+  editor({
+    titulo: r ? "✏️ Editar roteiro" : "✍️ Escrever na mão",
+    larga: true,
+    topo: topo ? '<div class="faixa faixa--ok" style="margin-bottom:12px">' + topo + "</div>" : "",
+    valores: v,
+    campos: [
+      { nome: "titulo", rot: "Título", dica: "Um nome pra achar depois" },
+      { nome: "de_quem", rot: "De quem", tipo: "select", opcoes: [["outra", "De outra pessoa"], ["minha", "Meu"]] },
+      { nome: "perfil", rot: "Perfil", dica: "@quempostou" },
+      { nome: "postado_em", rot: "Data de postagem", tipo: "date" },
+      { nome: "url", rot: "Link", inteiro: true, dica: "https://..." },
+      { nome: "tags", rot: "Tags (separadas por vírgula)", inteiro: true, dica: "skincare, gancho forte, react" },
+      { nome: "legenda", rot: "Legenda do post", tipo: "textarea", inteiro: true },
+      { nome: "transcricao", rot: "Transcrição", tipo: "textarea", inteiro: true, linhas: 12 },
+      { nome: "obs", rot: "Minhas notas", tipo: "textarea", inteiro: true, dica: "O que funciona aqui? O que eu quero usar?" }
+    ],
+    aoSalvar: async (dados, erro) => {
+      if (dados.url) {
+        const limpo = limpaLink(dados.url);
+        if (!limpo) { erro("O link precisa começar com https://. Copie o link completo do vídeo."); return false; }
+        dados.url = limpo;
+      }
+      dados.tags = Array.from(new Set(String(dados.tags || "").split(",").map(t => t.trim().replace(/^#/, "")).filter(Boolean)));
+      dados.perfil = dados.perfil ? String(dados.perfil).trim().replace(/^@/, "") : null;
+      dados.status = "pronto";
+      dados.erro = null;
+      if (!r) dados.fonte = "manual";
+      else if (dados.url !== r.url && r.fonte !== "manual") dados.fonte = fonteDe(dados.url) || "manual";
+      if (r && emAndamento.has(r.id)) { erro("Esse vídeo ainda está sendo transcrito. Espere terminar para salvar."); return false; }
+      const salvo = await salvarLinha("roteiros", dados, r && r.id);
+      if (!salvo) return false;
+      if (r) troca(D.roteiros, salvo); else D.roteiros.unshift(salvo);
+      desenharRoteiros();
+      torrada("Roteiro salvo ✓");
+      return true;
+    }
   });
+}
 
-  campo("tTok").addEventListener("click", () => {
-    const link = campo("tLink").value.trim();
-    if (!link) { erro("Cole o link do vídeo primeiro."); campo("tLink").focus(); return; }
-    erro("");
-    window.open("https://tokscript.com/" + link, "_blank", "noopener");
-    campo("tRoteiro").focus();
-  });
-
-  campo("tCopiar").addEventListener("click", async (e) => {
-    e.preventDefault();
-    const texto = campo("tRoteiro").value;
-    if (!texto) { torrada("O roteiro ainda está vazio."); return; }
-    try { await navigator.clipboard.writeText(texto); torrada("Roteiro copiado."); }
-    catch (x) { campo("tRoteiro").select(); torrada("Selecionei o texto. Use Cmd + C para copiar."); }
-  });
-
-  async function salvar(sozinho) {
-    pendenteTrans = null;
-    const id = transAberta;   /* guarda agora: pode trocar de vídeo enquanto salva */
-    const dados = {
-      link: campo("tLink").value.trim(),
-      titulo: campo("tTitulo").value.trim() || null,
-      criador: campo("tCriador").value.trim() || null,
-      transcricao: campo("tRoteiro").value.trim() || null,
-      obs: campo("tObs").value.trim() || null
-    };
-    if (!dados.link) { if (!sozinho) { erro("Cole o link do vídeo para poder salvar."); campo("tLink").focus(); } return false; }
-    dados.plataforma = plataformaDe(dados.link);
-    const aqui = () => transAberta === id;
-    if (aqui()) { erro(""); status("Salvando..."); }
-    const eraNova = id === "nova";
-    const salvo = await salvarLinha("transcricoes", dados, eraNova ? null : id);
-    if (!salvo) { if (aqui()) status("Não salvou"); return false; }
-    if (eraNova) D.transcricoes.unshift(salvo);
-    else troca(D.transcricoes, salvo);
-    desenharListaTrans();
-    if (eraNova && aqui()) abrirTranscricao(salvo.id);
-    else if (aqui()) status("Salvo");
-    return true;
+/* ----- transcrever ----- */
+async function clicouTranscrever() {
+  mostraAviso(null);
+  const bruto = $("#rLink").value.trim();
+  if (!bruto) { mostraAviso("erro", "Cole o link do vídeo no campo antes de clicar em Transcrever."); $("#rLink").focus(); return; }
+  const url = limpaLink(bruto);
+  if (!url) { mostraAviso("erro", "Esse link não parece certo. Copie o link completo do vídeo, começando com https://"); return; }
+  if (!fonteDe(url)) { mostraAviso("erro", "Por enquanto eu transcrevo só vídeos do Instagram, do TikTok e do YouTube."); return; }
+  if (!D.config[CHAVE_SUPADATA]) {
+    mostraAviso("erro", "🔑 Falta a chave da Supadata, o serviço que ouve o vídeo. É grátis: crie uma conta em " +
+      '<a class="link" href="https://supadata.ai" target="_blank" rel="noopener">supadata.ai</a> (100 créditos por mês, sem cartão), ' +
+      "copie a API key e cole no campo <b>Chave da Supadata</b> aqui em cima.");
+    $("#rChave").open = true;
+    return;
   }
-  campo("tSalvar").addEventListener("click", async () => { if (await salvar(false)) torrada("Transcrição salva."); });
+  const repetido = D.roteiros.find(r => r.url === url);
+  if (repetido) {
+    const j = abrirJanela({
+      titulo: "Esse vídeo já está na biblioteca",
+      corpo: "<p>Você já tem <b>" + esc(repetido.titulo || "esse vídeo") + "</b> guardado. Transcrever de novo gasta créditos da Supadata e cria um cartão novo.</p>",
+      rodape: '<span class="espaco"></span><button class="btn btn--linha" type="button" data-ver>Ver o que já tenho</button><button class="btn" type="button" data-denovo>Transcrever de novo</button>'
+    });
+    $("[data-ver]", j).addEventListener("click", () => { fecharJanela(); mostraCartao(repetido.id); });
+    $("[data-denovo]", j).addEventListener("click", () => { fecharJanela(); comecarTranscricao(url); });
+    return;
+  }
+  comecarTranscricao(url);
+}
 
-  /* o que já existe salva sozinho um pouquinho depois que você para de digitar */
-  if (!nova) {
-    det.addEventListener("input", () => {
-      status("Alterações não salvas");
-      clearTimeout(timerTrans);
-      pendenteTrans = () => salvar(true);
-      timerTrans = setTimeout(salvaPendente, 1500);
-    });
-    duploClique(campo("tApagar"), async () => {
-      clearTimeout(timerTrans);
-      pendenteTrans = null;
-      if (!(await apagarLinha("transcricoes", t.id))) return;
-      D.transcricoes = D.transcricoes.filter(x => x.id !== t.id);
-      torrada("Transcrição apagada.");
-      desenharListaTrans();
-      abrirTranscricao(D.transcricoes.length ? D.transcricoes[0].id : "nova");
-    });
+function mostraCartao(id) {
+  filtroQuem = "todos"; filtroTag = null; $("#rBusca").value = "";
+  desenharRoteiros();
+  const c = $('#rCartoes [data-id="' + id + '"]');
+  if (c) { c.scrollIntoView({ behavior: "smooth", block: "center" }); c.classList.add("piscando"); setTimeout(() => c.classList.remove("piscando"), 1600); }
+}
+
+async function comecarTranscricao(url) {
+  const nova = await salvarLinha("roteiros", {
+    fonte: fonteDe(url), url, perfil: perfilDe(url), de_quem: $("#rQuem").value, status: "processando"
+  });
+  if (!nova) { mostraAviso("erro", "Não consegui criar o cartão na biblioteca. Veja o aviso vermelho que apareceu."); return; }
+  D.roteiros.unshift(nova);
+  $("#rLink").value = "";
+  transcrever(nova);
+}
+
+async function tentarDeNovo(r) {
+  if (!D.config[CHAVE_SUPADATA]) { clicouTranscrever(); return; }
+  if (emAndamento.has(r.id)) return;
+  const salvo = await salvarLinha("roteiros", { status: "processando", erro: null }, r.id);
+  if (!salvo) return;
+  troca(D.roteiros, salvo);
+  transcrever(salvo);
+}
+
+async function transcrever(r) {
+  emAndamento.add(r.id);
+  desenharRoteiros();
+  $("#rTranscrever").disabled = true;
+  const inicio = Date.now();
+  const segundos = () => Math.round((Date.now() - inicio) / 1000);
+  const tempo = () => { const s = segundos(); return s < 60 ? s + "s" : Math.floor(s / 60) + "min " + pad(s % 60) + "s"; };
+  const andamento = () => mostraAviso("info", '<span class="rot__relogio" aria-hidden="true">⏳</span> 🎧 Ouvindo o vídeo… ' + tempo() +
+    ". Costuma levar de 3 a 4 minutos, pode deixar a aba aberta.");
+  andamento();
+  const relogio = setInterval(andamento, 1000);
+
+  let resultado;   /* { texto, segmentos } ou { falha, semFala } */
+  try {
+    const params = new URLSearchParams({ url: r.url, mode: "auto", text: "true", lang: "pt" });
+    let res = await supadata("/transcript?" + params.toString());
+    if (res.status === 202 && res.corpo.jobId) {
+      const job = res.corpo.jobId;
+      res = null;
+      while (!res) {
+        if (Date.now() - inicio > 6 * 60 * 1000) { resultado = { falha: "Passou de 6 minutos e eu desisti. O serviço deve estar cheio. Tente de novo mais tarde." }; break; }
+        await espera(5000);
+        const r2 = await supadata("/transcript/" + encodeURIComponent(job));
+        if (r2.rede) continue;                                  /* internet piscou: tenta de novo */
+        const st = String(r2.corpo.status || "").toLowerCase();
+        if (r2.status >= 400 && r2.status !== 206) { resultado = { falha: erroSupadata(r2) }; break; }
+        if (st === "failed") {
+          const e = r2.corpo.error;
+          const cod = String((e && (e.error || e.code)) || e || "").toLowerCase();
+          resultado = cod.includes("transcript-unavailable") ? { falha: SEM_FALA, semFala: true } : { falha: "A transcrição não deu certo do lado da Supadata. Tente de novo daqui a pouco." };
+          break;
+        }
+        if (st === "completed" || (!st && r2.corpo.content !== undefined)) res = r2;
+      }
+    }
+    if (!resultado) {
+      if (res.status === 200) {
+        const t = textoDe(res.corpo);
+        resultado = (!t.texto || String(res.corpo.lang || "").toLowerCase() === "none") ? { falha: SEM_FALA, semFala: true } : t;
+      } else if (res.status === 206 || String(res.corpo.error || "") === "transcript-unavailable") {
+        resultado = { falha: SEM_FALA, semFala: true };
+      } else {
+        resultado = { falha: erroSupadata(res) };
+      }
+    }
+  } catch (e) {
+    resultado = { falha: "A transcrição não deu certo. Tente de novo daqui a pouco." };
+  } finally {
+    clearInterval(relogio);
+    emAndamento.delete(r.id);
+    $("#rTranscrever").disabled = emAndamento.size > 0;
+  }
+
+  const dados = resultado.falha
+    ? { status: "falhou", erro: resultado.falha }
+    : { status: "pronto", erro: null, transcricao: resultado.texto, segmentos: resultado.segmentos };
+  const salvo = await salvarLinha("roteiros", dados, r.id);
+  const atual = salvo || Object.assign({}, r, dados);
+  troca(D.roteiros, atual);
+  desenharRoteiros();
+  atualizaSaldo();
+
+  if (!resultado.falha) {
+    mostraAviso("ok", "✅ Pronto em " + tempo() + ". Revisa, dá um nome e salva.");
+    editorRoteiro(atual, null, "✅ Pronto. Revisa, dá um nome e salva.");
+  } else if (resultado.semFala) {
+    mostraAviso("erro", "🔇 " + SEM_FALA + ' <button type="button" class="btn btn--linha" id="rGuardar">📝 Guardar assim mesmo</button>');
+    $("#rGuardar").addEventListener("click", () => editorRoteiro(atual));
   } else {
-    det.addEventListener("input", () => status(campo("tLink").value.trim() ? "Ainda não salva" : ""));
+    mostraAviso("erro", "⚠️ " + esc(resultado.falha));
   }
+}
 
-  desenharListaTrans();
-  if (!inicio && window.matchMedia("(max-width: 900px)").matches) det.scrollIntoView({ behavior: "smooth", block: "start" });
-  if (nova && !inicio && window.matchMedia("(pointer: fine)").matches) campo("tLink").focus();
+/* ----- estudar com o Claude: monta o prompt e copia ----- */
+async function estudarComClaude() {
+  const base = D.roteiros.filter(r => r.de_quem === "outra" && r.transcricao && r.status !== "processando").slice(0, 10);
+  if (!base.length) { mostraAviso("erro", "🧠 Para estudar, preciso de pelo menos um roteiro marcado como De outra e com transcrição."); return; }
+  const videos = base.map((r, i) =>
+    "VÍDEO " + (i + 1) + (r.perfil ? " · " + comArroba(r.perfil) : "") + (r.titulo ? " · " + r.titulo : "") + "\n" +
+    String(r.transcricao).slice(0, 4000)).join("\n\n");
+  const prompt =
+"Você é minha parceira de criação de conteúdo UGC. Abaixo estão as transcrições de " + plural(base.length, "vídeo", "vídeos") + " de outras creators que eu guardei porque chamaram a minha atenção.\n\n" +
+"Meu assunto: [escreva aqui o seu nicho ou o produto que você vai divulgar]\n\n" +
+"Analise os vídeos e me entregue:\n\n" +
+"1. Assuntos em alta: quais temas aparecem e por que estão prendendo a atenção.\n" +
+"2. Expressões que estão prendendo: frases e jeitos de falar que se repetem ou que chamam atenção. Cite o trecho e diga de qual vídeo é.\n" +
+"3. Padrões de gancho: os tipos de abertura usados, com um exemplo real de cada um, tirado das transcrições.\n" +
+"4. Cinco roteiros novos no MEU assunto, reaproveitando a estrutura desses vídeos, não o conteúdo. Para cada um: gancho, desenvolvimento e chamada final, com o tempo aproximado de cada parte.\n\n" +
+"Escreva do jeito que uma pessoa fala de verdade, sem ficar robotizado e sem frase pronta de propaganda. Nada de travessão.\n\n" +
+"=== OS VÍDEOS ===\n\n" + videos;
+  try {
+    await navigator.clipboard.writeText(prompt);
+    mostraAviso("ok", "🧠 Prompt copiado ✓ com " + plural(base.length, "roteiro", "roteiros") + ". Abra o Claude, cole com Cmd + V e troque o trecho \"Meu assunto\" pelo seu nicho.");
+  } catch (e) {
+    abrirJanela({ titulo: "🧠 Prompt pronto", larga: true, corpo: '<p class="mudo pequeno" style="margin-bottom:8px">Não consegui copiar sozinha. Selecione o texto abaixo e use Cmd + C.</p><textarea class="entrada" style="height:360px;padding:10px" readonly>' + esc(prompt) + "</textarea>" });
+  }
 }
 
 /* ============================================================
    10. MENU, GAVETA E SAIR
    ============================================================ */
-const TITULOS = { portfolio: "Portfólio", marcas: "Marcas", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", transcricoes: "Transcrições" };
+const TITULOS = { portfolio: "Portfólio", marcas: "Marcas", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "📜 Roteiros" };
 const lateral = $("#lateral"), cortina = $("#cortina");
 const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classList.remove("aberta"); };
 function irPara(aba) {
@@ -1433,7 +1753,7 @@ seguro("Marcas", () => { montarMarcas(); desenharMarcas(); });
 seguro("Calendário", () => { montarCalendario(); desenharCalendario(); });
 seguro("Campanhas", () => { montarCampanhas(); desenharCampanhas(); });
 seguro("Checklist", montarChecklist);
-seguro("Transcrições", montarTranscricoes);
+seguro("Roteiros", montarRoteiros);
 
 irPara(location.hash.slice(1));
 document.documentElement.classList.remove("travado");
