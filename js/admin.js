@@ -123,7 +123,7 @@ const ehErroDeCampo = (e) => e && (e.code === "PGRST204" || e.code === "42703" |
 const ESPERADO = {
   videos: ["titulo", "link", "nicho", "formato", "marca", "destaque", "ordem", "visivel"],
   marcas: ["nome", "instagram", "email", "telefone", "situacao", "obs", "ultimo_contato"],
-  base_marcas: ["nome", "instagram", "email", "telefone", "site", "nicho", "origem", "situacao", "obs", "ultimo_contato", "nao_enviar"],
+  base_marcas: ["nome", "instagram", "email", "telefone", "site", "nicho", "origem", "situacao", "obs", "ultimo_contato", "nao_enviar", "favorita", "produto", "link_produto", "outros_contatos", "fonte"],
   calendario: ["titulo", "marca", "tipo", "data", "status"],
   campanhas: ["campanha", "cliente", "tipo", "status", "qtd", "valor", "prazo", "pagamento", "ativa", "favorita"],
   marcados: ["chave"],
@@ -696,7 +696,7 @@ const B_NICHOS = ["Skincare", "Haircare", "Beauty", "Fashion", "Home & Decor", "
 const bSituacao = (v) => B_SITUACOES.find(s => s[0] === v) || B_SITUACOES[0];
 const bOrigem = (v) => B_ORIGENS.find(o => o[0] === v) || B_ORIGENS[B_ORIGENS.length - 1];
 let bVisao = "semana";
-const bFiltro = { situacao: "", origem: "", nicho: "" };
+const bFiltro = { situacao: "", origem: "", nicho: "", favoritas: false };
 const bCampanha = { nichos: new Set(), situacoes: new Set(["prospectada", "em_conversa", "ja_trabalhei"]) };
 
 const nichosDaBase = () => Array.from(new Set(B_NICHOS.concat(D.base.map(m => m.nicho).filter(Boolean)))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -715,6 +715,7 @@ function montarBase() {
       '<select class="entrada entrada--sel" id="bFSit"><option value="">Todas as situações</option>' + B_SITUACOES.map(s => '<option value="' + s[0] + '">' + s[1] + "</option>").join("") + "</select>" +
       '<select class="entrada entrada--sel" id="bFOri"><option value="">Todas as origens</option>' + B_ORIGENS.map(o => '<option value="' + o[0] + '">' + o[1] + "</option>").join("") + "</select>" +
       '<select class="entrada entrada--sel" id="bFNic"></select>' +
+      '<button type="button" class="btn btn--linha" id="bFFav" aria-pressed="false">⭐ Só favoritas</button>' +
       '<span class="mudo pequeno" id="bConta"></span><span class="espaco"></span>' +
     "</div>" +
     '<div class="ferramentas">' +
@@ -726,7 +727,7 @@ function montarBase() {
     "</div>" +
     '<div id="bCampanha"></div>' +
     '<div class="tabela-caixa"><table class="tabela"><thead><tr>' +
-      "<th>Marca</th><th>Nicho</th><th>Origem</th><th>Situação</th><th>Instagram</th><th>E-mail</th><th>Telefone</th><th>Último contato</th><th></th>" +
+      "<th></th><th>Marca</th><th>Produto</th><th>Nicho</th><th>Origem</th><th>Situação</th><th>Instagram</th><th>E-mail</th><th>Telefone</th><th>Último contato</th><th></th>" +
     '</tr></thead><tbody id="bCorpo"></tbody></table></div>';
 
   $("#bVisoes").addEventListener("click", (e) => {
@@ -739,6 +740,7 @@ function montarBase() {
   $("#bFSit").addEventListener("change", () => { bFiltro.situacao = $("#bFSit").value; desenharBase(); });
   $("#bFOri").addEventListener("change", () => { bFiltro.origem = $("#bFOri").value; desenharBase(); });
   $("#bFNic").addEventListener("change", () => { bFiltro.nicho = $("#bFNic").value; desenharBase(); });
+  $("#bFFav").addEventListener("click", () => { bFiltro.favoritas = !bFiltro.favoritas; desenharBase(); });
   $("#bNova").addEventListener("click", () => editorBase(null));
   $("#bModelo").addEventListener("click", baixarModelo);
   $("#bImportar").addEventListener("click", () => { if (falhou.base_marcas) { torrada("A tabela base_marcas ainda não existe. Rode o sql-marcas.sql no Supabase.", true); return; } $("#bArquivo").value = ""; $("#bArquivo").click(); });
@@ -753,6 +755,11 @@ function montarBase() {
     if (!tr) return;
     const m = D.base.find(x => x.id === tr.dataset.id);
     if (!m) return;
+    if (e.target.closest("[data-fav]")) {
+      const salvo = await salvarLinha("base_marcas", { favorita: !m.favorita }, m.id);
+      if (salvo) { troca(D.base, salvo); desenharBase(); }
+      return;
+    }
     if (e.target.closest("[data-prospectei]")) {
       const salvo = await salvarLinha("base_marcas", { situacao: "prospectada", ultimo_contato: isoLocal(new Date()) }, m.id);
       if (salvo) { troca(D.base, salvo); desenharBase(); torrada("📨 Marcada como prospectada hoje."); }
@@ -821,13 +828,18 @@ function desenharBase() {
       (naSemana ? m.situacao === "quero_prospectar" : (!bFiltro.situacao || m.situacao === bFiltro.situacao)) &&
       (!bFiltro.origem || m.origem === bFiltro.origem) &&
       (!bFiltro.nicho || m.nicho === bFiltro.nicho) &&
-      (!busca || normaliza([m.nome, m.instagram, m.email, m.obs, m.site].join(" ")).includes(busca)));
+      (!bFiltro.favoritas || m.favorita) &&
+      (!busca || normaliza([m.nome, m.instagram, m.email, m.obs, m.site, m.produto, m.outros_contatos].join(" ")).includes(busca)));
+    /* as favoritas sempre primeiro */
+    lista = lista.slice().sort((a, b) => (b.favorita ? 1 : 0) - (a.favorita ? 1 : 0));
   }
+  $("#bFFav").classList.toggle("ativo-fav", bFiltro.favoritas);
+  $("#bFFav").setAttribute("aria-pressed", String(bFiltro.favoritas));
   $("#bConta").textContent = lista.length === D.base.length ? plural(D.base.length, "marca", "marcas") : lista.length + " de " + D.base.length;
 
   const corpo = $("#bCorpo");
   if (!lista.length) {
-    corpo.innerHTML = '<tr><td colspan="9"><p class="vazio">' + (falhou.base_marcas
+    corpo.innerHTML = '<tr><td colspan="11"><p class="vazio">' + (falhou.base_marcas
       ? "A base ainda não existe no banco. Rode o sql-marcas.sql no Supabase."
       : !D.base.length ? "A base está vazia. Clique em 📥 Importar planilha ou em Adicionar marca."
       : naSemana ? "Nenhuma marca para prospectar agora. 🎉<br>Coloque marcas com situação Quero prospectar para elas aparecerem aqui."
@@ -837,10 +849,14 @@ function desenharBase() {
   corpo.innerHTML = lista.map(m => {
     const s = bSituacao(m.situacao), o = bOrigem(m.origem);
     const ig = arroba(m.instagram), wa = whatsapp(m.telefone);
-    return '<tr class="clica" data-id="' + esc(m.id) + '">' +
+    return '<tr class="clica' + (m.favorita ? " favorita" : "") + '" data-id="' + esc(m.id) + '">' +
+      '<td class="curta"><button type="button" class="btn--icone estrela' + (m.favorita ? " ligada" : "") + '" data-fav aria-label="' + (m.favorita ? "Tirar dos favoritos" : "Favoritar") + '">' + ic("estrela") + "</button></td>" +
       "<td><b>" + esc(m.nome) + "</b>" + (m.nao_enviar ? ' <span title="Não enviar campanha">🚫</span>' : "") + pilExemplo(m) +
         (m.site ? '<div class="pequeno"><a class="link" href="' + esc(/^https?:/i.test(m.site) ? m.site : "https://" + m.site) + '" target="_blank" rel="noopener">' + esc(String(m.site).replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "")) + "</a></div>" : "") + "</td>" +
-      "<td>" + esc(m.nicho || "") + "</td>" +
+      '<td class="corta" title="' + esc(m.produto || "") + '">' + (m.link_produto
+        ? '<a class="link" href="' + esc(m.link_produto) + '" target="_blank" rel="noopener">' + esc(m.produto || "ver produto") + " ↗</a>"
+        : esc(m.produto || "")) + "</td>" +
+      '<td style="white-space:nowrap">' + esc(m.nicho || "") + "</td>" +
       '<td><span class="pil c-cinza">' + esc(o[1]) + "</span></td>" +
       '<td><span class="pil ' + s[2] + '">' + esc(s[1]) + "</span></td>" +
       "<td>" + (ig ? '<a class="link" href="https://instagram.com/' + encodeURIComponent(ig) + '" target="_blank" rel="noopener">@' + esc(ig) + "</a>" : "") + "</td>" +
@@ -865,7 +881,12 @@ function editorBase(m, padrao) {
       { nome: "email", rot: "E-mail", tipo: "email" },
       { nome: "telefone", rot: "Telefone", dica: "+1 416 555 0000" },
       { nome: "site", rot: "Site", dica: "marca.com" },
+      { nome: "produto", rot: "Produto", dica: "ex.: Aspirador de pó" },
+      { nome: "link_produto", rot: "Link do produto", dica: "https://..." },
       { nome: "obs", rot: "Observação", tipo: "textarea", inteiro: true },
+      { nome: "outros_contatos", rot: "Outros contatos", tipo: "textarea", inteiro: true, dica: "Outros e-mails, telefone, formulário, programa de afiliados" },
+      { nome: "fonte", rot: "Fonte (de onde saiu o contato)", inteiro: true, dica: "https://..." },
+      { nome: "favorita", rot: "⭐ Favorita (prioridade na hora de abordar)", tipo: "check" },
       { nome: "nao_enviar", rot: "🚫 Não enviar campanha (pediu para não receber e-mails)", tipo: "check" }
     ],
     aoSalvar: async (dados) => {
@@ -904,16 +925,17 @@ async function moverParaBase(m) {
 /* ----- planilha: modelo, leitura, prévia e importação ----- */
 const COLUNAS_MODELO = [
   ["Marca", "nome"], ["Instagram", "instagram"], ["E-mail", "email"], ["Telefone", "telefone"], ["Site", "site"],
-  ["Nicho", "nicho"], ["Origem", "origem"], ["Situação", "situacao"], ["Observação", "obs"], ["Último contato", "ultimo_contato"],
-  ["Não enviar campanha", "nao_enviar"]
+  ["Produto", "produto"], ["Link do produto", "link_produto"],
+  ["Nicho", "nicho"], ["Origem", "origem"], ["Situação", "situacao"], ["Observação", "obs"], ["Outros contatos", "outros_contatos"],
+  ["Fonte", "fonte"], ["Último contato", "ultimo_contato"], ["Favorita", "favorita"], ["Não enviar campanha", "nao_enviar"]
 ];
 function linhaParaCSV(m) {
-  return [m.nome, m.instagram, m.email, m.telefone, m.site, m.nicho, bOrigem(m.origem)[1], bSituacao(m.situacao)[1].replace(/^\S+\s/, ""),
-    m.obs, dataBR(m.ultimo_contato), m.nao_enviar ? "sim" : ""];
+  return [m.nome, m.instagram, m.email, m.telefone, m.site, m.produto, m.link_produto, m.nicho, bOrigem(m.origem)[1], bSituacao(m.situacao)[1].replace(/^\S+\s/, ""),
+    m.obs, m.outros_contatos, m.fonte, dataBR(m.ultimo_contato), m.favorita ? "sim" : "", m.nao_enviar ? "sim" : ""];
 }
 function baixarModelo() {
   baixarCSV("modelo-marcas", COLUNAS_MODELO.map(c => c[0]), [
-    ["Marca Exemplo (apague esta linha)", "@marcaexemplo", "contato@marcaexemplo.com", "+1 416 000 0000", "marcaexemplo.com", "Skincare", "Instagram", "Quero prospectar", "Achei pela hashtag #ugc", "25/09/2026", ""]
+    ["Marca Exemplo (apague esta linha)", "@marcaexemplo", "contato@marcaexemplo.com", "+1 416 000 0000", "marcaexemplo.com", "Sérum facial", "https://marcaexemplo.com/serum", "Skincare", "Instagram", "Quero prospectar", "Achei pela hashtag #ugc", "affiliate@marcaexemplo.com", "https://marcaexemplo.com/contact", "25/09/2026", "sim", ""]
   ]);
   abrirJanela({
     titulo: "📄 Como preencher o modelo",
@@ -922,7 +944,8 @@ function baixarModelo() {
       "<h3>Situação (escreva uma destas)</h3><p>" + B_SITUACOES.map(s => s[1].replace(/^\S+\s/, "")).join(" · ") + "</p>" +
       "<h3>Nicho</h3><p>" + B_NICHOS.join(" · ") + ". Pode escrever outro, se precisar.</p>" +
       "<h3>Último contato</h3><p>No formato dia/mês/ano, por exemplo 25/09/2026.</p>" +
-      "<h3>Não enviar campanha</h3><p>Escreva <b>sim</b> se a marca pediu para não receber e-mails. Se não, deixe vazio.</p>" +
+      "<h3>Favorita e Não enviar campanha</h3><p>Escreva <b>sim</b> para marcar. Se não, deixe vazio.</p>" +
+      "<h3>Produto, Link do produto, Outros contatos e Fonte</h3><p>São opcionais. Preencha quando a pesquisa for de um produto específico.</p>" +
       "<h3>Na hora de salvar</h3><p>Salve como <b>CSV</b>. No Excel: Arquivo, Salvar como, CSV UTF-8. No Google Planilhas: Arquivo, Fazer download, CSV.</p></div>",
     rodape: '<span class="espaco"></span><button class="btn" type="button" data-fechar>Entendi</button>'
   });
@@ -956,22 +979,47 @@ function lerCSV(texto) {
 /* reconhece o nome da coluna mesmo escrito diferente */
 function campoDaColuna(nome) {
   const n = normaliza(nome).replace(/[^a-z0-9]/g, "");
-  const regras = [
-    ["nome", /^(marca|nome|empresa|brand|company|cliente|nomedamarca)/],
-    ["instagram", /^(instagram|insta|ig|arroba)/],
-    ["email", /^(email|mail|correio)/],
-    ["telefone", /^(telefone|fone|phone|whatsapp|celular|tel)/],
-    ["site", /^(site|website|url|web|link)/],
-    ["nicho", /^(nicho|categoria|niche|category|segmento)/],
-    ["origem", /^(origem|fonte|source|ondeencontrei|deondeveio|canal)/],
-    ["situacao", /^(situacao|status|etapa|estagio)/],
-    ["obs", /^(observ|obs|nota|notes|comentario)/],
-    ["ultimo_contato", /^(ultimocontato|data|lastcontact|contato)/],
-    ["nao_enviar", /^(naoenviar|optout|descadastr|bloque)/]
+  if (!n) return null;
+  const regras = [                          /* a ordem importa: a primeira que servir ganha */
+    [null, /seguidor|followers/],
+    ["nao_enviar", /naoenviar|optout|descadastr|bloque/],
+    ["favorita", /favorit|prioridade|destaque/],
+    ["outros_contatos", /outroscontatos|outrocontato|othercontact|maiscontatos/],
+    ["link_produto", /(link|url).*produto|produto.*(link|url)|productlink|producturl/],
+    ["instagram", /instagram|^insta|^ig$|arroba/],
+    ["produto", /produto|product/],
+    ["email", /mail|correio/],
+    ["obs", /^observ|^obs|^nota|notes|comentario/],
+    ["fonte", /^fonte|^source|referencia/],
+    ["telefone", /telefone|^fone|phone|whatsapp|celular|^tel/],
+    ["site", /^site|website|^url|^web/],
+    ["nicho", /nicho|categoria|niche|category|segmento/],
+    ["origem", /origem|ondeencontrei|deondeveio|canal/],
+    ["situacao", /situacao|status|etapa|estagio/],
+    ["ultimo_contato", /ultimocontato|^data|lastcontact/],
+    ["nome", /marca|nome|empresa|brand|company|cliente/]
   ];
   const r = regras.find(([, re]) => re.test(n));
   return r ? r[0] : null;
 }
+/* separa e-mails de um texto: o primeiro vira o e-mail principal, o resto vai para outros contatos */
+function emailsDoTexto(t) {
+  const texto = String(t || "");
+  const lista = Array.from(new Set((texto.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g) || []).map(e => e.toLowerCase())));
+  const naoTem = /^\s*n[aã]o encontrad/i.test(texto);   /* "não encontrado (só atendimento: ...)" */
+  if (naoTem) return { principal: null, resto: texto.trim() };
+  const linhas = texto.split(/\n/);
+  /* o comentário ao lado do e-mail principal não se perde: "(colaboração com influenciadores)" */
+  const comentario = (linhas[0] || "").replace(lista[0] ? new RegExp(lista[0].replace(/[.+]/g, "\\$&"), "i") : /$^/, "").replace(/^[\s:(-]+|[\s)]+$/g, "").trim();
+  return { principal: lista[0] || null, resto: [comentario && "Sobre o e-mail principal: " + comentario].concat(linhas.slice(1)).filter(Boolean).join("\n").trim() };
+}
+function instagramDoTexto(t) {
+  const linhas = String(t || "").split(/\n/).map(x => x.trim()).filter(Boolean);
+  const pega = (l) => { const m = l.match(/instagram\.com\/([\w.]+)/i) || l.match(/@([\w.]+)/); return m ? m[1] : (/^[\w.]+$/.test(l) ? l : null); };
+  const principal = linhas.length ? pega(linhas[0]) : null;
+  return { principal: principal ? "@" + principal.replace(/^@/, "") : null, resto: linhas.slice(1).join("\n") };
+}
+const semNaoEncontrado = (t) => String(t || "").split(/\n/).filter(l => !/:\s*n[aã]o encontrad/i.test(l) && !/^\s*n[aã]o encontrad[oa]\.?\s*$/i.test(l)).join("\n").trim();
 function origemDoTexto(t) {
   const n = normaliza(t);
   if (!n) return "outro";
@@ -1061,12 +1109,21 @@ function planoDaPlanilha(pl) {
     const item = { linha: i + 2 };
     if (!d.nome) return Object.assign(item, { tipo: "ignorada", motivo: "sem nome da marca", dados: { nome: "" } });
     if (/apague esta linha/i.test(d.nome)) return Object.assign(item, { tipo: "ignorada", motivo: "linha de exemplo", dados: { nome: d.nome } });
+    if (d.nome.length > 80 || /^(notas?|observac|obs\b|total|fonte)/i.test(normaliza(d.nome)))
+      return Object.assign(item, { tipo: "ignorada", motivo: "parece uma anotação, não uma marca", dados: { nome: d.nome.slice(0, 60) + (d.nome.length > 60 ? "…" : "") } });
+    const ig = instagramDoTexto(d.instagram), em = emailsDoTexto(d.email);
+    const outros = [semNaoEncontrado(em.resto), semNaoEncontrado(ig.resto) && "Instagram: " + ig.resto.replace(/\n/g, " · "), semNaoEncontrado(d.outros_contatos)].filter(Boolean).join("\n");
     const limpo = {
       nome: d.nome.slice(0, 200),
-      instagram: d.instagram ? "@" + arroba(d.instagram) : null,
-      email: d.email ? d.email.toLowerCase().slice(0, 200) : null,
+      instagram: ig.principal,
+      email: em.principal ? em.principal.slice(0, 200) : null,
       telefone: d.telefone || null,
       site: d.site || null,
+      produto: d.produto || null,
+      link_produto: d.link_produto || null,
+      outros_contatos: outros || null,
+      fonte: d.fonte || null,
+      favorita: /^(sim|s|yes|y|x|1|true|alta)$/i.test(d.favorita || "") || /prioridade alta/i.test(d.obs || ""),
       nicho: nichoDoTexto(d.nicho),
       origem: origemDoTexto(d.origem),
       situacao: situacaoDoTexto(d.situacao),
@@ -1083,7 +1140,8 @@ function planoDaPlanilha(pl) {
     if (!existe) return Object.assign(item, { tipo: "nova" });
     /* já existe: a planilha só preenche e atualiza o que veio escrito, nunca apaga */
     const mudar = {};
-    ["instagram", "email", "telefone", "site", "nicho", "obs", "ultimo_contato"].forEach(k => { if (limpo[k] && limpo[k] !== existe[k]) mudar[k] = limpo[k]; });
+    ["instagram", "email", "telefone", "site", "produto", "link_produto", "outros_contatos", "fonte", "nicho", "obs", "ultimo_contato"].forEach(k => { if (limpo[k] && limpo[k] !== existe[k]) mudar[k] = limpo[k]; });
+    if (limpo.favorita && !existe.favorita) mudar.favorita = true;
     if (d.origem && limpo.origem !== existe.origem) mudar.origem = limpo.origem;
     if (d.situacao && limpo.situacao !== existe.situacao) mudar.situacao = limpo.situacao;
     if (d.nao_enviar && limpo.nao_enviar !== !!existe.nao_enviar) mudar.nao_enviar = limpo.nao_enviar;
@@ -1111,16 +1169,31 @@ function previaImportacao(pl) {
   const FIXOS = {
     origem: B_ORIGENS.map(o => o[1]),
     situacao: B_SITUACOES.map(s => s[1].replace(/^\S+\s/, "")),
-    nicho: B_NICHOS
+    nicho: B_NICHOS,
+    produto: Array.from(new Set(D.base.map(m => m.produto).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"))
   };
   const opcoes = (campo, atual) => '<option value="">não importar</option>' +
     '<optgroup label="Coluna da planilha">' + pl.cabecalho.map((c, i) => '<option value="' + i + '"' + (atual === i ? " selected" : "") + ">" + esc(c || "(coluna " + (i + 1) + ")") + "</option>").join("") + "</optgroup>" +
-    (FIXOS[campo] ? '<optgroup label="O mesmo para todas as linhas">' + FIXOS[campo].map(v => '<option value="fixo:' + esc(v) + '"' + (atual === "fixo:" + v ? " selected" : "") + ">" + esc(v) + " (todas)</option>").join("") + "</optgroup>" : "");
+    (FIXOS[campo] ? '<optgroup label="O mesmo para todas as linhas">' + Array.from(new Set(FIXOS[campo].concat(typeof atual === "string" && atual.startsWith("fixo:") ? [atual.slice(5)] : []))).map(v => '<option value="fixo:' + esc(v) + '"' + (atual === "fixo:" + v ? " selected" : "") + ">" + esc(v) + " (todas)</option>").join("") +
+      (campo === "produto" || campo === "nicho" ? '<option value="escrever">✏️ Escrever um para todas…</option>' : "") + "</optgroup>" : "");
   $("#impMapa", j).innerHTML = COLUNAS_MODELO.map(([rot, campo]) =>
     '<label class="imp__linha"><span>' + esc(rot) + (campo === "nome" ? " *" : "") + '</span><select class="entrada" data-campo="' + campo + '">' + opcoes(campo, pl.mapa[campo]) + "</select></label>").join("");
   $("#impMapa", j).addEventListener("change", (e) => {
     const s = e.target.closest("[data-campo]");
     if (!s) return;
+    if (s.value === "escrever") {
+      const caixa = abrirJanela({ titulo: "✏️ " + (s.dataset.campo === "produto" ? "Produto" : "Nicho") + " para todas as linhas",
+        corpo: '<div class="campo"><label for="impEscrito">Escreva e clique em Usar</label><input id="impEscrito" class="entrada" placeholder="ex.: Aspirador de pó"></div>',
+        rodape: '<span class="espaco"></span><button class="btn" type="button" id="impUsar">Usar</button>' });
+      /* a janela da prévia continua guardada: volta para ela depois */
+      const campo = s.dataset.campo;
+      $("#impUsar", caixa).addEventListener("click", () => {
+        const v = $("#impEscrito", caixa).value.trim();
+        if (v) pl.mapa[campo] = "fixo:" + v;
+        previaImportacao(pl);
+      });
+      return;
+    }
     if (s.value === "") delete pl.mapa[s.dataset.campo];
     else pl.mapa[s.dataset.campo] = s.value.startsWith("fixo:") ? s.value : Number(s.value);
     recalcula();
@@ -1137,7 +1210,7 @@ function previaImportacao(pl) {
     const cel = (t, classe) => "<td" + (classe ? ' class="' + classe + '"' : "") + ' title="' + esc(t || "") + '">' + esc(t || "·") + "</td>";
     $("#impTabela", j).innerHTML = semNome
       ? '<p class="vazio">Escolha lá em cima de qual coluna vem o nome da <b>Marca</b>. Sem ele não dá para importar.</p>'
-      : '<table class="tabela"><thead><tr><th></th><th>#</th><th></th><th>Marca</th><th>Instagram</th><th>E-mail</th><th>Telefone</th><th>Site</th><th>Nicho</th><th>Origem</th><th>Situação</th><th>Observação</th><th>Último contato</th><th>🚫</th></tr></thead><tbody>' +
+      : '<table class="tabela"><thead><tr><th></th><th>#</th><th></th><th>⭐</th><th>Marca</th><th>Produto</th><th>Link do produto</th><th>Instagram</th><th>E-mail</th><th>Outros contatos</th><th>Telefone</th><th>Site</th><th>Nicho</th><th>Origem</th><th>Situação</th><th>Observação</th><th>Fonte</th><th>Último contato</th><th>🚫</th></tr></thead><tbody>' +
         plano.map((p, i) => {
           const d = p.dados, pode = p.tipo === "nova" || p.tipo === "atualiza";
           return '<tr class="' + (marcadas.has(i) ? "" : "apagado") + '">' +
@@ -1145,11 +1218,12 @@ function previaImportacao(pl) {
             '<td class="curta mudo">' + p.linha + "</td>" +
             '<td class="curta"><span class="pil ' + ROT[p.tipo][1] + '" title="' + esc(p.motivo || "") + '">' + ROT[p.tipo][0] + (p.motivo ? ": " + esc(p.motivo) : "") + "</span>" +
               (p.alerta ? '<div class="pequeno" style="color:var(--c-vermelho)">⚠️ ' + esc(p.alerta) + "</div>" : "") + "</td>" +
+            cel(d.favorita ? "⭐" : "") +
             "<td><b>" + esc(d.nome || "·") + "</b></td>" +
-            cel(d.instagram) + cel(d.email) + cel(d.telefone) + cel(d.site) + cel(d.nicho) +
+            cel(d.produto) + cel(d.link_produto) + cel(d.instagram) + cel(d.email) + cel(d.outros_contatos, "corta") + cel(d.telefone) + cel(d.site) + cel(d.nicho) +
             (d.origem ? cel(bOrigem(d.origem)[1]) : cel("")) +
             (d.situacao ? '<td><span class="pil ' + bSituacao(d.situacao)[2] + '">' + esc(bSituacao(d.situacao)[1]) + "</span></td>" : cel("")) +
-            cel(d.obs, "corta") + cel(dataBR(d.ultimo_contato)) + cel(d.nao_enviar ? "sim" : "") + "</tr>";
+            cel(d.obs, "corta") + cel(d.fonte, "corta") + cel(dataBR(d.ultimo_contato)) + cel(d.nao_enviar ? "sim" : "") + "</tr>";
         }).join("") + "</tbody></table>";
     const conta = (t) => plano.filter(p => p.tipo === t).length;
     const escolhidas = [...marcadas].filter(i => plano[i]);

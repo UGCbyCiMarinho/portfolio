@@ -50,4 +50,11 @@ select 'Marca Exemplo', '@marcaexemplo', 'contato@marcaexemplo.com', 'Skincare',
 where not exists (select 1 from public.base_marcas);
 
 
+-- CAMPOS EXTRAS DE PROSPECÇÃO (favorita, produto, link, outros contatos, fonte)
+alter table public.base_marcas add column if not exists favorita        boolean not null default false;  -- ⭐ prioridade
+alter table public.base_marcas add column if not exists produto         text;   -- ex.: Aspirador de pó
+alter table public.base_marcas add column if not exists link_produto    text;   -- link da página do produto
+alter table public.base_marcas add column if not exists outros_contatos text;   -- outros e-mails, telefone, formulário, afiliados
+alter table public.base_marcas add column if not exists fonte           text;   -- link de onde saiu o contato
+
 -- Pronto! Se apareceu "Success. No rows returned", deu tudo certo.

@@ -462,6 +462,7 @@ a.btn { text-decoration: none; }
 .imp__planilha .tabela td { white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .imp__planilha .tabela td .pil { white-space: nowrap; }
 .imp__planilha input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--red); }
+.btn.ativo-fav { background: var(--suave); border-color: var(--red); color: var(--text); }
 .rot__relogio { display: inline-block; animation: girando 2s linear infinite; }
 @keyframes girando { to { transform: rotate(360deg); } }
 .rot__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; }
