@@ -3251,9 +3251,9 @@ function registrarAbordagens() {
 const OPENROUTER = "https://openrouter.ai/api/v1";
 const MODELOS_IA = [["anthropic/claude-sonnet-5", "Claude Sonnet 5 (rápido, uns US$ 0,01 por mensagem)"], ["anthropic/claude-opus-5.5", "Claude Opus 5.5 (caprichado, uns US$ 0,02)"]];
 const TIPOS_ABORDAGEM = [
-  ["email", "✉️ E-mail", "Um e-mail frio de primeiro contato no método A.C.R. ASSUNTO funcional citando o produto. Saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\". 1) Atenção: a primeira frase fala do CLIENTE da marca (uma dor, um desejo, um momento) ou de algo específico do produto ou de um post, nunca da Cintia. 2) Resultado: a ideia de vídeo com NOME entre aspas, o GANCHO literal entre aspas (o que aparece e o que ela fala nos primeiros segundos) e a sequência curta de takes com o produto como herói. 3) Conexão: um fato REAL da vida dela que prova que ela é a cliente. 4) Uma frase sobre quem ela é e 3 marcas relevantes. 5) CTA: uma pergunta de sim ou não. No máximo 150 palavras. Assinatura \"Warmly,\" + nome + portfólio."],
+  ["email", "✉️ E-mail", "Um e-mail frio de primeiro contato no método A.C.R. ASSUNTO funcional citando o produto. Saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\". 1) Atenção: a primeira frase fala do CLIENTE da marca (uma dor, um desejo, um momento) ou de algo específico do produto ou de um post, nunca da Cintia. 2) Resultado: a ideia de vídeo com NOME entre aspas, o GANCHO literal entre aspas (o que aparece e o que ela fala nos primeiros segundos) e a sequência curta de takes com o produto como herói. 3) Conexão: um fato REAL da vida dela que prova que ela é a cliente. 4) Uma frase sobre quem ela é e 3 marcas relevantes. 5) CTA: uma pergunta de sim ou não, seguida de uma linha curta convidando para ver os trabalhos dela, com o link do portfólio (ex.: \"In the meantime, you can see my recent work here: [portfólio]\"). No máximo 160 palavras. Assinatura \"Warmly,\" + nome."],
   ["dm", "💬 DM", "Uma DM fria de Instagram, no máximo 4 linhas: um elogio ESPECÍFICO a algo real da marca (post, Reel ou produto), dizer que teve uma ideia de vídeo pensada só para aquele produto e perguntar se pode mandar (ou qual o melhor e-mail). Sem apresentar a ideia inteira, sem assunto, sem links."],
-  ["plataforma", "🧩 Plataforma", "Uma candidatura para uma vaga de UGC numa plataforma (InSense, Billo, JoinBrands...). A marca já quer contratar, então venda a IDEIA, não o processo. 1) Atenção: a primeira frase fala do CLIENTE da marca (a dor ou a objeção que o produto resolve), usando as palavras da brief. Nunca comece com \"I read the brief\", \"I love\", \"I noticed\" ou falando dela. 2) Resultado: uma ideia menos óbvia que a da brief, com NOME entre aspas, o GANCHO literal entre aspas e 2 ou 3 takes com o produto como herói, respeitando TUDO que a brief proíbe ou exige. 3) Conexão: um fato REAL dela que prova que ela é a cliente. 4) Uma frase de quem ela é com 3 marcas relevantes. 5) CTA: uma pergunta de sim ou não (ex.: roteiro com tempo de cada take para aprovação). NÃO liste formatos, proporções (9:16, 1:1), prazos nem entregáveis: isso é óbvio e a plataforma já sabe. De 90 a 150 palavras, sem assunto, sem assinatura longa."],
+  ["plataforma", "🧩 Plataforma", "Uma candidatura para uma vaga de UGC numa plataforma (InSense, Billo, JoinBrands...). A marca já quer contratar, então venda a IDEIA, não o processo. 1) Atenção: a primeira frase fala do CLIENTE da marca (a dor ou a objeção que o produto resolve), usando as palavras da brief. Nunca comece com \"I read the brief\", \"I love\", \"I noticed\" ou falando dela. 2) Resultado: uma ideia menos óbvia que a da brief, com NOME entre aspas, o GANCHO literal entre aspas e 2 ou 3 takes com o produto como herói, respeitando TUDO que a brief proíbe ou exige. 3) Conexão: um fato REAL dela que prova que ela é a cliente. 4) Uma frase de quem ela é com 3 marcas relevantes. 5) CTA: uma pergunta de sim ou não (ex.: roteiro com tempo de cada take para aprovação), seguida de uma linha curta convidando para ver os trabalhos dela, com o link do portfólio. NÃO liste formatos, proporções (9:16, 1:1), prazos nem entregáveis: isso é óbvio e a plataforma já sabe. De 90 a 150 palavras, sem assunto, sem assinatura longa."],
   ["followup", "🔁 Follow-up", "Um follow-up de 2 ou 3 linhas para um e-mail sem resposta há 48 a 72 horas, na mesma conversa: retoma a ideia ou traz um ângulo novo, urgência suave de agenda, e um CTA de sim ou não. Nunca cobrar, nunca repetir o primeiro e-mail. Sem assunto."]
 ];
 let abTipo = "email";
@@ -3459,7 +3459,7 @@ async function pesquisarMarca() {
       method: "POST",
       headers: { Authorization: "Bearer " + D.config.openrouter_api_key, "Content-Type": "application/json", "HTTP-Referer": "https://cimarinho.com", "X-Title": "Admin Ci Marinho" },
       body: JSON.stringify({ model: D.config.abordagem_modelo || MODELOS_IA[0][0], plugins: [{ id: "web", engine: "exa", max_results: 8 }],
-        messages: [{ role: "user", content: pedido }], temperature: 0.2, max_tokens: 1200 })
+        messages: [{ role: "user", content: pedido }], temperature: 0.2, max_tokens: 5000, reasoning: { effort: "low" } })
     });
     const j = await r.json().catch(() => ({}));
     if (r.status === 401 || r.status === 403) erro = "O OpenRouter não aceitou a chave. Confira no quadro 🔑 IA.";
@@ -3583,7 +3583,7 @@ function pedidoAbordagem(ajuste) {
     "3. Tem uma ideia de vídeo com nome e o gancho literal entre aspas (menos na DM e no follow-up).\n" +
     "4. Usa pelo menos um fato REAL da lista \"Quem ela é\" ou do guia, e nenhum fato inventado.\n" +
     "5. Não repete o óbvio (formatos, proporções, prazos, \"I'll deliver\").\n" +
-    "6. Termina com uma pergunta de sim ou não.\n" +
+    "6. Termina com uma pergunta de sim ou não e, no e-mail e na plataforma, com o convite para ver o portfólio com o link.\n" +
     "7. Está no tamanho pedido, sem travessão, sem palavras vagas (authentic, natural, creative, relatable).\n" +
     "8. Tem a mesma qualidade e especificidade dos EXEMPLOS REAIS do guia.\n\n" +
     "=== FORMATO DA RESPOSTA ===\n" +
@@ -3618,14 +3618,19 @@ async function gerarAbordagem(ajuste) {
     const r = await fetch(OPENROUTER + "/chat/completions", {
       method: "POST",
       headers: { Authorization: "Bearer " + D.config.openrouter_api_key, "Content-Type": "application/json", "HTTP-Referer": "https://cimarinho.com", "X-Title": "Admin Ci Marinho" },
-      body: JSON.stringify({ model: D.config.abordagem_modelo || MODELOS_IA[0][0], messages: pedidoAbordagem(ajuste), temperature: 0.7, max_tokens: 900 })
+      body: JSON.stringify({ model: D.config.abordagem_modelo || MODELOS_IA[0][0], messages: pedidoAbordagem(ajuste), temperature: 0.7, max_tokens: 5000, reasoning: { effort: "low" } })
     });
     const j = await r.json().catch(() => ({}));
     if (r.status === 401 || r.status === 403) erro = "O OpenRouter não aceitou a chave. Confira no quadro 🔑 IA.";
     else if (r.status === 402) erro = "Os créditos do OpenRouter acabaram. Coloque mais em openrouter.ai/credits.";
     else if (r.status === 429) erro = "Muitos pedidos seguidos. Espere um minutinho e tente de novo.";
     else if (!r.ok) erro = "A IA não respondeu agora (" + ((j.error && j.error.message) || r.status) + "). Tente de novo.";
-    else texto = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    else {
+      const escolha = (j.choices && j.choices[0]) || {};
+      const c = escolha.message && escolha.message.content;
+      texto = Array.isArray(c) ? c.map(x => x && (x.text || "")).join("") : c;
+      if (!texto && escolha.finish_reason === "length") erro = "A IA pensou demais e não sobrou espaço para escrever. Tente de novo, ou troque para o Sonnet 5 no quadro 🔑.";
+    }
   } catch (e) { erro = "Sem conexão com a IA. Confira a sua internet."; }
   botao.disabled = false;
   desenharAbordar();
