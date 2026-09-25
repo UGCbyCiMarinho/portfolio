@@ -1491,7 +1491,7 @@ function cartaoRoteiro(r) {
           ? (emAnalise.has(r.id) ? '<button type="button" class="btn btn--linha" disabled><span class="rot__relogio">⏳</span> Analisando…</button>'
             : (temAnalise(r) ? '<button type="button" class="btn" data-ficha>📑 Ver análise</button>' : '<button type="button" class="btn" data-analisar>🔍 Analisar</button>'))
           : "") +
-        (r.url && r.status !== "processando" && !r.capa && !r.metricas && D.config[CHAVE_SUPADATA] ? '<button type="button" class="btn btn--linha" data-dados>🖼️ Buscar capa e números</button>' : "") +
+        (r.url && r.status !== "processando" && (!r.capa || !r.metricas) && D.config[CHAVE_SUPADATA] ? '<button type="button" class="btn btn--linha" data-dados>🖼️ Buscar capa e números</button>' : "") +
         '<button type="button" class="btn btn--linha" data-editar>✏️ Editar</button>' +
         '<button type="button" class="btn btn--perigo" data-apagar>🗑️ Apagar</button>' +
         (r.url ? '<a class="link pequeno" href="' + esc(r.url) + '" target="_blank" rel="noopener">abrir no ' + esc((FONTES[fonteDe(r.url)] || fonte).nome) + "</a>" : "") +
@@ -1530,7 +1530,9 @@ async function cliqueNoCartao(e) {
     b.disabled = true; b.textContent = "⏳ Buscando…";
     const novo = await preencherDadosDoPost(r);
     atualizaSaldo();
-    if (novo === r) { b.disabled = false; b.textContent = "🖼️ Buscar capa e números"; torrada("Não consegui os dados desse post agora. Tente de novo mais tarde.", true); }
+    const veio = ultimaResposta[r.id];
+    if (!veio) { b.disabled = false; b.textContent = "🖼️ Buscar capa e números"; torrada("A Supadata não respondeu agora. Tente de novo daqui a pouco.", true); return; }
+    if (!novo.capa || !novo.metricas) mostraOQueVeio(novo, veio);
     else torrada("Capa e números atualizados ✓");
     return;
   }
@@ -1777,6 +1779,7 @@ async function copiaDaCapa(url) {
   }
 }
 
+const ultimaResposta = {};   /* o que a Supadata mandou por último, para mostrar se faltar algo */
 /* pede os dados do post à Supadata (1 crédito) e preenche o que estiver vazio */
 async function preencherDadosDoPost(r) {
   if (!r.url || !D.config[CHAVE_SUPADATA]) return r;
@@ -1797,16 +1800,21 @@ async function preencherDadosDoPost(r) {
     if (!isNaN(d)) patch.postado_em = isoLocal(d);
   }
   if (!r.titulo) { const t = tituloAutomatico({ title: m.title, description: legenda }, r); if (t) patch.titulo = t; }
-  const metricas = {
-    views: primeiro(st.views, st.viewCount, st.playCount, st.plays),
-    likes: primeiro(st.likes, st.likeCount, st.diggCount),
-    comments: primeiro(st.comments, st.commentCount),
+  /* post com vários itens (carrossel): a capa e a duração ficam no primeiro item */
+  const itens = Array.isArray(md.items) ? md.items : [];
+  const video = itens.find(x => x && (x.duration || x.thumbnailUrl)) || itens[0] || {};
+  const extra = m.additionalData || {};
+  const metricas = Object.assign({}, r.metricas || {}, {
+    views: primeiro(st.views, st.viewCount, st.playCount, st.plays, extra.views, extra.playCount),
+    likes: primeiro(st.likes, st.likeCount, st.diggCount, extra.likes),
+    comments: primeiro(st.comments, st.commentCount, extra.comments),
     shares: primeiro(st.shares, st.shareCount),
-    duracao: primeiro(md.duration, m.duration)
-  };
+    duracao: primeiro(md.duration, video.duration, m.duration, extra.duration)
+  });
   Object.keys(metricas).forEach(k => { if (metricas[k] == null) delete metricas[k]; });
-  if (Object.keys(metricas).length) patch.metricas = metricas;
-  const capaUrl = primeiro(md.thumbnailUrl, md.thumbnail, m.thumbnailUrl, m.thumbnail);
+  if (Object.keys(metricas).length && JSON.stringify(metricas) !== JSON.stringify(r.metricas || {})) patch.metricas = metricas;
+  const capaUrl = primeiro(md.thumbnailUrl, md.thumbnail, video.thumbnailUrl, video.url, md.type === "image" ? md.url : null, m.thumbnailUrl, m.thumbnail);
+  ultimaResposta[r.id] = { tipo: m.type, capa: !!capaUrl, data: !!quando, views: metricas.views, likes: metricas.likes, comments: metricas.comments, duracao: metricas.duracao };
   if (!r.capa && capaUrl && !idYoutube(r.url)) {
     const copia = await copiaDaCapa(capaUrl);
     patch.capa = copia || capaUrl;           /* sem cópia, guarda o link (pode expirar) */
@@ -1819,6 +1827,25 @@ async function preencherDadosDoPost(r) {
   return salvo;
 }
 
+/* janelinha simples com o que a Supadata mandou, para a Cintia mandar print */
+function mostraOQueVeio(r, v) {
+  const linha = (rot, ok, valor) => "<li>" + (ok ? "✅ " : "❌ ") + rot + (valor != null ? ": " + esc(valor) : "") + "</li>";
+  const TIPOS = { video: "vídeo", image: "foto", carousel: "carrossel", post: "post" };
+  abrirJanela({
+    titulo: "📋 O que a Supadata mandou",
+    corpo: "<p style=\"margin-bottom:10px\">Para esse post, veio isto:</p><ul class=\"lista-simples\" style=\"list-style:none;padding:0\">" +
+      linha("Tipo de post", !!v.tipo, TIPOS[v.tipo] || v.tipo || "não informado") +
+      linha("Capa", v.capa || !!r.capa, null) +
+      linha("Data de postagem", v.data, null) +
+      linha("Visualizações", v.views != null, v.views != null ? compacto.format(v.views) : null) +
+      linha("Curtidas", v.likes != null, v.likes != null ? compacto.format(v.likes) : null) +
+      linha("Comentários", v.comments != null, v.comments != null ? compacto.format(v.comments) : null) +
+      linha("Duração", v.duracao != null, v.duracao != null ? Math.round(v.duracao) + "s" : null) +
+      "</ul><p class=\"mudo pequeno\" style=\"margin-top:10px\">O que está com ❌ a Supadata não mandou para esse post. Tire um print desta janela e mande para o Claude, que ele vê o que dá para fazer.</p>",
+    rodape: '<span class="espaco"></span><button class="btn" type="button" data-fechar>Entendi</button>'
+  });
+}
+
 /* ----- a análise ----- */
 const ANALISE_PROMPT = "Você é especialista em vídeos curtos de UGC. Assista ao vídeo inteiro, prestando atenção na fala, no que aparece na tela, nos cortes e no ritmo. " +
   "Separe a fala em gancho, corpo e CTA, copiando os trechos exatamente como foram falados, no idioma original. " +
@@ -1827,6 +1854,7 @@ const ANALISE_SCHEMA = {
   type: "object",
   properties: {
     titulo: { type: "string", description: "Título curto em português do Brasil, até 60 caracteres, dizendo do que é o vídeo" },
+    duracao_segundos: { type: "number", description: "Duração total do vídeo em segundos" },
     estilo: { type: "string", description: "Formato do vídeo em até 3 palavras, em português: por exemplo Demonstração, Problema e solução, React, Rotina, Encenação, Unboxing" },
     gancho: { type: "string", description: "Trecho exato da fala que abre o vídeo e prende a atenção, no idioma original" },
     corpo: { type: "string", description: "Trecho exato da fala entre o gancho e a chamada final, no idioma original" },
@@ -1872,6 +1900,8 @@ function patchDaAnalise(d, r) {
     analise
   };
   if (!r.titulo && textoDoCampo(d.titulo)) patch.titulo = textoDoCampo(d.titulo).slice(0, 80);
+  const dur = Number(d.duracao_segundos);
+  if (dur > 0 && !(r.metricas && r.metricas.duracao)) patch.metricas = Object.assign({}, r.metricas || {}, { duracao: dur });
   return patch;
 }
 
@@ -1893,29 +1923,60 @@ async function guardarAnalise(r, patch) {
 /* a ficha: igual à das Referências de vídeo */
 function abrirFicha(r) {
   const a = r.analise || {};
-  const numeros = linhaMetricas(r).replace(/<[^>]+>/g, "");
-  const meta = [a.estilo, comArroba(r.perfil), numeros].filter(Boolean).join(" · ");
+  const fonte = FONTES[fonteDe(r.url)] || FONTES[r.fonte] || FONTES.manual;
   const secao = (rot, t, classe) => t ? "<h3>" + rot + "</h3><p" + (classe ? ' class="' + classe + '"' : "") + ">" + esc(t) + "</p>" : "";
-  abrirJanela({
+  /* link do perfil: Instagram, TikTok ou YouTube */
+  const perfilLink = r.perfil
+    ? (fonteDe(r.url) === "tiktok" ? "https://www.tiktok.com/@" + encodeURIComponent(r.perfil)
+      : fonteDe(r.url) === "youtube" ? "https://www.youtube.com/@" + encodeURIComponent(r.perfil)
+      : "https://www.instagram.com/" + encodeURIComponent(r.perfil) + "/")
+    : null;
+  const emb = embedRoteiro(r.url);
+  const yt = idYoutube(r.url);
+  const imagem = r.capa || (yt ? "https://i.ytimg.com/vi/" + yt + "/hqdefault.jpg" : "");
+
+  /* coluna da esquerda: o vídeo, quem postou e os números */
+  const esquerda = '<div class="ficha2__lado">' +
+    (emb
+      ? '<div class="ficha2__video' + (emb.deitado ? " deitado" : "") + '"><iframe src="' + esc(emb.src) + '" allow="autoplay; encrypted-media; picture-in-picture; clipboard-write" allowfullscreen></iframe></div>'
+      : '<div class="ficha2__video ficha2__video--capa">' + (imagem ? '<img src="' + esc(imagem) + '" alt="">' : '<span class="rot__capa-emoji">' + fonte.emoji + "</span>") + "</div>") +
+    (r.perfil ? '<a class="ficha2__perfil" href="' + esc(perfilLink) + '" target="_blank" rel="noopener">' + fonte.emoji + " " + esc(comArroba(r.perfil)) + "</a>" : "") +
+    linhaMetricas(r) +
+    '<div class="ficha2__etiquetas">' + (a.estilo ? '<span class="pil c-destaque">' + esc(a.estilo) + "</span>" : "") +
+      '<span class="pil ' + (QUEM[r.de_quem] || QUEM.outra).cor + '">' + (QUEM[r.de_quem] || QUEM.outra).nome + "</span>" +
+      (r.postado_em ? '<span class="mudo pequeno">postado ' + dataBR(r.postado_em) + "</span>" : "") + "</div>" +
+    (r.url ? '<a class="link pequeno" href="' + esc(r.url) + '" target="_blank" rel="noopener">abrir no ' + esc(fonte.nome) + "</a>" : "") +
+    "</div>";
+
+  /* coluna da direita: a análise, e depois o roteiro completo */
+  const direita = '<div class="ficha ficha2__texto">' +
+    secao("Gancho", r.gancho, "ficha__gancho") +
+    secao("Corpo", r.corpo) +
+    secao("CTA", r.cta) +
+    secao("Por que funciona", a.por_que_funciona) +
+    secao("O diferencial", a.diferencial) +
+    secao("Erro comum", a.erro_comum) +
+    (a.blocos && a.blocos.length ? "<h3>Roteiro em blocos de tempo</h3>" +
+      '<div class="blocos">' + a.blocos.map(b => '<div class="blocos__linha"><span class="blocos__t">' + esc(b.t) + "</span><span>" + destacaNome(b.o) + "</span></div>").join("") + "</div>" : "") +
+    (!temAnalise(r) && !r.gancho ? '<p class="vazio">Esse vídeo ainda não foi analisado. Clique em 🔍 Analisar aqui embaixo.</p>' : "") +
+    (r.transcricao ? '<h3>Roteiro completo (transcrição) <button type="button" class="link" data-f-copiar>copiar</button></h3><p class="ficha2__roteiro">' + esc(r.transcricao) + "</p>" : "") +
+    (r.legenda ? '<h3>Legenda do post</h3><p class="ficha2__roteiro mudo">' + esc(r.legenda) + "</p>" : "") +
+    (r.obs ? "<h3>Minhas notas</h3><p class=\"ficha2__roteiro\">" + esc(r.obs) + "</p>" : "") +
+    "</div>";
+
+  const j = abrirJanela({
     titulo: "🎬 " + (r.titulo || "Análise do vídeo"), larga: true,
-    corpo: '<div class="ficha">' +
-      (meta ? '<p class="mudo pequeno">' + esc(meta) + "</p>" : "") +
-      secao("Gancho", r.gancho, "ficha__gancho") +
-      secao("Corpo", r.corpo) +
-      secao("CTA", r.cta) +
-      secao("Por que funciona", a.por_que_funciona) +
-      secao("O diferencial", a.diferencial) +
-      secao("Erro comum", a.erro_comum) +
-      (a.blocos && a.blocos.length ? "<h3>Roteiro em blocos de tempo</h3>" +
-        '<div class="blocos">' + a.blocos.map(b => '<div class="blocos__linha"><span class="blocos__t">' + esc(b.t) + "</span><span>" + destacaNome(b.o) + "</span></div>").join("") + "</div>" : "") +
-      (!temAnalise(r) && !r.gancho ? '<p class="vazio">Esse vídeo ainda não foi analisado.</p>' : "") +
-      "</div>",
-    rodape: (r.url ? '<a class="btn btn--linha" href="' + esc(r.url) + '" target="_blank" rel="noopener">▶ Assistir</a>' : "") +
-      '<span class="espaco"></span><button class="btn btn--linha" type="button" data-f-editar>✏️ Editar</button>' +
-      '<button class="btn btn--linha" type="button" data-f-denovo>🔍 Analisar de novo</button>'
+    corpo: '<div class="ficha2">' + esquerda + direita + "</div>",
+    rodape: '<span class="espaco"></span><button class="btn btn--linha" type="button" data-f-editar>✏️ Editar</button>' +
+      '<button class="btn btn--linha" type="button" data-f-denovo>🔍 ' + (temAnalise(r) ? "Analisar de novo" : "Analisar") + "</button>"
   });
-  $("[data-f-editar]").addEventListener("click", () => editorRoteiro(D.roteiros.find(x => x.id === r.id) || r));
-  $("[data-f-denovo]").addEventListener("click", () => { fecharJanela(); analisar(D.roteiros.find(x => x.id === r.id) || r); });
+  $(".janela__caixa", j).classList.add("janela__caixa--ficha");
+  $("[data-f-editar]", j).addEventListener("click", () => editorRoteiro(D.roteiros.find(x => x.id === r.id) || r));
+  $("[data-f-denovo]", j).addEventListener("click", () => { fecharJanela(); analisar(D.roteiros.find(x => x.id === r.id) || r); });
+  const copiar = $("[data-f-copiar]", j);
+  if (copiar) copiar.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(r.transcricao || ""); copiar.textContent = "copiado ✓"; } catch (e) { copiar.textContent = "não deu para copiar"; }
+  });
 }
 /* "Nome do bloco. resto" vira nome em negrito, como nas Referências */
 function destacaNome(t) {

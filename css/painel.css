@@ -430,6 +430,25 @@ a.btn { text-decoration: none; }
 .rot__estado--falhou { display: block; color: var(--text); background: color-mix(in srgb, var(--c-vermelho) 10%, transparent); border-radius: var(--radius); padding: 8px 10px; }
 .rot__estado-botoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .rot__metricas { font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.janela__caixa--ficha { max-width: 1040px; }
+.ficha2 { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 22px; align-items: start; }
+.ficha2__lado { position: sticky; top: 0; display: flex; flex-direction: column; gap: 10px; }
+.ficha2__video { width: 100%; aspect-ratio: 9 / 16; border-radius: var(--radius); overflow: hidden; background: #000; position: relative; display: grid; place-items: center; }
+.ficha2__video.deitado { aspect-ratio: 16 / 9; }
+.ficha2__video iframe { width: 100%; height: 100%; border: 0; display: block; }
+.ficha2__video--capa { background: linear-gradient(160deg, var(--suave), var(--card-2)); }
+.ficha2__video--capa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ficha2__perfil { font-size: 14px; font-weight: 700; text-decoration: none; color: var(--text); }
+.ficha2__perfil:hover { color: var(--red); }
+.ficha2__etiquetas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ficha2__texto h3:first-child { margin-top: 0; }
+.ficha2__texto h3 .link { text-transform: none; letter-spacing: 0; margin-left: 6px; font-weight: 500; }
+.ficha2__roteiro { white-space: pre-line; background: var(--card-2); border-radius: var(--radius); padding: 10px 12px; }
+@media (max-width: 900px) {
+  .ficha2 { grid-template-columns: 1fr; }
+  .ficha2__lado { position: static; }
+  .ficha2__video { max-width: 320px; }
+}
 .rot__relogio { display: inline-block; animation: girando 2s linear infinite; }
 @keyframes girando { to { transform: rotate(360deg); } }
 .rot__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; }
