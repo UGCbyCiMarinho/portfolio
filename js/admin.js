@@ -3292,7 +3292,9 @@ function montarAbordar() {
             '<div class="campo"><label for="abIdioma">Idioma</label><select id="abIdioma"><option value="inglês">Inglês</option><option value="português do Brasil">Português</option></select></div>' +
             '<div class="campo"><label for="abExtra">Pedido especial (opcional)</label><input id="abExtra" placeholder="Ex.: citar que tenho pele oleosa" autocomplete="off"></div>' +
           "</div>" +
-          '<button type="button" class="btn btn--full" id="abGerar" style="margin-top:12px;height:40px">✨ Gerar abordagem</button>' +
+          '<div class="abordar__botoes"><button type="button" class="btn btn--linha" id="abPesquisar" title="A IA pesquisa a marca na internet e traz fatos com fonte">🔎 Pesquisar a marca</button>' +
+          '<button type="button" class="btn" id="abGerar">✨ Gerar abordagem</button></div>' +
+          '<div id="abPesquisa"></div>' +
         "</div>" +
         '<div id="abSaida"></div>' +
       "</div>" +
@@ -3325,6 +3327,7 @@ function montarAbordar() {
   $("#abMarca").addEventListener("change", escolheMarca);
   $("#abMarca").addEventListener("input", () => { if (!$("#abMarca").value) { abMarcaId = null; $("#abMarcaInfo").textContent = ""; } });
   $("#abGerar").addEventListener("click", () => gerarAbordagem());
+  $("#abPesquisar").addEventListener("click", pesquisarMarca);
   $("#abPdfBtn").addEventListener("click", () => $("#abPdf").click());
   $("#abPdf").addEventListener("change", () => { const f = $("#abPdf").files[0]; if (f) lerBrief(f); });
   const zona = $("#abPdfZona");
@@ -3427,6 +3430,62 @@ async function lerBrief(arquivo) {
   } catch (e) {
     info.textContent = "Não consegui ler esse PDF. Cole o texto da brief no campo acima.";
   }
+}
+
+/* pesquisa na internet (OpenRouter + busca Exa): fatos com fonte, para ela conferir antes de usar */
+async function pesquisarMarca() {
+  if (!D.config.openrouter_api_key) { $("#abIA").open = true; torrada("Falta a chave do OpenRouter, no quadro 🔑 IA aqui do lado.", true); return; }
+  const marca = $("#abMarca").value.trim();
+  if (!marca) { torrada("Escolha ou escreva o nome da marca primeiro.", true); $("#abMarca").focus(); return; }
+  const m = abMarcaId ? D.base.find(x => x.id === abMarcaId) : null;
+  const alvo = $("#abPesquisa"), botao = $("#abPesquisar");
+  botao.disabled = true; botao.textContent = "🔎 Pesquisando...";
+  alvo.innerHTML = '<div class="abordar__pesquisa"><p class="mudo"><span class="rot__relogio">⏳</span> Pesquisando ' + esc(marca) + " na internet... leva uns 20 a 40 segundos.</p></div>";
+  const pedido = "Pesquise a marca \"" + marca + "\"" +
+    [$("#abProduto").value.trim() && "e o produto \"" + $("#abProduto").value.trim() + "\"", $("#abLink").value.trim() && "(link: " + $("#abLink").value.trim() + ")",
+     m && m.site && "(site: " + m.site + ")", m && m.instagram && "(Instagram: " + m.instagram + ")"].filter(Boolean).join(" ") + ".\n\n" +
+    "Traga de 4 a 7 fatos ATUAIS e verificáveis que ajudem uma creator de UGC a escrever uma abordagem personalizada para essa marca: posicionamento e diferenciais, lançamentos recentes, campanhas ou posts que chamaram atenção, para quem ela vende, tendências ou números públicos sobre a marca ou a categoria (hashtags, crescimento, avaliações).\n" +
+    "Regras: só fatos que aparecem nas fontes; número só com fonte; nada de opinião. Cada fato numa linha começando com \"- \", em português do Brasil, e no fim da linha a fonte entre colchetes com a URL, assim: [https://...]. Nunca use travessão. Se não achar nada confiável, diga isso.";
+  let texto = null, links = [], erro = null;
+  try {
+    const r = await fetch(OPENROUTER + "/chat/completions", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + D.config.openrouter_api_key, "Content-Type": "application/json", "HTTP-Referer": "https://cimarinho.com", "X-Title": "Admin Ci Marinho" },
+      body: JSON.stringify({ model: D.config.abordagem_modelo || MODELOS_IA[0][0], plugins: [{ id: "web", engine: "exa", max_results: 8 }],
+        messages: [{ role: "user", content: pedido }], temperature: 0.2, max_tokens: 1200 })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401 || r.status === 403) erro = "O OpenRouter não aceitou a chave. Confira no quadro 🔑 IA.";
+    else if (r.status === 402) erro = "Os créditos do OpenRouter acabaram. Coloque mais em openrouter.ai/credits.";
+    else if (!r.ok) erro = "A pesquisa não deu certo agora (" + ((j.error && j.error.message) || r.status) + "). Tente de novo.";
+    else {
+      const msg = j.choices && j.choices[0] && j.choices[0].message || {};
+      texto = msg.content;
+      links = (msg.annotations || []).filter(a => a.type === "url_citation" && a.url_citation).map(a => a.url_citation);
+    }
+  } catch (e) { erro = "Sem conexão com a IA. Confira a sua internet."; }
+  botao.disabled = false; botao.textContent = "🔎 Pesquisar a marca";
+  atualizaResumoIA();
+  if (erro || !texto) { alvo.innerHTML = '<div class="faixa" style="margin-top:10px">⚠️ ' + esc(erro || "A pesquisa voltou vazia. Tente de novo.") + "</div>"; return; }
+  const fatos = semTravessao(texto).replace(/\*\*/g, "").split("\n").map(l => l.trim()).filter(l => /^[-•*]\s/.test(l)).map(l => l.replace(/^[-•*]\s+/, ""));
+  const linkar = (t) => esc(t).replace(/\[(https?:\/\/[^\]\s]+)\]/g, (x, u) => ' <a class="link pequeno" href="' + u + '" target="_blank" rel="noopener">fonte ↗</a>');
+  const fontesExtras = Array.from(new Map(links.map(l => [l.url, l])).values()).slice(0, 8);
+  alvo.innerHTML = '<div class="abordar__pesquisa">' +
+    '<div class="bloco__cab"><h2>🔎 O que eu achei sobre ' + esc(marca) + '</h2><span class="espaco"></span><span class="mudo pequeno">confira as fontes antes de usar</span></div>' +
+    (fatos.length
+      ? '<div class="abordar__fatos">' + fatos.map((f, i) => '<label class="item-check"><input type="checkbox" data-fato="' + i + '" checked><div class="item-check__t">' + linkar(f) + "</div></label>").join("") + "</div>"
+      : '<p class="pequeno" style="white-space:pre-line">' + linkar(semTravessao(texto)) + "</p>") +
+    (fontesExtras.length ? '<p class="mudo pequeno" style="margin-top:8px">Fontes consultadas: ' + fontesExtras.map(l => '<a class="link" href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc((l.title || l.url).slice(0, 50)) + "</a>").join(" · ") + "</p>" : "") +
+    (fatos.length ? '<div class="ferramentas" style="margin:10px 0 0"><button type="button" class="btn" id="abUsarFatos">➕ Usar os marcados na abordagem</button><span class="mudo pequeno">Desmarque o que não quiser usar.</span></div>' : "") +
+    "</div>";
+  if (fatos.length) $("#abUsarFatos").addEventListener("click", () => {
+    const usados = $$("[data-fato]", alvo).filter(c => c.checked).map(c => "- " + fatos[Number(c.dataset.fato)]);
+    if (!usados.length) { torrada("Marque pelo menos um fato."); return; }
+    const campo = $("#abBrief");
+    campo.value = (campo.value.trim() ? campo.value.trim() + "\n\n" : "") + "Pesquisa sobre a marca (fatos com fonte):\n" + usados.join("\n");
+    torrada("➕ " + plural(usados.length, "fato foi", "fatos foram") + " para a brief. Agora é só gerar.");
+    alvo.innerHTML = "";
+  });
 }
 
 /* monta o pedido para a IA */
