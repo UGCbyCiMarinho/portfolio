@@ -1742,15 +1742,27 @@ const textoDoCampo = (v) => semTravessao(Array.isArray(v) ? v.filter(Boolean).jo
 const primeiro = (...v) => v.find(x => x !== undefined && x !== null && x !== "");
 const temAnalise = (r) => !!(r.analise && typeof r.analise === "object" && Object.keys(r.analise).length);
 
+/* duração estimada sem gastar crédito: o fim do último bloco da análise ou do último trecho da transcrição */
+function duracaoEstimada(r) {
+  const blocos = r.analise && Array.isArray(r.analise.blocos) ? r.analise.blocos : [];
+  const nums = blocos.flatMap(b => (String(b.t || "").match(/\d+(?:[.,]\d+)?/g) || []).map(x => Number(x.replace(",", "."))));
+  if (nums.length) return Math.max(...nums);
+  const seg = Array.isArray(r.segmentos) ? r.segmentos[r.segmentos.length - 1] : null;
+  if (seg && seg.offset != null) return Math.round((Number(seg.offset) + Number(seg.duration || 0)) / 1000);
+  return null;
+}
+
 function linhaMetricas(r) {
-  const m = r.metricas;
-  if (!m || typeof m !== "object") return "";
+  const m = Object.assign({}, r.metricas && typeof r.metricas === "object" ? r.metricas : {});
+  let aproximada = false;
+  if (m.duracao == null) { const d = duracaoEstimada(r); if (d) { m.duracao = d; aproximada = true; } }
+  if (!Object.keys(m).length) return "";
   const partes = [];
   if (m.views != null) partes.push("👁 " + compacto.format(m.views));
   if (m.likes != null) partes.push("❤️ " + compacto.format(m.likes));
   if (m.comments != null) partes.push("💬 " + compacto.format(m.comments));
   if (m.shares != null) partes.push("↗️ " + compacto.format(m.shares));
-  if (m.duracao != null) partes.push("⏱ " + Math.round(m.duracao) + "s");
+  if (m.duracao != null) partes.push("⏱ " + (aproximada ? "uns " : "") + Math.round(m.duracao) + "s");
   return partes.length ? '<div class="rot__metricas">' + partes.join('<span class="mudo"> · </span>') + "</div>" : "";
 }
 
@@ -1945,6 +1957,7 @@ function abrirFicha(r) {
     '<div class="ficha2__etiquetas">' + (a.estilo ? '<span class="pil c-destaque">' + esc(a.estilo) + "</span>" : "") +
       '<span class="pil ' + (QUEM[r.de_quem] || QUEM.outra).cor + '">' + (QUEM[r.de_quem] || QUEM.outra).nome + "</span>" +
       (r.postado_em ? '<span class="mudo pequeno">postado ' + dataBR(r.postado_em) + "</span>" : "") + "</div>" +
+    (r.url && (!r.capa || !r.metricas) && D.config[CHAVE_SUPADATA] ? '<button type="button" class="btn btn--linha" data-f-dados>🖼️ Buscar números</button>' : "") +
     (r.url ? '<a class="link pequeno" href="' + esc(r.url) + '" target="_blank" rel="noopener">abrir no ' + esc(fonte.nome) + "</a>" : "") +
     "</div>";
 
@@ -1973,6 +1986,16 @@ function abrirFicha(r) {
   $(".janela__caixa", j).classList.add("janela__caixa--ficha");
   $("[data-f-editar]", j).addEventListener("click", () => editorRoteiro(D.roteiros.find(x => x.id === r.id) || r));
   $("[data-f-denovo]", j).addEventListener("click", () => { fecharJanela(); analisar(D.roteiros.find(x => x.id === r.id) || r); });
+  const dados = $("[data-f-dados]", j);
+  if (dados) dados.addEventListener("click", async () => {
+    dados.disabled = true; dados.textContent = "⏳ Buscando…";
+    const novo = await preencherDadosDoPost(D.roteiros.find(x => x.id === r.id) || r);
+    atualizaSaldo();
+    const veio = ultimaResposta[r.id];
+    if (!veio) { dados.disabled = false; dados.textContent = "🖼️ Buscar números"; torrada("A Supadata não respondeu agora. Tente de novo daqui a pouco.", true); return; }
+    if (!novo.capa || !novo.metricas) mostraOQueVeio(novo, veio);
+    else { abrirFicha(novo); torrada("Números atualizados ✓"); }
+  });
   const copiar = $("[data-f-copiar]", j);
   if (copiar) copiar.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(r.transcricao || ""); copiar.textContent = "copiado ✓"; } catch (e) { copiar.textContent = "não deu para copiar"; }
