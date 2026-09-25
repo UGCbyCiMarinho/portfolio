@@ -3289,6 +3289,10 @@ function montarAbordar() {
               '<textarea id="abBrief" rows="6" placeholder="Cole aqui o texto da brief, ou escreva o que chamou a sua atenção no site ou no Instagram da marca."></textarea>' +
               '<div class="abordar__pdf" id="abPdfZona"><input type="file" id="abPdf" accept=".pdf,.txt,.md" hidden>' +
                 '<button type="button" class="btn btn--linha" id="abPdfBtn">📄 Anexar brief em PDF</button><span class="mudo pequeno" id="abPdfInfo">ou arraste o arquivo para cá</span></div></div>' +
+            '<div class="campo inteiro"><label for="abPost">Link de um post ou Reel da marca (opcional)</label>' +
+              '<div class="rot__chavelinha"><input id="abPost" class="entrada" placeholder="instagram.com/p/... · instagram.com/reel/... · tiktok.com/..." autocomplete="off">' +
+              '<button type="button" class="btn btn--linha" id="abPuxar">📥 Puxar o post</button></div>' +
+              '<p class="mudo pequeno" style="margin-top:4px">A IA fala sobre esse post na abordagem, como na sua DM da Royal. Custa 1 crédito da Supadata.</p><div id="abPostInfo"></div></div>' +
             '<div class="campo"><label for="abIdioma">Idioma</label><select id="abIdioma"><option value="inglês">Inglês</option><option value="português do Brasil">Português</option></select></div>' +
             '<div class="campo"><label for="abExtra">Pedido especial (opcional)</label><input id="abExtra" placeholder="Ex.: citar que tenho pele oleosa" autocomplete="off"></div>' +
           "</div>" +
@@ -3328,6 +3332,8 @@ function montarAbordar() {
   $("#abMarca").addEventListener("input", () => { if (!$("#abMarca").value) { abMarcaId = null; $("#abMarcaInfo").textContent = ""; } });
   $("#abGerar").addEventListener("click", () => gerarAbordagem());
   $("#abPesquisar").addEventListener("click", pesquisarMarca);
+  $("#abPuxar").addEventListener("click", puxarPost);
+  $("#abPost").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); puxarPost(); } });
   $("#abPdfBtn").addEventListener("click", () => $("#abPdf").click());
   $("#abPdf").addEventListener("change", () => { const f = $("#abPdf").files[0]; if (f) lerBrief(f); });
   const zona = $("#abPdfZona");
@@ -3486,6 +3492,70 @@ async function pesquisarMarca() {
     torrada("➕ " + plural(usados.length, "fato foi", "fatos foram") + " para a brief. Agora é só gerar.");
     alvo.innerHTML = "";
   });
+}
+
+/* puxa a legenda (e, se ela quiser, a fala) de um post da marca pela Supadata */
+async function puxarPost() {
+  const info = $("#abPostInfo"), botao = $("#abPuxar");
+  const url = limpaLink($("#abPost").value);
+  if (!url || !fonteDe(url)) { info.innerHTML = '<p class="faixa" style="margin-top:6px">Cole o link completo de um post ou Reel do Instagram, TikTok ou YouTube, começando com https://</p>'; return; }
+  if (!D.config[CHAVE_SUPADATA]) { info.innerHTML = '<p class="faixa" style="margin-top:6px">Falta a chave da Supadata. Ela fica na aba Análise de vídeo, no quadro 🔑 Chave da Supadata.</p>'; return; }
+  botao.disabled = true; botao.textContent = "⏳ Puxando...";
+  const res = await supadata("/metadata?url=" + encodeURIComponent(url));
+  botao.disabled = false; botao.textContent = "📥 Puxar o post";
+  if (res.status !== 200) { info.innerHTML = '<p class="faixa" style="margin-top:6px">⚠️ ' + esc(erroSupadata(res)) + "</p>"; return; }
+  const m = res.corpo || {}, st = m.stats || {}, autor = m.author || {};
+  const legenda = String(m.description || m.caption || m.title || "").trim();
+  const quando = m.createdAt ? dataBR(isoLocal(new Date(m.createdAt))) : "";
+  const numeros = [st.likes != null && compacto.format(st.likes) + " curtidas", st.comments != null && compacto.format(st.comments) + " comentários", st.views != null && compacto.format(st.views) + " visualizações"].filter(Boolean).join(" · ");
+  const post = { url, legenda, quando, numeros, autor: autor.username ? "@" + String(autor.username).replace(/^@/, "") : "", tipo: m.type, fala: "" };
+  const desenha = () => {
+    info.innerHTML = '<div class="abordar__pesquisa" style="margin-top:8px">' +
+      '<p class="pequeno"><b>' + esc(post.autor || "Post da marca") + "</b>" + (post.quando ? ' <span class="mudo">· ' + post.quando + "</span>" : "") + (post.numeros ? ' <span class="mudo">· ' + esc(post.numeros) + "</span>" : "") + "</p>" +
+      (post.legenda ? '<p class="pequeno" style="white-space:pre-line;margin-top:6px;max-height:140px;overflow:auto">' + esc(post.legenda) + "</p>" : '<p class="mudo pequeno" style="margin-top:6px">Esse post não tem legenda.</p>') +
+      (post.fala ? '<p class="pequeno" style="margin-top:6px"><b>🎧 O que é falado:</b> ' + esc(post.fala.slice(0, 600)) + (post.fala.length > 600 ? "…" : "") + "</p>" : "") +
+      '<div class="ferramentas" style="margin:10px 0 0"><button type="button" class="btn" id="abUsarPost">➕ Usar esse post na abordagem</button>' +
+      (!post.fala && post.tipo !== "image" ? '<button type="button" class="btn btn--linha" id="abFala">🎧 Puxar também o que é falado</button>' : "") + "</div></div>";
+    $("#abUsarPost").addEventListener("click", () => {
+      const campo = $("#abBrief");
+      const bloco = "Post da marca que eu vi" + (post.quando ? " (" + post.quando + ")" : "") + ": " + post.url + "\n" +
+        (post.legenda ? "Legenda: " + post.legenda.slice(0, 2000) + "\n" : "") + (post.fala ? "O que é falado no vídeo: " + post.fala.slice(0, 3000) + "\n" : "") +
+        "Use esse post como a Atenção da abordagem: cite algo específico dele.";
+      campo.value = (campo.value.trim() ? campo.value.trim() + "\n\n" : "") + bloco;
+      info.innerHTML = '<p class="mudo pequeno" style="margin-top:6px">✅ O post foi para a brief. Agora é só gerar.</p>';
+    });
+    const fala = $("#abFala");
+    if (fala) fala.addEventListener("click", async () => {
+      fala.disabled = true; fala.textContent = "🎧 Ouvindo... (pode levar 1 a 3 minutos)";
+      const t = await falaDoVideo(url);
+      if (t.erro) { fala.disabled = false; fala.textContent = "🎧 Puxar também o que é falado"; torrada(t.erro, true); return; }
+      post.fala = t.texto || "(o vídeo não tem fala, só música ou texto na tela)";
+      desenha(); atualizaSaldo();
+    });
+  };
+  desenha();
+  atualizaSaldo();
+}
+/* transcrição simples, esperando o trabalho da Supadata quando o vídeo é longo */
+async function falaDoVideo(url) {
+  const inicio = Date.now();
+  let res = await supadata("/transcript?" + new URLSearchParams({ url, mode: "auto", text: "true", lang: "pt" }).toString());
+  if (res.status === 202 && res.corpo.jobId) {
+    const job = res.corpo.jobId; res = null;
+    while (!res) {
+      if (Date.now() - inicio > 4 * 60 * 1000) return { erro: "Demorou demais para ouvir o vídeo. Use só a legenda." };
+      await espera(5000);
+      const r2 = await supadata("/transcript/" + encodeURIComponent(job));
+      if (r2.rede) continue;
+      const st = String(r2.corpo.status || "").toLowerCase();
+      if (st === "failed") return { texto: "" };
+      if (st === "completed") res = r2;
+      else if (r2.status >= 400) return { erro: erroSupadata(r2) };
+    }
+  }
+  if (res.status === 206) return { texto: "" };
+  if (res.status !== 200) return { erro: erroSupadata(res) };
+  return { texto: textoDe(res.corpo).texto };
 }
 
 /* monta o pedido para a IA */
