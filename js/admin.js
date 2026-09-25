@@ -123,6 +123,7 @@ const ehErroDeCampo = (e) => e && (e.code === "PGRST204" || e.code === "42703" |
 const ESPERADO = {
   videos: ["titulo", "link", "nicho", "formato", "marca", "destaque", "ordem", "visivel"],
   marcas: ["nome", "instagram", "email", "telefone", "situacao", "obs", "ultimo_contato"],
+  base_marcas: ["nome", "instagram", "email", "telefone", "site", "nicho", "origem", "situacao", "obs", "ultimo_contato", "nao_enviar"],
   calendario: ["titulo", "marca", "tipo", "data", "status"],
   campanhas: ["campanha", "cliente", "tipo", "status", "qtd", "valor", "prazo", "pagamento", "ativa", "favorita"],
   marcados: ["chave"],
@@ -280,13 +281,14 @@ function lerCampos(form, campos) {
   return o;
 }
 /* janela de editar/adicionar, igual para todas as abas */
-function editor({ titulo, campos, valores, aoSalvar, aoApagar, larga, topo }) {
+function editor({ titulo, campos, valores, aoSalvar, aoApagar, larga, topo, extra }) {
   valores = valores || {};
   const j = abrirJanela({
     titulo, larga,
     corpo: (topo || "") + '<form class="grade-form" novalidate>' + campos.map(c => campoHTML(c, valores[c.nome])).join("") +
            '<div class="faixa inteiro escondido" data-erro></div></form>',
     rodape: (aoApagar ? '<button class="btn btn--perigo" type="button" data-apagar>' + ic("lixo") + " Apagar</button>" : "") +
+            (extra ? '<button class="btn btn--linha" type="button" data-extra>' + esc(extra.rot) + "</button>" : "") +
             '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Cancelar</button>' +
             '<button class="btn" type="button" data-salvar>Salvar</button>'
   });
@@ -306,6 +308,7 @@ function editor({ titulo, campos, valores, aoSalvar, aoApagar, larga, topo }) {
     if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "checkbox") { e.preventDefault(); salvar(); }
   });
   if (aoApagar) duploClique($("[data-apagar]", j), async () => { if (await aoApagar()) fecharJanela(); });
+  if (extra) duploClique($("[data-extra]", j), async () => { if (await extra.acao()) fecharJanela(); }, extra.confirma || "Clique de novo para confirmar");
   const primeiro = $("input, select, textarea", form);
   if (primeiro && window.matchMedia("(pointer: fine)").matches) primeiro.focus();
   return j;
@@ -339,10 +342,10 @@ const numero = (rot, val, sub) =>
 /* ============================================================
    4. CARREGAR OS DADOS
    ============================================================ */
-const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], roteiros: [], config: {}, marcados: new Set() };
+const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], config: {}, marcados: new Set() };
 const inicio14 = hoje(); inicio14.setDate(inicio14.getDate() - 13);
 
-const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, configuracoes] = await Promise.all([
+const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base] = await Promise.all([
   ler("videos", q => q.order("ordem", { ascending: true }).order("criado_em", { ascending: true })),
   ler("visitas", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
   ler("marcas", q => q.order("criado_em", { ascending: false })),
@@ -350,12 +353,13 @@ const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, confi
   ler("campanhas", q => q.order("criado_em", { ascending: false })),
   ler("marcados"),
   ler("roteiros", q => q.order("created_at", { ascending: false })),
-  ler("configuracoes")
+  ler("configuracoes"),
+  ler("base_marcas", q => q.order("created_at", { ascending: false }))
 ]);
-Object.assign(D, { videos, visitas, marcas, calendario, campanhas, roteiros, marcados: new Set(marcados.map(m => m.chave)) });
+Object.assign(D, { videos, visitas, marcas, calendario, campanhas, roteiros, base, marcados: new Set(marcados.map(m => m.chave)) });
 configuracoes.forEach(c => { D.config[c.chave] = c.valor; });
 
-const nomesDeMarcas = () => Array.from(new Set(D.marcas.map(m => m.nome).concat(D.campanhas.map(c => c.cliente), D.videos.map(v => v.marca)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
+const nomesDeMarcas = () => Array.from(new Set(D.marcas.map(m => m.nome).concat(D.base.map(m => m.nome), D.campanhas.map(c => c.cliente), D.videos.map(v => v.marca)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
 
 /* ============================================================
    5. ABA PORTFÓLIO
@@ -623,7 +627,7 @@ function desenharMarcas() {
   const corpo = $("#mCorpo");
   if (!lista.length) {
     corpo.innerHTML = '<tr><td colspan="7"><p class="vazio">' +
-      (falhou.marcas ? "As marcas não puderam ser carregadas. Veja o aviso lá em cima." : D.marcas.length ? "Nenhuma marca encontrada com essa busca." : "Nenhuma marca ainda. Clique em Adicionar marca.") + "</p></td></tr>";
+      (falhou.marcas ? "As marcas não puderam ser carregadas. Veja o aviso lá em cima." : D.marcas.length ? "Nenhuma marca encontrada com essa busca." : "📥 Nenhuma marca chegou pelo formulário do site ainda.<br>Quando uma marca preencher o contato do seu portfólio, ela aparece aqui.") + "</p></td></tr>";
     return;
   }
   corpo.innerHTML = lista.map(m => {
@@ -667,8 +671,462 @@ function editorMarca(m) {
     aoApagar: m ? async () => {
       if (!(await apagarLinha("marcas", m.id))) return false;
       D.marcas = D.marcas.filter(x => x.id !== m.id); desenharMarcas(); torrada("Marca apagada."); return true;
+    } : null,
+    extra: m && !m.exemplo ? { rot: "➡️ Mover para Marcas", confirma: "Clique de novo para mover", acao: () => moverParaBase(m) } : null
+  });
+}
+
+/* ============================================================
+   6b. ABA MARCAS (base de prospecção e campanhas)
+   Tabela base_marcas. Três visões: prospecção da semana,
+   base completa e montar campanha. Importa planilha CSV.
+   ============================================================ */
+const B_SITUACOES = [
+  ["quero_prospectar", "🎯 Quero prospectar", "c-azul"],
+  ["prospectada", "📨 Prospectada, sem retorno", "c-mostarda"],
+  ["em_conversa", "💬 Em conversa", "c-roxo"],
+  ["ja_trabalhei", "✅ Já trabalhei", "c-verde"],
+  ["sem_interesse", "⏸️ Sem interesse", "c-cinza"]
+];
+const B_ORIGENS = [
+  ["instagram", "Instagram"], ["x", "X"], ["linkedin", "LinkedIn"], ["tiktok", "TikTok"], ["email", "E-mail"],
+  ["google", "Pesquisa no Google"], ["indicacao", "Indicação"], ["portfolio", "Portfólio"], ["outro", "Outro"]
+];
+const B_NICHOS = ["Skincare", "Haircare", "Beauty", "Fashion", "Home & Decor", "Tech", "Pet", "Food", "Fitness", "Teens", "Outro"];
+const bSituacao = (v) => B_SITUACOES.find(s => s[0] === v) || B_SITUACOES[0];
+const bOrigem = (v) => B_ORIGENS.find(o => o[0] === v) || B_ORIGENS[B_ORIGENS.length - 1];
+let bVisao = "semana";
+const bFiltro = { situacao: "", origem: "", nicho: "" };
+const bCampanha = { nichos: new Set(), situacoes: new Set(["prospectada", "em_conversa", "ja_trabalhei"]) };
+
+const nichosDaBase = () => Array.from(new Set(B_NICHOS.concat(D.base.map(m => m.nicho).filter(Boolean)))).sort((a, b) => a.localeCompare(b, "pt"));
+const chaveNome = (t) => normaliza(t).replace(/[^a-z0-9]/g, "");
+
+function montarBase() {
+  const el = $("#aba-base");
+  el.innerHTML =
+    '<div class="pilulas" id="bVisoes" style="margin-bottom:14px">' +
+      '<button type="button" data-v="semana">🎯 Prospecção da semana</button>' +
+      '<button type="button" data-v="base">📚 Base completa</button>' +
+      '<button type="button" data-v="campanha">📣 Montar campanha</button>' +
+    "</div>" +
+    '<div class="ferramentas" id="bFiltros">' +
+      '<input class="entrada" id="bBusca" type="search" placeholder="Buscar por marca, @, e-mail ou observação">' +
+      '<select class="entrada entrada--sel" id="bFSit"><option value="">Todas as situações</option>' + B_SITUACOES.map(s => '<option value="' + s[0] + '">' + s[1] + "</option>").join("") + "</select>" +
+      '<select class="entrada entrada--sel" id="bFOri"><option value="">Todas as origens</option>' + B_ORIGENS.map(o => '<option value="' + o[0] + '">' + o[1] + "</option>").join("") + "</select>" +
+      '<select class="entrada entrada--sel" id="bFNic"></select>' +
+      '<span class="mudo pequeno" id="bConta"></span><span class="espaco"></span>' +
+    "</div>" +
+    '<div class="ferramentas">' +
+      '<button class="btn" id="bNova">' + ic("mais") + " Adicionar marca</button>" +
+      '<button class="btn btn--linha" id="bImportar">📥 Importar planilha</button>' +
+      '<button class="btn btn--linha" id="bModelo">📄 Baixar modelo</button>' +
+      '<button class="btn btn--linha" id="bCsv">' + ic("baixar") + " Baixar base</button>" +
+      '<input type="file" id="bArquivo" accept=".csv,.txt,text/csv" hidden>' +
+    "</div>" +
+    '<div id="bCampanha"></div>' +
+    '<div class="tabela-caixa"><table class="tabela"><thead><tr>' +
+      "<th>Marca</th><th>Nicho</th><th>Origem</th><th>Situação</th><th>Instagram</th><th>E-mail</th><th>Telefone</th><th>Último contato</th><th></th>" +
+    '</tr></thead><tbody id="bCorpo"></tbody></table></div>';
+
+  $("#bVisoes").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-v]");
+    if (!b) return;
+    bVisao = b.dataset.v;
+    desenharBase();
+  });
+  $("#bBusca").addEventListener("input", desenharBase);
+  $("#bFSit").addEventListener("change", () => { bFiltro.situacao = $("#bFSit").value; desenharBase(); });
+  $("#bFOri").addEventListener("change", () => { bFiltro.origem = $("#bFOri").value; desenharBase(); });
+  $("#bFNic").addEventListener("change", () => { bFiltro.nicho = $("#bFNic").value; desenharBase(); });
+  $("#bNova").addEventListener("click", () => editorBase(null));
+  $("#bModelo").addEventListener("click", baixarModelo);
+  $("#bImportar").addEventListener("click", () => { if (falhou.base_marcas) { torrada("A tabela base_marcas ainda não existe. Rode o sql-marcas.sql no Supabase.", true); return; } $("#bArquivo").value = ""; $("#bArquivo").click(); });
+  $("#bArquivo").addEventListener("change", () => { const f = $("#bArquivo").files[0]; if (f) lerPlanilha(f); });
+  $("#bCsv").addEventListener("click", () => {
+    if (!D.base.length) { torrada("A base ainda está vazia."); return; }
+    baixarCSV("marcas-base", COLUNAS_MODELO.map(c => c[0]), D.base.map(linhaParaCSV));
+  });
+  $("#bCorpo").addEventListener("click", async (e) => {
+    if (e.target.closest("a")) return;
+    const tr = e.target.closest("tr[data-id]");
+    if (!tr) return;
+    const m = D.base.find(x => x.id === tr.dataset.id);
+    if (!m) return;
+    if (e.target.closest("[data-prospectei]")) {
+      const salvo = await salvarLinha("base_marcas", { situacao: "prospectada", ultimo_contato: isoLocal(new Date()) }, m.id);
+      if (salvo) { troca(D.base, salvo); desenharBase(); torrada("📨 Marcada como prospectada hoje."); }
+      return;
+    }
+    editorBase(m);
+  });
+  $("#bCampanha").addEventListener("click", async (e) => {
+    const chip = e.target.closest("[data-cn], [data-cs]");
+    if (chip) {
+      const conj = chip.dataset.cn != null ? bCampanha.nichos : bCampanha.situacoes;
+      const valor = chip.dataset.cn != null ? chip.dataset.cn : chip.dataset.cs;
+      if (conj.has(valor)) conj.delete(valor); else conj.add(valor);
+      desenharBase();
+      return;
+    }
+    const lista = listaCampanha();
+    if (e.target.closest("#bCopiarEmails")) {
+      if (!lista.length) { torrada("Nenhuma marca com e-mail nesse filtro."); return; }
+      try { await navigator.clipboard.writeText(lista.map(m => m.email).join(", ")); torrada("📋 " + plural(lista.length, "e-mail copiado", "e-mails copiados") + " ✓"); }
+      catch (x) { abrirJanela({ titulo: "E-mails da campanha", corpo: '<textarea class="entrada" style="height:240px;padding:10px" readonly>' + esc(lista.map(m => m.email).join(", ")) + "</textarea>" }); }
+    }
+    if (e.target.closest("#bBaixarLista")) {
+      if (!lista.length) { torrada("Nenhuma marca com e-mail nesse filtro."); return; }
+      baixarCSV("campanha", ["Marca", "E-mail", "Instagram", "Nicho", "Situação"], lista.map(m => [m.nome, m.email, m.instagram, m.nicho, bSituacao(m.situacao)[1].replace(/^\S+\s/, "")]));
+    }
+  });
+}
+
+function listaCampanha() {
+  return D.base.filter(m => m.email && !m.nao_enviar && !m.exemplo &&
+    (!bCampanha.nichos.size || bCampanha.nichos.has(m.nicho || "")) &&
+    (!bCampanha.situacoes.size || bCampanha.situacoes.has(m.situacao)));
+}
+
+function desenharBase() {
+  $$("#bVisoes button").forEach(b => b.classList.toggle("ativo", b.dataset.v === bVisao));
+  const nichos = nichosDaBase();
+  $("#bFNic").innerHTML = '<option value="">Todos os nichos</option>' + nichos.map(n => '<option value="' + esc(n) + '"' + (n === bFiltro.nicho ? " selected" : "") + ">" + esc(n) + "</option>").join("");
+  const naSemana = bVisao === "semana";
+  $("#bFiltros").classList.toggle("escondido", bVisao === "campanha");
+  $("#bFSit").disabled = naSemana;
+  $("#bFSit").value = naSemana ? "" : bFiltro.situacao;
+
+  let lista;
+  if (bVisao === "campanha") {
+    const usados = Array.from(new Set(D.base.map(m => m.nicho).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
+    const semEmail = D.base.filter(m => !m.email).length, bloqueadas = D.base.filter(m => m.nao_enviar).length;
+    lista = listaCampanha();
+    $("#bCampanha").innerHTML = '<div class="bloco">' +
+      '<div class="bloco__cab"><h2>📣 Quem recebe a campanha</h2></div>' +
+      '<p class="rotulo" style="margin-bottom:6px">Nicho (nenhum marcado = todos)</p><div class="rot__chips">' +
+        (usados.length ? usados.map(n => '<button type="button" class="rot__chip' + (bCampanha.nichos.has(n) ? " ativo" : "") + '" data-cn="' + esc(n) + '">' + esc(n) + "</button>").join("") : '<span class="mudo pequeno">Nenhuma marca com nicho ainda.</span>') + "</div>" +
+      '<p class="rotulo" style="margin-bottom:6px">Situação</p><div class="rot__chips">' +
+        B_SITUACOES.map(s => '<button type="button" class="rot__chip' + (bCampanha.situacoes.has(s[0]) ? " ativo" : "") + '" data-cs="' + s[0] + '">' + s[1] + "</button>").join("") + "</div>" +
+      '<div class="ferramentas" style="margin:0"><b>' + plural(lista.length, "marca vai receber", "marcas vão receber") + "</b>" +
+        '<span class="mudo pequeno">Ficam de fora automaticamente: ' + plural(semEmail, "marca sem e-mail", "marcas sem e-mail") + " e " + plural(bloqueadas, "marcada", "marcadas") + ' com 🚫 Não enviar.</span><span class="espaco"></span>' +
+        '<button class="btn btn--linha" id="bCopiarEmails">📋 Copiar e-mails</button><button class="btn" id="bBaixarLista">' + ic("baixar") + " Baixar lista</button></div>" +
+      "</div>";
+  } else {
+    $("#bCampanha").innerHTML = naSemana
+      ? '<p class="mudo pequeno" style="margin-bottom:10px">🎯 Aqui ficam só as marcas com situação <b>Quero prospectar</b>. Depois de mandar o e-mail ou a DM, clique em 📨 na linha: ela vira <b>Prospectada, sem retorno</b> com a data de hoje.</p>'
+      : "";
+    const busca = normaliza($("#bBusca").value.trim());
+    lista = D.base.filter(m =>
+      (naSemana ? m.situacao === "quero_prospectar" : (!bFiltro.situacao || m.situacao === bFiltro.situacao)) &&
+      (!bFiltro.origem || m.origem === bFiltro.origem) &&
+      (!bFiltro.nicho || m.nicho === bFiltro.nicho) &&
+      (!busca || normaliza([m.nome, m.instagram, m.email, m.obs, m.site].join(" ")).includes(busca)));
+  }
+  $("#bConta").textContent = lista.length === D.base.length ? plural(D.base.length, "marca", "marcas") : lista.length + " de " + D.base.length;
+
+  const corpo = $("#bCorpo");
+  if (!lista.length) {
+    corpo.innerHTML = '<tr><td colspan="9"><p class="vazio">' + (falhou.base_marcas
+      ? "A base ainda não existe no banco. Rode o sql-marcas.sql no Supabase."
+      : !D.base.length ? "A base está vazia. Clique em 📥 Importar planilha ou em Adicionar marca."
+      : naSemana ? "Nenhuma marca para prospectar agora. 🎉<br>Coloque marcas com situação Quero prospectar para elas aparecerem aqui."
+      : "Nenhuma marca com esses filtros.") + "</p></td></tr>";
+    return;
+  }
+  corpo.innerHTML = lista.map(m => {
+    const s = bSituacao(m.situacao), o = bOrigem(m.origem);
+    const ig = arroba(m.instagram), wa = whatsapp(m.telefone);
+    return '<tr class="clica" data-id="' + esc(m.id) + '">' +
+      "<td><b>" + esc(m.nome) + "</b>" + (m.nao_enviar ? ' <span title="Não enviar campanha">🚫</span>' : "") + pilExemplo(m) +
+        (m.site ? '<div class="pequeno"><a class="link" href="' + esc(/^https?:/i.test(m.site) ? m.site : "https://" + m.site) + '" target="_blank" rel="noopener">' + esc(String(m.site).replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "")) + "</a></div>" : "") + "</td>" +
+      "<td>" + esc(m.nicho || "") + "</td>" +
+      '<td><span class="pil c-cinza">' + esc(o[1]) + "</span></td>" +
+      '<td><span class="pil ' + s[2] + '">' + esc(s[1]) + "</span></td>" +
+      "<td>" + (ig ? '<a class="link" href="https://instagram.com/' + encodeURIComponent(ig) + '" target="_blank" rel="noopener">@' + esc(ig) + "</a>" : "") + "</td>" +
+      '<td class="corta">' + (m.email ? '<a href="mailto:' + esc(m.email) + '">' + esc(m.email) + "</a>" : "") + "</td>" +
+      '<td style="white-space:nowrap">' + (m.telefone ? '<span class="contato-links">' + esc(m.telefone) + (wa ? '<a href="' + wa + '" target="_blank" rel="noopener" title="Abrir no WhatsApp">' + ic("whats") + "</a>" : "") + "</span>" : "") + "</td>" +
+      '<td style="white-space:nowrap">' + dataBR(m.ultimo_contato) + "</td>" +
+      '<td class="curta">' + (m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" data-prospectei title="Marcar como prospectada hoje">📨 Prospectei</button>' : "") + "</td></tr>";
+  }).join("");
+}
+
+function editorBase(m, padrao) {
+  editor({
+    titulo: m ? "✏️ Editar marca" : "🏷️ Adicionar marca",
+    valores: m || Object.assign({ situacao: "quero_prospectar", origem: "instagram" }, padrao || {}),
+    campos: [
+      { nome: "nome", rot: "Marca", obrigatorio: true, inteiro: true },
+      { nome: "nicho", rot: "Nicho", lista: nichosDaBase(), dica: "Skincare, Teens..." },
+      { nome: "origem", rot: "De onde veio o contato", tipo: "select", opcoes: B_ORIGENS },
+      { nome: "situacao", rot: "Situação", tipo: "select", opcoes: B_SITUACOES.map(s => [s[0], s[1]]) },
+      { nome: "ultimo_contato", rot: "Último contato", tipo: "date" },
+      { nome: "instagram", rot: "Instagram", dica: "@marca" },
+      { nome: "email", rot: "E-mail", tipo: "email" },
+      { nome: "telefone", rot: "Telefone", dica: "+1 416 555 0000" },
+      { nome: "site", rot: "Site", dica: "marca.com" },
+      { nome: "obs", rot: "Observação", tipo: "textarea", inteiro: true },
+      { nome: "nao_enviar", rot: "🚫 Não enviar campanha (pediu para não receber e-mails)", tipo: "check" }
+    ],
+    aoSalvar: async (dados) => {
+      if (dados.instagram) dados.instagram = "@" + arroba(dados.instagram);
+      if (dados.email) dados.email = dados.email.toLowerCase();
+      const salvo = await salvarLinha("base_marcas", dados, m && m.id);
+      if (!salvo) return false;
+      if (m) troca(D.base, salvo); else D.base.unshift(salvo);
+      desenharBase();
+      torrada("Marca salva ✓");
+      return true;
+    },
+    aoApagar: m ? async () => {
+      if (!(await apagarLinha("base_marcas", m.id))) return false;
+      D.base = D.base.filter(x => x.id !== m.id); desenharBase(); torrada("Marca apagada."); return true;
     } : null
   });
+}
+
+/* ----- inbound: mover para Marcas ----- */
+const INBOUND_PARA_BASE = { lead: "em_conversa", conversando: "em_conversa", cliente: "ja_trabalhei", parada: "sem_interesse" };
+async function moverParaBase(m) {
+  if (falhou.base_marcas) { torrada("A tabela base_marcas ainda não existe. Rode o sql-marcas.sql no Supabase.", true); return false; }
+  const nova = await salvarLinha("base_marcas", {
+    nome: m.nome, instagram: m.instagram || null, email: m.email ? String(m.email).toLowerCase() : null, telefone: m.telefone || null,
+    obs: m.obs || null, ultimo_contato: m.ultimo_contato || null, origem: "portfolio", situacao: INBOUND_PARA_BASE[m.situacao] || "em_conversa"
+  });
+  if (!nova) return false;
+  D.base.unshift(nova);
+  if (await apagarLinha("marcas", m.id)) D.marcas = D.marcas.filter(x => x.id !== m.id);
+  desenharMarcas(); desenharBase();
+  torrada("➡️ " + m.nome + " foi para Marcas.");
+  return true;
+}
+
+/* ----- planilha: modelo, leitura, prévia e importação ----- */
+const COLUNAS_MODELO = [
+  ["Marca", "nome"], ["Instagram", "instagram"], ["E-mail", "email"], ["Telefone", "telefone"], ["Site", "site"],
+  ["Nicho", "nicho"], ["Origem", "origem"], ["Situação", "situacao"], ["Observação", "obs"], ["Último contato", "ultimo_contato"],
+  ["Não enviar campanha", "nao_enviar"]
+];
+function linhaParaCSV(m) {
+  return [m.nome, m.instagram, m.email, m.telefone, m.site, m.nicho, bOrigem(m.origem)[1], bSituacao(m.situacao)[1].replace(/^\S+\s/, ""),
+    m.obs, dataBR(m.ultimo_contato), m.nao_enviar ? "sim" : ""];
+}
+function baixarModelo() {
+  baixarCSV("modelo-marcas", COLUNAS_MODELO.map(c => c[0]), [
+    ["Marca Exemplo (apague esta linha)", "@marcaexemplo", "contato@marcaexemplo.com", "+1 416 000 0000", "marcaexemplo.com", "Skincare", "Instagram", "Quero prospectar", "Achei pela hashtag #ugc", "25/09/2026", ""]
+  ]);
+  abrirJanela({
+    titulo: "📄 Como preencher o modelo",
+    corpo: '<div class="ficha"><p>O modelo foi baixado. Abra no Excel ou no Google Planilhas, apague a linha de exemplo e preencha uma marca por linha. Só a coluna <b>Marca</b> é obrigatória.</p>' +
+      "<h3>Origem (escreva uma destas)</h3><p>" + B_ORIGENS.map(o => o[1]).join(" · ") + "</p>" +
+      "<h3>Situação (escreva uma destas)</h3><p>" + B_SITUACOES.map(s => s[1].replace(/^\S+\s/, "")).join(" · ") + "</p>" +
+      "<h3>Nicho</h3><p>" + B_NICHOS.join(" · ") + ". Pode escrever outro, se precisar.</p>" +
+      "<h3>Último contato</h3><p>No formato dia/mês/ano, por exemplo 25/09/2026.</p>" +
+      "<h3>Não enviar campanha</h3><p>Escreva <b>sim</b> se a marca pediu para não receber e-mails. Se não, deixe vazio.</p>" +
+      "<h3>Na hora de salvar</h3><p>Salve como <b>CSV</b>. No Excel: Arquivo, Salvar como, CSV UTF-8. No Google Planilhas: Arquivo, Fazer download, CSV.</p></div>",
+    rodape: '<span class="espaco"></span><button class="btn" type="button" data-fechar>Entendi</button>'
+  });
+}
+
+/* lê CSV com vírgula, ponto e vírgula ou tab, com aspas e acentos */
+function lerCSV(texto) {
+  texto = texto.replace(/^﻿/, "");
+  const primeira = texto.split(/\r?\n/)[0] || "";
+  const conta = (c) => primeira.split(c).length;
+  const sep = [";", ",", "\t"].sort((a, b) => conta(b) - conta(a))[0];
+  const linhas = [];
+  let linha = [], cel = "", aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (aspas) {
+      if (c === '"' && texto[i + 1] === '"') { cel += '"'; i++; }
+      else if (c === '"') aspas = false;
+      else cel += c;
+    } else if (c === '"') aspas = true;
+    else if (c === sep) { linha.push(cel); cel = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && texto[i + 1] === "\n") i++;
+      linha.push(cel); linhas.push(linha); linha = []; cel = "";
+    } else cel += c;
+  }
+  if (cel !== "" || linha.length) { linha.push(cel); linhas.push(linha); }
+  return linhas.filter(l => l.some(c => String(c).trim() !== ""));
+}
+
+/* reconhece o nome da coluna mesmo escrito diferente */
+function campoDaColuna(nome) {
+  const n = normaliza(nome).replace(/[^a-z0-9]/g, "");
+  const regras = [
+    ["nome", /^(marca|nome|empresa|brand|company|cliente|nomedamarca)/],
+    ["instagram", /^(instagram|insta|ig|arroba)/],
+    ["email", /^(email|mail|correio)/],
+    ["telefone", /^(telefone|fone|phone|whatsapp|celular|tel)/],
+    ["site", /^(site|website|url|web|link)/],
+    ["nicho", /^(nicho|categoria|niche|category|segmento)/],
+    ["origem", /^(origem|fonte|source|ondeencontrei|deondeveio|canal)/],
+    ["situacao", /^(situacao|status|etapa|estagio)/],
+    ["obs", /^(observ|obs|nota|notes|comentario)/],
+    ["ultimo_contato", /^(ultimocontato|data|lastcontact|contato)/],
+    ["nao_enviar", /^(naoenviar|optout|descadastr|bloque)/]
+  ];
+  const r = regras.find(([, re]) => re.test(n));
+  return r ? r[0] : null;
+}
+function origemDoTexto(t) {
+  const n = normaliza(t);
+  if (!n) return "outro";
+  if (/insta|^ig$/.test(n)) return "instagram";
+  if (/linkedin/.test(n)) return "linkedin";
+  if (/tiktok/.test(n)) return "tiktok";
+  if (/twitter|^x$|^x\b|x\.com/.test(n)) return "x";
+  if (/mail/.test(n)) return "email";
+  if (/google|chrome|pesquisa|busca|site/.test(n)) return "google";
+  if (/indica/.test(n)) return "indicacao";
+  if (/portf|formul|inbound/.test(n)) return "portfolio";
+  return "outro";
+}
+function situacaoDoTexto(t) {
+  const n = normaliza(t);
+  if (!n) return "quero_prospectar";
+  if (/sem interesse|parad|recus|nao quer/.test(n)) return "sem_interesse";
+  if (/trabalhei|cliente|fechad|parceir/.test(n)) return "ja_trabalhei";
+  if (/conversa|negocia|respond/.test(n)) return "em_conversa";
+  if (/sem retorno|prospectad|enviad|contatad/.test(n)) return "prospectada";
+  return "quero_prospectar";
+}
+function dataDoTexto(t) {
+  const s = String(t || "").trim();
+  let m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+  if (m) { const ano = m[3].length === 2 ? "20" + m[3] : m[3]; const d = new Date(+ano, +m[2] - 1, +m[1]); return isNaN(d) ? null : isoLocal(d); }
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return m[1] + "-" + pad(+m[2]) + "-" + pad(+m[3]);
+  return null;
+}
+function nichoDoTexto(t) {
+  const s = String(t || "").trim();
+  if (!s) return null;
+  const achou = nichosDaBase().find(n => normaliza(n) === normaliza(s));
+  return achou || s;
+}
+
+/* acha a marca já existente: pelo e-mail, pelo @ ou pelo nome */
+function marcaExistente(d, indices) {
+  if (d.email && indices.email.has(d.email)) return indices.email.get(d.email);
+  const ig = d.instagram ? arroba(d.instagram).toLowerCase() : "";
+  if (ig && indices.ig.has(ig)) return indices.ig.get(ig);
+  const nome = chaveNome(d.nome);
+  if (nome && indices.nome.has(nome)) return indices.nome.get(nome);
+  return null;
+}
+function indicesDaBase(lista) {
+  const ix = { email: new Map(), ig: new Map(), nome: new Map() };
+  lista.forEach(m => {
+    if (m.email) ix.email.set(String(m.email).toLowerCase(), m);
+    if (m.instagram) ix.ig.set(arroba(m.instagram).toLowerCase(), m);
+    if (m.nome) ix.nome.set(chaveNome(m.nome), m);
+  });
+  return ix;
+}
+
+async function lerPlanilha(arquivo) {
+  if (/\.(xlsx|xls|numbers)$/i.test(arquivo.name)) {
+    torrada("Esse arquivo é do Excel ou do Numbers. Salve como CSV primeiro (o modelo explica como) e importe de novo.", true);
+    return;
+  }
+  const buf = await arquivo.arrayBuffer();
+  let texto = new TextDecoder("utf-8").decode(buf);
+  if (texto.includes("�")) texto = new TextDecoder("windows-1252").decode(buf);   /* CSV antigo do Excel */
+  const linhas = lerCSV(texto);
+  if (linhas.length < 2) { torrada("Não achei nenhuma marca nesse arquivo. Confira se é o CSV certo.", true); return; }
+  const cab = linhas[0].map(campoDaColuna);
+  if (!cab.includes("nome")) {
+    abrirJanela({ titulo: "📥 Não achei a coluna Marca", corpo: "<p>A primeira linha da planilha precisa ter os nomes das colunas, e uma delas precisa se chamar <b>Marca</b> (ou Empresa, ou Nome). A primeira linha do seu arquivo é:</p><p class=\"mudo\" style=\"margin-top:8px\">" + esc(linhas[0].join(" | ")) + "</p><p style=\"margin-top:8px\">Dica: baixe o 📄 modelo e copie os seus dados para ele.</p>" });
+    return;
+  }
+  const ignoradas = [], plano = [];
+  const ix = indicesDaBase(D.base);
+  const daPlanilha = indicesDaBase([]);
+  linhas.slice(1).forEach((l, i) => {
+    const d = {};
+    cab.forEach((campo, c) => { if (campo && d[campo] == null) d[campo] = String(l[c] == null ? "" : l[c]).trim(); });
+    const numLinha = i + 2;
+    if (!d.nome) { ignoradas.push(numLinha + " (sem nome da marca)"); return; }
+    if (/apague esta linha|marca exemplo/i.test(d.nome)) { ignoradas.push(numLinha + " (linha de exemplo)"); return; }
+    const limpo = {
+      nome: d.nome.slice(0, 200),
+      instagram: d.instagram ? "@" + arroba(d.instagram) : null,
+      email: d.email ? d.email.toLowerCase().slice(0, 200) : null,
+      telefone: d.telefone || null,
+      site: d.site || null,
+      nicho: nichoDoTexto(d.nicho),
+      origem: origemDoTexto(d.origem),
+      situacao: situacaoDoTexto(d.situacao),
+      obs: d.obs || null,
+      ultimo_contato: dataDoTexto(d.ultimo_contato),
+      nao_enviar: /^(sim|s|yes|y|x|1|true)$/i.test(d.nao_enviar || "")
+    };
+    if (limpo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpo.email)) { limpo.obs = [limpo.obs, "E-mail na planilha: " + limpo.email].filter(Boolean).join("\n"); limpo.email = null; }
+    if (marcaExistente(limpo, daPlanilha)) { ignoradas.push(numLinha + " (" + limpo.nome + " repetida na planilha)"); return; }
+    [["email", limpo.email], ["ig", limpo.instagram && arroba(limpo.instagram).toLowerCase()], ["nome", chaveNome(limpo.nome)]].forEach(([k, v]) => { if (v) daPlanilha[k].set(v, limpo); });
+    const existe = marcaExistente(limpo, ix);
+    if (!existe) { plano.push({ tipo: "nova", dados: limpo }); return; }
+    /* já existe: a planilha só preenche e atualiza o que veio escrito, nunca apaga */
+    const mudar = {};
+    ["instagram", "email", "telefone", "site", "nicho", "obs", "ultimo_contato"].forEach(k => { if (limpo[k] && limpo[k] !== existe[k]) mudar[k] = limpo[k]; });
+    if (d.origem && limpo.origem !== existe.origem) mudar.origem = limpo.origem;
+    if (d.situacao && limpo.situacao !== existe.situacao) mudar.situacao = limpo.situacao;
+    if (d.nao_enviar && limpo.nao_enviar !== !!existe.nao_enviar) mudar.nao_enviar = limpo.nao_enviar;
+    plano.push(Object.keys(mudar).length ? { tipo: "atualiza", dados: limpo, existe, mudar } : { tipo: "igual", dados: limpo, existe });
+  });
+  previaImportacao(arquivo.name, plano, ignoradas);
+}
+
+function previaImportacao(nome, plano, ignoradas) {
+  const novas = plano.filter(p => p.tipo === "nova"), atualiza = plano.filter(p => p.tipo === "atualiza"), iguais = plano.filter(p => p.tipo === "igual");
+  const ROT = { nova: ["nova", "c-verde"], atualiza: ["atualiza", "c-azul"], igual: ["já está igual", "c-cinza"] };
+  const amostra = plano.slice(0, 50);
+  const j = abrirJanela({
+    titulo: "📥 Prévia da importação", larga: true,
+    corpo: '<p class="mudo pequeno" style="margin-bottom:10px">Arquivo: ' + esc(nome) + ". Nada foi gravado ainda.</p>" +
+      '<div class="numeros">' +
+        numero("Marcas novas", inteiro(novas.length), "vão entrar na base") +
+        numero("Vão ser atualizadas", inteiro(atualiza.length), "já existiam, a planilha completa os dados") +
+        numero("Já estão iguais", inteiro(iguais.length), "nada muda") +
+        numero("Ignoradas", inteiro(ignoradas.length), ignoradas.length ? "veja embaixo" : "") +
+      "</div>" +
+      (amostra.length ? '<div class="tabela-caixa" style="max-height:320px;overflow:auto"><table class="tabela"><thead><tr><th></th><th>Marca</th><th>Nicho</th><th>Origem</th><th>Situação</th><th>E-mail</th></tr></thead><tbody>' +
+        amostra.map(p => '<tr><td><span class="pil ' + ROT[p.tipo][1] + '">' + ROT[p.tipo][0] + "</span></td><td><b>" + esc(p.dados.nome) + "</b></td><td>" + esc(p.dados.nicho || "") +
+          "</td><td>" + esc(bOrigem(p.dados.origem)[1]) + "</td><td>" + esc(bSituacao(p.dados.situacao)[1]) + '</td><td class="corta">' + esc(p.dados.email || "") + "</td></tr>").join("") +
+        "</tbody></table></div>" + (plano.length > amostra.length ? '<p class="mudo pequeno" style="margin-top:6px">Mostrando as primeiras 50 de ' + plano.length + ".</p>" : "") : "") +
+      (ignoradas.length ? '<details style="margin-top:10px"><summary class="link">Ver as linhas ignoradas</summary><ul class="lista-simples" style="margin-top:6px">' + ignoradas.map(x => "<li>Linha " + esc(x) + "</li>").join("") + "</ul></details>" : ""),
+    rodape: '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Cancelar</button>' +
+      '<button class="btn" type="button" id="bConfirmar"' + (novas.length + atualiza.length ? "" : " disabled") + ">📥 Importar " + plural(novas.length, "nova", "novas") + " e atualizar " + inteiro(atualiza.length) + "</button>"
+  });
+  $("#bConfirmar", j).addEventListener("click", () => importar(novas, atualiza, $("#bConfirmar", j)));
+}
+
+async function importar(novas, atualiza, botao) {
+  botao.disabled = true;
+  let ok = 0, erros = 0;
+  const passo = (t) => { botao.textContent = "⏳ " + t; };
+  for (let i = 0; i < novas.length; i += 100) {
+    passo("Gravando " + Math.min(i + 100, novas.length) + " de " + novas.length + "…");
+    const { data, error } = await banco.from("base_marcas").insert(novas.slice(i, i + 100).map(p => p.dados)).select();
+    if (error) { erros += novas.slice(i, i + 100).length; torrada(traduzErro(error, "base_marcas"), true); continue; }
+    (data || []).forEach(m => D.base.unshift(m));
+    ok += (data || []).length;
+  }
+  let atualizadas = 0;
+  for (let i = 0; i < atualiza.length; i += 10) {
+    passo("Atualizando " + Math.min(i + 10, atualiza.length) + " de " + atualiza.length + "…");
+    const lote = await Promise.all(atualiza.slice(i, i + 10).map(p => banco.from("base_marcas").update(p.mudar).eq("id", p.existe.id).select().single()));
+    lote.forEach(r => { if (r.error) erros++; else { troca(D.base, r.data); atualizadas++; } });
+  }
+  fecharJanela();
+  desenharBase();
+  torrada(erros ? "Importei " + ok + " e atualizei " + atualizadas + ", mas " + erros + " deram erro." : "✅ " + plural(ok, "marca nova", "marcas novas") + " e " + plural(atualizadas, "atualizada", "atualizadas") + ".", !!erros);
+  bVisao = "base";
+  desenharBase();
 }
 
 /* ============================================================
@@ -2160,7 +2618,7 @@ async function estudarComClaude() {
 /* ============================================================
    10. MENU, GAVETA E SAIR
    ============================================================ */
-const TITULOS = { portfolio: "Portfólio", marcas: "Marcas", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo" };
+const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo" };
 const lateral = $("#lateral"), cortina = $("#cortina");
 const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classList.remove("aberta"); };
 function irPara(aba) {
@@ -2193,7 +2651,8 @@ function seguro(nome, fn) {
   }
 }
 seguro("Portfólio", () => { montarPortfolio(); desenharPortfolio(); });
-seguro("Marcas", () => { montarMarcas(); desenharMarcas(); });
+seguro("Inbound", () => { montarMarcas(); desenharMarcas(); });
+seguro("Marcas", () => { montarBase(); desenharBase(); });
 seguro("Calendário", () => { montarCalendario(); desenharCalendario(); });
 seguro("Campanhas", () => { montarCampanhas(); desenharCampanhas(); });
 seguro("Checklist", montarChecklist);
