@@ -3725,7 +3725,7 @@ My video, "Night Shift Reset", opens in the locker room as I say "If you work ni
 
 I've created content for brands like Vital Proteins and Clinique.
 
-Want me to send the timed script, plus a second hook you can A/B test? You can see my work here: [portfólio]
+If this fits what you have in mind, I'd love to create it for you, with a second hook you can A/B test. Should I send over my rates? You can see my work here: [portfólio]
 
 MODELO 2 (e-mail frio, produto: creme para pele sensível):
 ASSUNTO: A redness test for your barrier cream
@@ -3740,7 +3740,7 @@ My video, "The Redness Test", opens on a close-up of my cheek as I say "I don't 
 
 I've created content for brands like La Roche-Posay and Cetaphil.
 
-Want me to send the timed script for "The Redness Test"? You can see my work here: [portfólio]
+If this fits what you have in mind, I'd love to create it for you. Should I send over my rates? You can see my work here: [portfólio]
 
 Warmly,
 [nome]`;
@@ -3753,9 +3753,10 @@ function instrucaoRedatora() {
     "ESTRUTURA: o método A.C.R. do curso, na ordem dos modelos. Cada parte puxa a próxima:\n" +
     "1. ATENÇÃO (1 ou 2 frases): uma verdade sobre o cliente da marca, ligada ao herói do produto. Nada sobre ela.\n" +
     "2. CONEXÃO (1 frase): o fato real dela que a coloca DENTRO desse problema. Ligação direta com a frase anterior. Nada de currículo.\n" +
-    "3. RESULTADO (3 ou 4 frases): \"My video, [nome da ideia], opens...\" com o GANCHO ESCOLHIDO por ela, exatamente: o que aparece, a fala entre aspas e o texto na tela. Depois o produto em uso e o que a pessoa sente ou vê, e o fecho do vídeo. Escreva para dar VONTADE de ver, não como lista técnica: nada de \"label facing camera\", \"close-up on the label\", \"hero moment\", \"measuring spoon\", \"in focus\".\n" +
+    "3. RESULTADO (3 ou 4 frases): \"My video, [nome da ideia], opens...\" com o GANCHO ESCOLHIDO por ela, exatamente: o que aparece, a fala entre aspas e o texto na tela. Depois, em linhas gerais e no tom de conversa com uma amiga: a dor explicada de leve, a virada (o produto e o seu diferencial), e a cena real dela usando o produto. Escreva para dar VONTADE de ver, não como roteiro nem lista técnica: nada de \"label facing camera\", \"close-up on the label\", \"hero moment\", \"measuring spoon\", \"in focus\", tempos ou cena por cena.\n" +
     "4. CREDENCIAL (1 frase neutra): \"I've created content for brands like...\" com 2 ou 3 marcas, de preferência do mesmo nicho. Nunca ligue a marcas com \"which is why\" ou \"that's why\".\n" +
-    "5. FECHO: uma pergunta de sim ou não ligada à ideia" + (F.estrategia && F.estrategia.uso === "ads" && F.ganchoB ? ", oferecendo também o segundo gancho para teste A/B" : "") + ", e o convite para ver o trabalho dela: " + portfolio + "\n\n" +
+    "5. FECHO: uma frase dizendo que ela adoraria criar isso para a marca" + (F.estrategia && F.estrategia.uso === "ads" && F.ganchoB ? " (com um segundo gancho para teste A/B)" : "") + ", uma pergunta de sim ou não sobre o próximo passo (ex.: \"Should I send over my rates?\") e o convite para ver o trabalho dela: " + portfolio + "\n" +
+    "NUNCA entregue o roteiro inteiro nem ofereça mandar o roteiro: mostre só a ideia, o gancho e o caminho do vídeo em linhas gerais, o suficiente para a marca visualizar e querer, não para fazer sem ela.\n\n" +
     "Tamanho: parecido com os modelos, no máximo " + (F.tipo === "plataforma" ? "140" : "160") + " palavras.\n" +
     "Do guia de estilo, use a VOZ, os FATOS dela e a lista do que nunca dizer. A ESTRUTURA é a dos modelos. Imite o ritmo e a lógica dos modelos, nunca as frases nem os produtos deles.\n\n" +
     "=== MODELOS (de outra creator; só para você ver o nível e a estrutura) ===\n" + MODELOS_PITCH;
