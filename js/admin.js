@@ -126,7 +126,7 @@ const ESPERADO = {
   calendario: ["titulo", "marca", "tipo", "data", "status"],
   campanhas: ["campanha", "cliente", "tipo", "status", "qtd", "valor", "prazo", "pagamento", "ativa", "favorita"],
   marcados: ["chave"],
-  roteiros: ["fonte", "url", "perfil", "de_quem", "titulo", "transcricao", "legenda", "postado_em", "tags", "obs", "status", "erro"],
+  roteiros: ["fonte", "url", "perfil", "de_quem", "titulo", "transcricao", "legenda", "postado_em", "tags", "obs", "status", "erro", "gancho", "corpo", "cta", "analise", "metricas"],
   configuracoes: ["chave", "valor"],
   visitas: ["data", "pagina", "origem"]
 };
@@ -1254,10 +1254,13 @@ function embedRoteiro(url) {
 const comArroba = (p) => p ? "@" + String(p).replace(/^@/, "") : "";
 
 /* ----- conversa com a Supadata ----- */
-async function supadata(caminho) {
+async function supadata(caminho, enviar) {
   const chave = D.config[CHAVE_SUPADATA];
+  const op = enviar
+    ? { method: "POST", headers: { "x-api-key": chave, "Content-Type": "application/json" }, body: JSON.stringify(enviar) }
+    : { headers: { "x-api-key": chave } };
   let r;
-  try { r = await fetch(SUPADATA + caminho, { headers: { "x-api-key": chave } }); }
+  try { r = await fetch(SUPADATA + caminho, op); }
   catch (e) { return { rede: true, status: 0, corpo: {} }; }
   let corpo = {};
   try { corpo = await r.json(); } catch (e) {}
@@ -1454,7 +1457,7 @@ function cartaoRoteiro(r) {
       '<div class="rot__estado-botoes"><button type="button" class="btn btn--linha" data-abrir>📝 Abrir mesmo assim</button>' +
       (r.url ? '<button type="button" class="btn btn--linha" data-denovo>🔄 Tentar de novo</button>' : "") + "</div></div>";
   } else {
-    meio = r.transcricao ? '<p class="rot__texto">' + esc(r.transcricao) + "</p>" : '<p class="rot__texto mudo">Sem transcrição ainda.</p>';
+    meio = (r.transcricao ? '<p class="rot__texto">' + esc(r.transcricao) + "</p>" : '<p class="rot__texto mudo">Sem transcrição ainda.</p>') + blocoAnalise(r);
   }
 
   return '<article class="rot__cartao" data-id="' + esc(r.id) + '">' + capa +
@@ -1466,9 +1469,13 @@ function cartaoRoteiro(r) {
         '<span class="pil ' + fonte.cor + '">' + fonte.emoji + " " + fonte.nome + "</span>" +
         (r.tags || []).map(t => '<span class="rot__tag">#' + esc(t) + "</span>").join("") +
         '<span class="mudo pequeno">' + quando + "</span>" +
-      "</div>" + meio +
+      "</div>" + linhaMetricas(r) + meio +
       '<div class="rot__acoes">' +
         (r.status === "pronto" && r.transcricao ? '<button type="button" class="btn btn--linha" data-copiar>📋 Copiar transcrição</button>' : "") +
+        (r.status === "pronto" && (r.transcricao || r.url)
+          ? (emAnalise.has(r.id) ? '<button type="button" class="btn btn--linha" disabled><span class="rot__relogio">⏳</span> Analisando…</button>'
+            : '<button type="button" class="btn btn--linha" data-analisar>🔍 ' + (r.gancho || r.analise ? "Analisar de novo" : "Analisar") + "</button>")
+          : "") +
         '<button type="button" class="btn btn--linha" data-editar>✏️ Editar</button>' +
         '<button type="button" class="btn btn--perigo" data-apagar>🗑️ Apagar</button>' +
         (r.url ? '<a class="link pequeno" href="' + esc(r.url) + '" target="_blank" rel="noopener">abrir no ' + esc((FONTES[fonteDe(r.url)] || fonte).nome) + "</a>" : "") +
@@ -1500,6 +1507,7 @@ async function cliqueNoCartao(e) {
   }
   if (e.target.closest("[data-editar], [data-abrir]")) { editorRoteiro(r); return; }
   if (e.target.closest("[data-denovo]")) { tentarDeNovo(r); return; }
+  if (e.target.closest("[data-analisar]")) { analisar(r); return; }
   const apagar = e.target.closest("[data-apagar]");
   if (apagar) {
     if (!apagar.dataset.armado) {
@@ -1535,6 +1543,10 @@ function editorRoteiro(r, padrao, topo) {
       { nome: "tags", rot: "Tags (separadas por vírgula)", inteiro: true, dica: "skincare, gancho forte, react" },
       { nome: "legenda", rot: "Legenda do post", tipo: "textarea", inteiro: true },
       { nome: "transcricao", rot: "Transcrição", tipo: "textarea", inteiro: true, linhas: 12 },
+      { nome: "gancho", rot: "🪝 Gancho", tipo: "textarea", inteiro: true, linhas: 2 },
+      { nome: "corpo", rot: "📖 Corpo", tipo: "textarea", inteiro: true, linhas: 4 },
+      { nome: "cta", rot: "📣 CTA (chamada final)", tipo: "textarea", inteiro: true, linhas: 2 },
+      { nome: "analise", rot: "💡 Análise: por que funcionou", tipo: "textarea", inteiro: true, linhas: 7 },
       { nome: "obs", rot: "Minhas notas", tipo: "textarea", inteiro: true, dica: "O que funciona aqui? O que eu quero usar?" }
     ],
     aoSalvar: async (dados, erro) => {
@@ -1672,20 +1684,250 @@ async function transcrever(r) {
     ? { status: "falhou", erro: resultado.falha }
     : { status: "pronto", erro: null, transcricao: resultado.texto, segmentos: resultado.segmentos };
   const salvo = await salvarLinha("roteiros", dados, r.id);
-  const atual = salvo || Object.assign({}, r, dados);
+  let atual = salvo || Object.assign({}, r, dados);
   troca(D.roteiros, atual);
   desenharRoteiros();
+
+  if (!resultado.falha || resultado.semFala) {
+    mostraAviso("info", '<span class="rot__relogio" aria-hidden="true">⏳</span> 📋 Buscando os dados do post (perfil, legenda, data e números)…');
+    atual = await preencherDadosDoPost(atual);
+  }
   atualizaSaldo();
 
   if (!resultado.falha) {
-    mostraAviso("ok", "✅ Pronto em " + tempo() + ". Revisa, dá um nome e salva.");
-    editorRoteiro(atual, null, "✅ Pronto. Revisa, dá um nome e salva.");
+    mostraAviso("ok", "✅ Pronto em " + tempo() + ". Revisa e salva. Depois, clique em 🔍 Analisar no cartão para ver gancho, corpo, CTA e por que o vídeo funcionou.");
+    editorRoteiro(atual, null, "✅ Pronto. Já preenchi o que o post mostra. Revisa e salva.");
   } else if (resultado.semFala) {
     mostraAviso("erro", "🔇 " + SEM_FALA + ' <button type="button" class="btn btn--linha" id="rGuardar">📝 Guardar assim mesmo</button>');
     $("#rGuardar").addEventListener("click", () => editorRoteiro(atual));
   } else {
     mostraAviso("erro", "⚠️ " + esc(resultado.falha));
   }
+}
+
+/* ============================================================
+   DADOS DO POST E ANÁLISE (gancho, corpo, CTA e por que funcionou)
+   ============================================================ */
+const emAnalise = new Set();
+const compacto = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
+const semTravessao = (t) => String(t == null ? "" : t).replace(/\s*—\s*/g, ", ").trim();
+const textoDoCampo = (v) => semTravessao(Array.isArray(v) ? v.filter(Boolean).join(", ") : v);
+
+function linhaMetricas(r) {
+  const m = r.metricas;
+  if (!m || typeof m !== "object") return "";
+  const partes = [];
+  if (m.views != null) partes.push("👁 " + compacto.format(m.views));
+  if (m.likes != null) partes.push("❤️ " + compacto.format(m.likes));
+  if (m.comments != null) partes.push("💬 " + compacto.format(m.comments));
+  if (m.shares != null) partes.push("↗️ " + compacto.format(m.shares));
+  if (m.duracao != null) partes.push("⏱ " + Math.round(m.duracao) + "s");
+  return partes.length ? '<div class="rot__metricas">' + partes.join('<span class="mudo"> · </span>') + "</div>" : "";
+}
+
+function blocoAnalise(r) {
+  if (!r.gancho && !r.corpo && !r.cta && !r.analise) return "";
+  const parte = (rot, t) => t ? '<div class="rot__parte"><b>' + rot + "</b><p>" + esc(t) + "</p></div>" : "";
+  return '<details class="rot__analise"><summary>🔍 Ver gancho, corpo, CTA e por que funcionou</summary>' +
+    parte("🪝 Gancho", r.gancho) + parte("📖 Corpo", r.corpo) + parte("📣 CTA", r.cta) + parte("💡 Análise", r.analise) + "</details>";
+}
+
+function tituloAutomatico(meta, r) {
+  const corta = (t) => { t = String(t || "").replace(/#[\w\u00C0-\u017F]+/g, "").replace(/\s+/g, " ").trim(); return t.length > 60 ? t.slice(0, 57).replace(/\s+\S*$/, "") + "…" : t; };
+  if (meta.title && meta.title !== meta.description && meta.title.length <= 80) return corta(meta.title);
+  const primeiraLinha = String(meta.description || "").split("\n").map(x => x.trim()).find(x => x.replace(/#\S+/g, "").trim().length >= 8);
+  if (primeiraLinha) return corta(primeiraLinha);
+  const frase = String(r.transcricao || "").split(/(?<=[.!?])\s/)[0];
+  return frase ? corta(frase) : null;
+}
+
+/* pede os dados do post à Supadata (1 crédito) e preenche o que estiver vazio */
+async function preencherDadosDoPost(r) {
+  if (!r.url || !D.config[CHAVE_SUPADATA]) return r;
+  const res = await supadata("/metadata?url=" + encodeURIComponent(r.url));
+  if (res.status !== 200) return r;          /* sem dados extras: segue normal, sem incomodar */
+  const m = res.corpo || {};
+  const autor = m.author || {};
+  const st = m.stats || {};
+  const md = m.media || {};
+  const patch = {};
+  if (!r.perfil && autor.username) patch.perfil = String(autor.username).replace(/^@/, "");
+  if (!r.legenda && m.description) patch.legenda = String(m.description).slice(0, 5000);
+  if (!r.postado_em && m.createdAt) { const d = new Date(m.createdAt); if (!isNaN(d)) patch.postado_em = isoLocal(d); }
+  if (!r.titulo) { const t = tituloAutomatico(m, r); if (t) patch.titulo = t; }
+  const metricas = { views: st.views, likes: st.likes, comments: st.comments, shares: st.shares, duracao: md.duration };
+  Object.keys(metricas).forEach(k => { if (metricas[k] == null) delete metricas[k]; });
+  if (Object.keys(metricas).length) patch.metricas = metricas;
+  if (!Object.keys(patch).length) return r;
+  let { data, error } = await banco.from("roteiros").update(patch).eq("id", r.id).select().single();
+  if (error && patch.metricas) {             /* banco ainda sem a coluna metricas: salva o resto */
+    delete patch.metricas;
+    ({ data, error } = await banco.from("roteiros").update(patch).eq("id", r.id).select().single());
+  }
+  if (error || !data) return r;
+  troca(D.roteiros, data);
+  desenharRoteiros();
+  return data;
+}
+
+const ANALISE_PROMPT = "Você é especialista em vídeos curtos de UGC. Assista ao vídeo e separe a fala em gancho, corpo e CTA, copiando os trechos exatamente como foram falados, no idioma original. Depois explique, em português do Brasil, por que esse vídeo funciona, olhando a fala, o que aparece na tela, o ritmo e o formato. Nunca use travessão.";
+const ANALISE_SCHEMA = {
+  type: "object",
+  properties: {
+    titulo: { type: "string", description: "Título curto em português do Brasil, até 60 caracteres, dizendo do que é o vídeo" },
+    gancho: { type: "string", description: "Trecho exato da fala que abre o vídeo e prende a atenção, no idioma original" },
+    corpo: { type: "string", description: "Trecho exato da fala entre o gancho e a chamada final, no idioma original" },
+    cta: { type: "string", description: "Trecho exato da chamada para ação no fim, no idioma original. Vazio se não houver" },
+    tipo_de_gancho: { type: "string", description: "Em português do Brasil: que tipo de gancho é (pergunta, identificação, curiosidade, polêmica, resultado...) e por que prende" },
+    por_que_funcionou: { type: "string", description: "Em português do Brasil, de 3 a 6 frases: por que o vídeo funciona, olhando fala, imagem, ritmo e formato" },
+    gatilhos: { type: "array", items: { type: "string" }, description: "Em português do Brasil: gatilhos usados, como dor, desejo, prova, urgência, humor" },
+    o_que_reaproveitar: { type: "string", description: "Em português do Brasil: a estrutura que dá para usar num vídeo meu, sem copiar o conteúdo" }
+  },
+  required: ["titulo", "gancho", "corpo", "cta", "tipo_de_gancho", "por_que_funcionou", "gatilhos", "o_que_reaproveitar"]
+};
+
+/* transforma a resposta (da Supadata ou do Claude) no que vai para o banco */
+function patchDaAnalise(d, r) {
+  const cta = textoDoCampo(d.cta);
+  const patch = {
+    gancho: textoDoCampo(d.gancho) || null,
+    corpo: textoDoCampo(d.corpo) || null,
+    cta: cta && !/^sem cta\.?$/i.test(cta) ? cta : null,
+    analise: [["🪝 Tipo de gancho", d.tipo_de_gancho], ["💡 Por que funcionou", d.por_que_funcionou], ["🎯 Gatilhos", d.gatilhos], ["♻️ O que reaproveitar", d.o_que_reaproveitar]]
+      .map(([rot, v]) => [rot, textoDoCampo(v)]).filter(([, v]) => v).map(([rot, v]) => rot + ": " + v).join("\n\n") || null
+  };
+  if (!r.titulo && textoDoCampo(d.titulo)) patch.titulo = textoDoCampo(d.titulo).slice(0, 80);
+  return patch;
+}
+
+async function guardarAnalise(r, patch) {
+  const salvo = await salvarLinha("roteiros", patch, r.id);
+  if (!salvo) return false;
+  troca(D.roteiros, salvo);
+  mostraCartao(salvo.id);
+  const c = $('#rCartoes [data-id="' + salvo.id + '"] .rot__analise');
+  if (c) c.open = true;
+  return true;
+}
+
+async function analisar(r) {
+  if (emAnalise.has(r.id)) return;
+  if (!r.url || !D.config[CHAVE_SUPADATA]) { analisarComClaude(r); return; }
+  emAnalise.add(r.id);
+  desenharRoteiros();
+  const inicio = Date.now();
+  const tick = () => mostraAviso("info", '<span class="rot__relogio" aria-hidden="true">⏳</span> 🔍 Assistindo e analisando o vídeo… ' +
+    Math.round((Date.now() - inicio) / 1000) + "s. Costuma levar de 1 a 3 minutos, pode deixar a aba aberta.");
+  tick();
+  const relogio = setInterval(tick, 1000);
+  let dados = null, falha = null, planoB = false;
+  const precisaPlano = (res) => res.status === 402 || res.status === 403 || /upgrade/i.test(String(res.corpo && res.corpo.error || ""));
+  try {
+    const res = await supadata("/extract", { url: r.url, prompt: ANALISE_PROMPT, schema: ANALISE_SCHEMA });
+    if (precisaPlano(res)) planoB = true;
+    else if (res.corpo && res.corpo.data) dados = res.corpo.data;
+    else if (res.corpo && res.corpo.jobId) {
+      while (!dados && !falha) {
+        if (Date.now() - inicio > 6 * 60 * 1000) { falha = "Passou de 6 minutos e eu desisti. Tente de novo mais tarde."; break; }
+        await espera(5000);
+        const r2 = await supadata("/extract/" + encodeURIComponent(res.corpo.jobId));
+        if (r2.rede) continue;
+        if (precisaPlano(r2)) { planoB = true; break; }
+        if (r2.status >= 400) { falha = erroSupadata(r2); break; }
+        const st = String(r2.corpo.status || "").toLowerCase();
+        if (st === "failed") {
+          const e = r2.corpo.error || {};
+          if (/upgrade/i.test(String(e.error || e.code || e))) { planoB = true; break; }
+          falha = "A análise não deu certo do lado da Supadata. Tente de novo daqui a pouco.";
+        } else if (st === "completed") dados = r2.corpo.data || {};
+      }
+    } else falha = erroSupadata(res);
+  } catch (e) {
+    falha = "A análise não deu certo. Tente de novo daqui a pouco.";
+  } finally {
+    clearInterval(relogio);
+    emAnalise.delete(r.id);
+  }
+  desenharRoteiros();
+  atualizaSaldo();
+  if (planoB) { mostraAviso(null); analisarComClaude(r, "A análise automática não está liberada no seu plano da Supadata. Sem problema: dá para fazer com o Claude, de graça."); return; }
+  if (falha) {
+    mostraAviso("erro", "⚠️ " + esc(falha) + ' <button type="button" class="btn btn--linha" id="rComClaude">🧠 Fazer com o Claude</button>');
+    $("#rComClaude").addEventListener("click", () => analisarComClaude(r));
+    return;
+  }
+  const atual = D.roteiros.find(x => x.id === r.id) || r;
+  if (await guardarAnalise(atual, patchDaAnalise(dados || {}, atual))) mostraAviso("ok", "✅ Análise pronta. Está aberta no cartão, em 🔍 Ver gancho, corpo, CTA e por que funcionou.");
+}
+
+/* plano B, grátis: um pedido pronto para colar no Claude, e a resposta volta para cá */
+const ROTULOS_CLAUDE = [["TÍTULO", "titulo"], ["TITULO", "titulo"], ["TIPO DE GANCHO", "tipo_de_gancho"], ["GANCHO", "gancho"], ["CORPO", "corpo"], ["CTA", "cta"],
+  ["POR QUE FUNCIONOU", "por_que_funcionou"], ["GATILHOS", "gatilhos"], ["O QUE REAPROVEITAR", "o_que_reaproveitar"]];
+function lerRespostaClaude(texto) {
+  const limpo = String(texto || "").replace(/\*\*/g, "").replace(/^\s*#+\s*/gm, "");
+  const re = new RegExp("^\\s*(" + ROTULOS_CLAUDE.map(x => x[0]).join("|") + ")\\s*:\\s*", "gim");
+  const achados = [];
+  let m;
+  while ((m = re.exec(limpo))) achados.push({ rot: m[1].toUpperCase(), ini: m.index, fim: re.lastIndex });
+  if (!achados.length) return null;
+  const d = {};
+  achados.forEach((a, i) => {
+    const campo = (ROTULOS_CLAUDE.find(x => x[0] === a.rot) || [])[1];
+    if (campo) d[campo] = limpo.slice(a.fim, i + 1 < achados.length ? achados[i + 1].ini : undefined).trim();
+  });
+  return d;
+}
+function pedidoParaClaude(r) {
+  const m = r.metricas || {};
+  const numeros = [m.views != null && m.views + " visualizações", m.likes != null && m.likes + " curtidas", m.comments != null && m.comments + " comentários", m.duracao != null && Math.round(m.duracao) + " segundos"].filter(Boolean).join(", ");
+  return "Você é especialista em vídeos curtos de UGC. Analise o vídeo abaixo pela transcrição" + (r.legenda ? " e pela legenda" : "") + ".\n\n" +
+    "Separe a fala em gancho, corpo e CTA, copiando os trechos exatamente como foram falados, no idioma original. Depois explique em português do Brasil por que esse vídeo funciona.\n\n" +
+    "Responda EXATAMENTE neste formato, com estes títulos em maiúsculas, um por linha, sem nada antes:\n" +
+    "TÍTULO: um título curto em português, até 60 caracteres\n" +
+    "GANCHO: o trecho exato da abertura\n" +
+    "CORPO: o trecho exato do meio\n" +
+    "CTA: o trecho exato da chamada final, ou \"sem CTA\"\n" +
+    "TIPO DE GANCHO: que tipo de gancho é e por que prende\n" +
+    "POR QUE FUNCIONOU: de 3 a 6 frases\n" +
+    "GATILHOS: separados por vírgula\n" +
+    "O QUE REAPROVEITAR: a estrutura que eu posso usar num vídeo meu, sem copiar o conteúdo\n\n" +
+    "Escreva como gente fala, sem ficar robotizado, e nunca use travessão.\n\n" +
+    "=== O VÍDEO ===\n" +
+    (r.perfil ? "Perfil: " + comArroba(r.perfil) + "\n" : "") + (r.url ? "Link: " + r.url + "\n" : "") + (numeros ? "Números: " + numeros + "\n" : "") +
+    (r.legenda ? "\nLegenda:\n" + r.legenda + "\n" : "") + "\nTranscrição:\n" + (r.transcricao || "(sem fala)");
+}
+async function analisarComClaude(r, motivo) {
+  const pedido = pedidoParaClaude(r);
+  let copiou = true;
+  try { await navigator.clipboard.writeText(pedido); } catch (e) { copiou = false; }
+  const j = abrirJanela({
+    titulo: "🧠 Analisar com o Claude", larga: true,
+    corpo: (motivo ? '<div class="faixa faixa--aviso" style="margin-bottom:12px">' + esc(motivo) + "</div>" : "") +
+      '<ol class="lista-simples" style="margin-bottom:12px">' +
+        "<li>" + (copiou ? "Já copiei o pedido pronto. ✓" : "Copie o pedido pronto que está no fim desta janela.") + "</li>" +
+        '<li>Abra o <a class="link" href="https://claude.ai/new" target="_blank" rel="noopener">Claude</a>, cole com Cmd + V e envie.</li>' +
+        "<li>Copie a resposta inteira do Claude, cole aqui embaixo e clique em Guardar análise.</li></ol>" +
+      '<textarea class="entrada" id="rResposta" style="height:220px;padding:10px" placeholder="Cole aqui a resposta do Claude"></textarea>' +
+      '<div class="faixa escondido" id="rRespostaErro" style="margin-top:8px"></div>' +
+      (copiou ? "" : '<details style="margin-top:10px"><summary class="link">Ver o pedido para copiar</summary><textarea class="entrada" style="height:200px;padding:10px;margin-top:6px" readonly>' + esc(pedido) + "</textarea></details>"),
+    rodape: '<button class="btn btn--linha" type="button" id="rCopiarDeNovo">📋 Copiar o pedido de novo</button><span class="espaco"></span>' +
+      '<button class="btn btn--linha" type="button" data-fechar>Cancelar</button><button class="btn" type="button" id="rGuardarAnalise">Guardar análise</button>'
+  });
+  $("#rCopiarDeNovo", j).addEventListener("click", async (e) => {
+    try { await navigator.clipboard.writeText(pedido); e.target.textContent = "copiado ✓"; } catch (x) { e.target.textContent = "não deu para copiar"; }
+  });
+  $("#rGuardarAnalise", j).addEventListener("click", async () => {
+    const texto = $("#rResposta", j).value.trim();
+    const aviso = $("#rRespostaErro", j);
+    if (!texto) { aviso.textContent = "Cole a resposta do Claude no campo acima."; aviso.classList.remove("escondido"); return; }
+    const d = lerRespostaClaude(texto);
+    const atual = D.roteiros.find(x => x.id === r.id) || r;
+    const patch = d ? patchDaAnalise(d, atual) : { analise: semTravessao(texto) };
+    if (await guardarAnalise(atual, patch)) {
+      fecharJanela();
+      mostraAviso("ok", d ? "✅ Análise guardada. Está aberta no cartão." : "✅ Guardei a resposta inteira na Análise, porque ela não veio no formato com GANCHO, CORPO e CTA. Dá para separar à mão em ✏️ Editar.");
+    }
+  });
 }
 
 /* ----- estudar com o Claude: monta o prompt e copia ----- */
