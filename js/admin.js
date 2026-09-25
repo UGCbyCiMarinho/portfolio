@@ -3251,10 +3251,10 @@ function registrarAbordagens() {
 const OPENROUTER = "https://openrouter.ai/api/v1";
 const MODELOS_IA = [["anthropic/claude-sonnet-5", "Claude Sonnet 5 (rápido, uns US$ 0,01 por mensagem)"], ["anthropic/claude-opus-5.5", "Claude Opus 5.5 (caprichado, uns US$ 0,02)"]];
 const TIPOS_ABORDAGEM = [
-  ["email", "✉️ E-mail", "Um e-mail de primeiro contato: ASSUNTO curto e específico, saudação \"Hello [Marca] team,\", de 110 a 170 palavras, e a assinatura \"Warmly,\" + nome + link do portfólio."],
-  ["dm", "💬 DM", "Uma DM de Instagram de primeiro contato: sem assunto, de 40 a 80 palavras, gancho forte na primeira linha, termina pedindo o melhor e-mail do time de marketing para mandar o portfólio. Sem links."],
-  ["plataforma", "🧩 Plataforma", "Uma candidatura para uma vaga de UGC numa plataforma (InSense, Billo, JoinBrands...): responde ao brief, mostra por que ela é a creator certa para AQUELE brief, propõe o conceito de vídeo e confirma que entrega o que foi pedido. De 80 a 150 palavras, sem assunto, sem assinatura longa."],
-  ["followup", "🔁 Follow-up", "Um follow-up curto (40 a 80 palavras) de um e-mail que ficou sem resposta: volta ao assunto com uma ideia nova ou um ângulo novo, sem cobrar, sem repetir o primeiro e-mail. Sem assunto (vai na mesma conversa)."]
+  ["email", "✉️ E-mail", "Um e-mail frio de primeiro contato seguindo o método A.C.R. do guia: ASSUNTO funcional citando o produto; saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\"; Atenção (algo específico da marca), Conexão (um fato real da vida dela), Resultado (a ideia com nome, o gancho literal entre aspas e os takes com o produto como herói), uma ou duas frases sobre quem ela é, e um CTA de sim ou não. Curto, no máximo uns 150 palavras. Assinatura \"Warmly,\" + nome + portfólio."],
+  ["dm", "💬 DM", "Uma DM fria de Instagram, no máximo 4 linhas: um elogio específico a algo real da marca (post, Reel ou produto), dizer que teve uma ideia de vídeo pensada só para aquele produto e perguntar se pode mandar (ou qual o melhor e-mail). Sem apresentar a ideia inteira, sem assunto, sem links."],
+  ["plataforma", "🧩 Plataforma", "Uma candidatura para uma vaga de UGC numa plataforma (InSense, Billo, JoinBrands...): A.C.R. completo que se lê em 30 segundos, usando as palavras exatas do briefing, com uma ideia menos óbvia que a do briefing (de preferência com pessoa e história), confirmando que entrega o que foi pedido. De 90 a 160 palavras, sem assunto, sem assinatura longa."],
+  ["followup", "🔁 Follow-up", "Um follow-up de 2 ou 3 linhas para um e-mail sem resposta há 48 a 72 horas, na mesma conversa: retoma a ideia ou traz um ângulo novo, urgência suave de agenda, e um CTA de sim ou não. Nunca cobrar, nunca repetir o primeiro e-mail. Sem assunto."]
 ];
 let abTipo = "email";
 let abResultado = null;     /* { assunto, mensagem } */
