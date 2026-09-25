@@ -940,7 +940,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
         <a href="https://tiktok.com/@cimarinhougc" target="_blank" rel="noopener">TikTok</a>
         <a href="https://x.com/Ciimarinho" target="_blank" rel="noopener">X</a>
         <a href="https://wa.me/16478774725" target="_blank" rel="noopener">WhatsApp</a>
-        <a href="mailto:cimarinho.ugc@gmail.com">Email</a>
+        <a href="mailto:hello@cimarinho.com">Email</a>
       </nav>
     </div>
     <div class="footer__legal">
@@ -1231,7 +1231,7 @@ const TESTIMONIALS = [
 /* CONTATOS: a linha inteira é clicável, ícone e texto.
    Para acrescentar outra rede, copie uma linha e use um dos ícones da lista ICONES. */
 const CONTATOS = [
-  { icone:"email",     texto:"cimarinho.ugc@gmail.com", link:"mailto:cimarinho.ugc@gmail.com" },
+  { icone:"email",     texto:"hello@cimarinho.com",     link:"mailto:hello@cimarinho.com" },
   { icone:"whatsapp",  texto:"+1 647 877 4725",         link:"https://wa.me/16478774725" },
   { icone:"instagram", texto:"@ccimarinho",             link:"https://instagram.com/ccimarinho" },
   { icone:"tiktok",    texto:"@cimarinhougc",           link:"https://tiktok.com/@cimarinhougc" },
@@ -1726,7 +1726,7 @@ function handleForm(form, btn, feedback, msg) {
     } catch (erro) {
       /* se o envio falhar, a pessoa precisa saber, e ter o e-mail à mão */
       feedback.classList.add("form__feedback--erro");
-      feedback.textContent = "Could not send. Please write to cimarinho.ugc@gmail.com.";
+      feedback.textContent = "Could not send. Please write to hello@cimarinho.com.";
     } finally {
       btn.disabled = false;
       btn.innerHTML = original;
