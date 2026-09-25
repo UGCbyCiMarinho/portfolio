@@ -3630,6 +3630,12 @@ async function gerarAbordagem(ajuste) {
       const c = escolha.message && escolha.message.content;
       texto = Array.isArray(c) ? c.map(x => x && (x.text || "")).join("") : c;
       if (!texto && escolha.finish_reason === "length") erro = "A IA pensou demais e não sobrou espaço para escrever. Tente de novo, ou troque para o Sonnet 5 no quadro 🔑.";
+      else if (!texto) {
+        /* detalhe para diagnóstico (nunca inclui a chave) */
+        const det = { modelo: j.model, fim: escolha.finish_reason, erro: (escolha.error && escolha.error.message) || (j.error && j.error.message), provedor: j.provider,
+          tem_raciocinio: !!(escolha.message && escolha.message.reasoning) };
+        erro = "A IA voltou sem texto. Detalhe para o Claude: " + JSON.stringify(det);
+      }
     }
   } catch (e) { erro = "Sem conexão com a IA. Confira a sua internet."; }
   botao.disabled = false;
