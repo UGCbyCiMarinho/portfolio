@@ -126,7 +126,7 @@ const ESPERADO = {
   calendario: ["titulo", "marca", "tipo", "data", "status"],
   campanhas: ["campanha", "cliente", "tipo", "status", "qtd", "valor", "prazo", "pagamento", "ativa", "favorita"],
   marcados: ["chave"],
-  roteiros: ["fonte", "url", "perfil", "de_quem", "titulo", "transcricao", "legenda", "postado_em", "tags", "obs", "status", "erro", "gancho", "corpo", "cta", "analise", "metricas"],
+  roteiros: ["fonte", "url", "perfil", "de_quem", "titulo", "transcricao", "legenda", "postado_em", "tags", "obs", "status", "erro", "gancho", "corpo", "cta", "analise", "metricas", "capa"],
   configuracoes: ["chave", "valor"],
   visitas: ["data", "pagina", "origem"]
 };
@@ -168,11 +168,24 @@ async function ler(tabela, montar) {
 }
 
 async function salvarLinha(tabela, dados, id) {
+  dados = Object.assign({}, dados);
+  const faltando = [];
   try {
-    const q = id ? banco.from(tabela).update(dados).eq("id", id) : banco.from(tabela).insert(dados);
-    const { data, error } = await q.select().single();
-    if (error) throw error;
-    return data;
+    for (let tentativa = 0; tentativa < 8; tentativa++) {
+      const q = id ? banco.from(tabela).update(dados).eq("id", id) : banco.from(tabela).insert(dados);
+      const { data, error } = await q.select().single();
+      if (!error) {
+        if (faltando.length) aviso("salvar-" + tabela + faltando.join(), 'Salvei, mas a tabela "' + tabela + '" não tem os campos: ' + faltando.join(", ") + ". Rode o SQL mais recente no Supabase para guardar tudo.");
+        return data;
+      }
+      /* campo que não existe no banco: tira ele e tenta de novo, para não perder o resto */
+      const achou = ehErroDeCampo(error) && String(error.message || "").match(/'([^']+)' column|column "?(?:\w+\.)?([\w]+)"?/i);
+      const campo = achou && (achou[1] || achou[2]);
+      if (!campo || !(campo in dados)) throw error;
+      delete dados[campo];
+      faltando.push(campo);
+    }
+    throw new Error("muitos campos faltando");
   } catch (e) { torrada(traduzErro(e, tabela), true); return null; }
 }
 async function apagarLinha(tabela, id) {
@@ -1441,8 +1454,9 @@ function cartaoRoteiro(r) {
   const quem = QUEM[r.de_quem] || QUEM.outra;
   const yt = idYoutube(r.url);
   const emb = embedRoteiro(r.url);
-  const capa = '<div class="rot__capa' + (yt ? " tem-foto" : "") + '"' + (yt ? ' style="background-image:url(\'https://i.ytimg.com/vi/' + yt + '/hqdefault.jpg\')"' : "") + ">" +
-    (yt ? "" : '<span class="rot__capa-emoji">' + fonte.emoji + "</span>") +
+  const imagem = r.capa || (yt ? "https://i.ytimg.com/vi/" + yt + "/hqdefault.jpg" : "");
+  const capa = '<div class="rot__capa">' + '<span class="rot__capa-emoji">' + fonte.emoji + "</span>" +
+    (imagem ? '<img class="rot__capa-img" src="' + esc(imagem) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : "") +
     (emb ? '<button type="button" class="rot__ver" data-ver>▶ ver vídeo</button>' : "") + "</div>";
   const quando = r.postado_em ? "postado " + dataBR(r.postado_em) : "salvo " + dataBR(String(r.created_at || "").slice(0, 10));
 
@@ -1457,7 +1471,8 @@ function cartaoRoteiro(r) {
       '<div class="rot__estado-botoes"><button type="button" class="btn btn--linha" data-abrir>📝 Abrir mesmo assim</button>' +
       (r.url ? '<button type="button" class="btn btn--linha" data-denovo>🔄 Tentar de novo</button>' : "") + "</div></div>";
   } else {
-    meio = (r.transcricao ? '<p class="rot__texto">' + esc(r.transcricao) + "</p>" : '<p class="rot__texto mudo">Sem transcrição ainda.</p>') + blocoAnalise(r);
+    meio = (r.gancho ? '<p class="rot__gancho">🪝 ' + esc(r.gancho) + "</p>" : "") +
+      (r.transcricao ? '<p class="rot__texto">' + esc(r.transcricao) + "</p>" : '<p class="rot__texto mudo">Sem transcrição ainda.</p>');
   }
 
   return '<article class="rot__cartao" data-id="' + esc(r.id) + '">' + capa +
@@ -1474,8 +1489,9 @@ function cartaoRoteiro(r) {
         (r.status === "pronto" && r.transcricao ? '<button type="button" class="btn btn--linha" data-copiar>📋 Copiar transcrição</button>' : "") +
         (r.status === "pronto" && (r.transcricao || r.url)
           ? (emAnalise.has(r.id) ? '<button type="button" class="btn btn--linha" disabled><span class="rot__relogio">⏳</span> Analisando…</button>'
-            : '<button type="button" class="btn btn--linha" data-analisar>🔍 ' + (r.gancho || r.analise ? "Analisar de novo" : "Analisar") + "</button>")
+            : (temAnalise(r) ? '<button type="button" class="btn" data-ficha>📑 Ver análise</button>' : '<button type="button" class="btn" data-analisar>🔍 Analisar</button>'))
           : "") +
+        (r.url && r.status !== "processando" && !r.capa && !r.metricas && D.config[CHAVE_SUPADATA] ? '<button type="button" class="btn btn--linha" data-dados>🖼️ Buscar capa e números</button>' : "") +
         '<button type="button" class="btn btn--linha" data-editar>✏️ Editar</button>' +
         '<button type="button" class="btn btn--perigo" data-apagar>🗑️ Apagar</button>' +
         (r.url ? '<a class="link pequeno" href="' + esc(r.url) + '" target="_blank" rel="noopener">abrir no ' + esc((FONTES[fonteDe(r.url)] || fonte).nome) + "</a>" : "") +
@@ -1508,6 +1524,16 @@ async function cliqueNoCartao(e) {
   if (e.target.closest("[data-editar], [data-abrir]")) { editorRoteiro(r); return; }
   if (e.target.closest("[data-denovo]")) { tentarDeNovo(r); return; }
   if (e.target.closest("[data-analisar]")) { analisar(r); return; }
+  if (e.target.closest("[data-ficha]")) { abrirFicha(r); return; }
+  if (e.target.closest("[data-dados]")) {
+    const b = e.target.closest("[data-dados]");
+    b.disabled = true; b.textContent = "⏳ Buscando…";
+    const novo = await preencherDadosDoPost(r);
+    atualizaSaldo();
+    if (novo === r) { b.disabled = false; b.textContent = "🖼️ Buscar capa e números"; torrada("Não consegui os dados desse post agora. Tente de novo mais tarde.", true); }
+    else torrada("Capa e números atualizados ✓");
+    return;
+  }
   const apagar = e.target.closest("[data-apagar]");
   if (apagar) {
     if (!apagar.dataset.armado) {
@@ -1546,7 +1572,6 @@ function editorRoteiro(r, padrao, topo) {
       { nome: "gancho", rot: "🪝 Gancho", tipo: "textarea", inteiro: true, linhas: 2 },
       { nome: "corpo", rot: "📖 Corpo", tipo: "textarea", inteiro: true, linhas: 4 },
       { nome: "cta", rot: "📣 CTA (chamada final)", tipo: "textarea", inteiro: true, linhas: 2 },
-      { nome: "analise", rot: "💡 Análise: por que funcionou", tipo: "textarea", inteiro: true, linhas: 7 },
       { nome: "obs", rot: "Minhas notas", tipo: "textarea", inteiro: true, dica: "O que funciona aqui? O que eu quero usar?" }
     ],
     aoSalvar: async (dados, erro) => {
@@ -1706,12 +1731,14 @@ async function transcrever(r) {
 }
 
 /* ============================================================
-   DADOS DO POST E ANÁLISE (gancho, corpo, CTA e por que funcionou)
+   DADOS DO POST, CAPA E ANÁLISE (ficha igual à das Referências)
    ============================================================ */
 const emAnalise = new Set();
 const compacto = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
 const semTravessao = (t) => String(t == null ? "" : t).replace(/\s*—\s*/g, ", ").trim();
 const textoDoCampo = (v) => semTravessao(Array.isArray(v) ? v.filter(Boolean).join(", ") : v);
+const primeiro = (...v) => v.find(x => x !== undefined && x !== null && x !== "");
+const temAnalise = (r) => !!(r.analise && typeof r.analise === "object" && Object.keys(r.analise).length);
 
 function linhaMetricas(r) {
   const m = r.metricas;
@@ -1725,20 +1752,29 @@ function linhaMetricas(r) {
   return partes.length ? '<div class="rot__metricas">' + partes.join('<span class="mudo"> · </span>') + "</div>" : "";
 }
 
-function blocoAnalise(r) {
-  if (!r.gancho && !r.corpo && !r.cta && !r.analise) return "";
-  const parte = (rot, t) => t ? '<div class="rot__parte"><b>' + rot + "</b><p>" + esc(t) + "</p></div>" : "";
-  return '<details class="rot__analise"><summary>🔍 Ver gancho, corpo, CTA e por que funcionou</summary>' +
-    parte("🪝 Gancho", r.gancho) + parte("📖 Corpo", r.corpo) + parte("📣 CTA", r.cta) + parte("💡 Análise", r.analise) + "</details>";
-}
-
 function tituloAutomatico(meta, r) {
-  const corta = (t) => { t = String(t || "").replace(/#[\w\u00C0-\u017F]+/g, "").replace(/\s+/g, " ").trim(); return t.length > 60 ? t.slice(0, 57).replace(/\s+\S*$/, "") + "…" : t; };
-  if (meta.title && meta.title !== meta.description && meta.title.length <= 80) return corta(meta.title);
-  const primeiraLinha = String(meta.description || "").split("\n").map(x => x.trim()).find(x => x.replace(/#\S+/g, "").trim().length >= 8);
-  if (primeiraLinha) return corta(primeiraLinha);
+  const corta = (t) => { t = String(t || "").replace(/#[\w\u00C0-\u017F]+/g, "").replace(/@[\w.]+/g, "").replace(/\s+/g, " ").trim(); return t.length > 60 ? t.slice(0, 57).replace(/\s+\S*$/, "") + "…" : t; };
+  if (meta.title && meta.title !== meta.description && meta.title.length <= 80 && corta(meta.title).length >= 8) return corta(meta.title);
+  const linha = String(meta.description || "").split("\n").map(x => x.trim()).find(x => corta(x).length >= 8);
+  if (linha) return corta(linha);
   const frase = String(r.transcricao || "").split(/(?<=[.!?])\s/)[0];
   return frase ? corta(frase) : null;
+}
+
+/* guarda uma cópia pequena da capa no banco: o link do Instagram expira em poucos dias */
+async function copiaDaCapa(url) {
+  try {
+    const resp = await fetch(url, { referrerPolicy: "no-referrer" });
+    if (!resp.ok) throw new Error(resp.status);
+    const img = await createImageBitmap(await resp.blob());
+    const largura = 240, altura = Math.round(largura * img.height / img.width);
+    const tela = document.createElement("canvas");
+    tela.width = largura; tela.height = altura;
+    tela.getContext("2d").drawImage(img, 0, 0, largura, altura);
+    return tela.toDataURL("image/jpeg", 0.72);
+  } catch (e) {
+    return null;
+  }
 }
 
 /* pede os dados do post à Supadata (1 crédito) e preenche o que estiver vazio */
@@ -1747,54 +1783,93 @@ async function preencherDadosDoPost(r) {
   const res = await supadata("/metadata?url=" + encodeURIComponent(r.url));
   if (res.status !== 200) return r;          /* sem dados extras: segue normal, sem incomodar */
   const m = res.corpo || {};
-  const autor = m.author || {};
-  const st = m.stats || {};
+  const autor = m.author || m.owner || {};
+  const st = m.stats || m.statistics || {};
   const md = m.media || {};
   const patch = {};
-  if (!r.perfil && autor.username) patch.perfil = String(autor.username).replace(/^@/, "");
-  if (!r.legenda && m.description) patch.legenda = String(m.description).slice(0, 5000);
-  if (!r.postado_em && m.createdAt) { const d = new Date(m.createdAt); if (!isNaN(d)) patch.postado_em = isoLocal(d); }
-  if (!r.titulo) { const t = tituloAutomatico(m, r); if (t) patch.titulo = t; }
-  const metricas = { views: st.views, likes: st.likes, comments: st.comments, shares: st.shares, duracao: md.duration };
+  const usuario = primeiro(autor.username, autor.handle, autor.uniqueId);
+  if (!r.perfil && usuario) patch.perfil = String(usuario).replace(/^@/, "");
+  const legenda = primeiro(m.description, m.caption, m.text);
+  if (!r.legenda && legenda) patch.legenda = String(legenda).slice(0, 5000);
+  const quando = primeiro(m.createdAt, m.created_at, m.publishedAt, m.uploadDate, m.date, m.timestamp, md.createdAt);
+  if (!r.postado_em && quando) {
+    const d = typeof quando === "number" ? new Date(quando < 1e12 ? quando * 1000 : quando) : new Date(quando);
+    if (!isNaN(d)) patch.postado_em = isoLocal(d);
+  }
+  if (!r.titulo) { const t = tituloAutomatico({ title: m.title, description: legenda }, r); if (t) patch.titulo = t; }
+  const metricas = {
+    views: primeiro(st.views, st.viewCount, st.playCount, st.plays),
+    likes: primeiro(st.likes, st.likeCount, st.diggCount),
+    comments: primeiro(st.comments, st.commentCount),
+    shares: primeiro(st.shares, st.shareCount),
+    duracao: primeiro(md.duration, m.duration)
+  };
   Object.keys(metricas).forEach(k => { if (metricas[k] == null) delete metricas[k]; });
   if (Object.keys(metricas).length) patch.metricas = metricas;
-  if (!Object.keys(patch).length) return r;
-  let { data, error } = await banco.from("roteiros").update(patch).eq("id", r.id).select().single();
-  if (error && patch.metricas) {             /* banco ainda sem a coluna metricas: salva o resto */
-    delete patch.metricas;
-    ({ data, error } = await banco.from("roteiros").update(patch).eq("id", r.id).select().single());
+  const capaUrl = primeiro(md.thumbnailUrl, md.thumbnail, m.thumbnailUrl, m.thumbnail);
+  if (!r.capa && capaUrl && !idYoutube(r.url)) {
+    const copia = await copiaDaCapa(capaUrl);
+    patch.capa = copia || capaUrl;           /* sem cópia, guarda o link (pode expirar) */
   }
-  if (error || !data) return r;
-  troca(D.roteiros, data);
+  if (!Object.keys(patch).length) return r;
+  const salvo = await salvarLinha("roteiros", patch, r.id);
+  if (!salvo) return r;
+  troca(D.roteiros, salvo);
   desenharRoteiros();
-  return data;
+  return salvo;
 }
 
-const ANALISE_PROMPT = "Você é especialista em vídeos curtos de UGC. Assista ao vídeo e separe a fala em gancho, corpo e CTA, copiando os trechos exatamente como foram falados, no idioma original. Depois explique, em português do Brasil, por que esse vídeo funciona, olhando a fala, o que aparece na tela, o ritmo e o formato. Nunca use travessão.";
+/* ----- a análise ----- */
+const ANALISE_PROMPT = "Você é especialista em vídeos curtos de UGC. Assista ao vídeo inteiro, prestando atenção na fala, no que aparece na tela, nos cortes e no ritmo. " +
+  "Separe a fala em gancho, corpo e CTA, copiando os trechos exatamente como foram falados, no idioma original. " +
+  "Todo o resto responda em português do Brasil, de um jeito simples e direto, como uma creator experiente explicando para outra. Nunca use travessão.";
 const ANALISE_SCHEMA = {
   type: "object",
   properties: {
     titulo: { type: "string", description: "Título curto em português do Brasil, até 60 caracteres, dizendo do que é o vídeo" },
+    estilo: { type: "string", description: "Formato do vídeo em até 3 palavras, em português: por exemplo Demonstração, Problema e solução, React, Rotina, Encenação, Unboxing" },
     gancho: { type: "string", description: "Trecho exato da fala que abre o vídeo e prende a atenção, no idioma original" },
     corpo: { type: "string", description: "Trecho exato da fala entre o gancho e a chamada final, no idioma original" },
     cta: { type: "string", description: "Trecho exato da chamada para ação no fim, no idioma original. Vazio se não houver" },
-    tipo_de_gancho: { type: "string", description: "Em português do Brasil: que tipo de gancho é (pergunta, identificação, curiosidade, polêmica, resultado...) e por que prende" },
-    por_que_funcionou: { type: "string", description: "Em português do Brasil, de 3 a 6 frases: por que o vídeo funciona, olhando fala, imagem, ritmo e formato" },
-    gatilhos: { type: "array", items: { type: "string" }, description: "Em português do Brasil: gatilhos usados, como dor, desejo, prova, urgência, humor" },
-    o_que_reaproveitar: { type: "string", description: "Em português do Brasil: a estrutura que dá para usar num vídeo meu, sem copiar o conteúdo" }
+    por_que_funciona: { type: "string", description: "De 3 a 5 frases: por que o vídeo prende e convence, olhando fala, imagem, ritmo e formato" },
+    diferencial: { type: "string", description: "De 2 a 3 frases: o que esse vídeo faz que a maioria não faz" },
+    erro_comum: { type: "string", description: "1 ou 2 frases: o erro que faria esse formato não funcionar se alguém fosse reproduzir" },
+    roteiro_em_blocos: {
+      type: "array",
+      description: "O vídeo dividido em 4 a 6 blocos de tempo, do começo ao fim",
+      items: {
+        type: "object",
+        properties: {
+          tempo: { type: "string", description: "Intervalo em segundos, por exemplo 0 a 3s, 3 a 10s, ou final" },
+          o_que_acontece: { type: "string", description: "Começa com o nome do bloco e um ponto. Depois diz o que é falado e o que aparece na tela nesse trecho" }
+        },
+        required: ["tempo", "o_que_acontece"]
+      }
+    }
   },
-  required: ["titulo", "gancho", "corpo", "cta", "tipo_de_gancho", "por_que_funcionou", "gatilhos", "o_que_reaproveitar"]
+  required: ["titulo", "estilo", "gancho", "corpo", "cta", "por_que_funciona", "diferencial", "erro_comum", "roteiro_em_blocos"]
 };
 
 /* transforma a resposta (da Supadata ou do Claude) no que vai para o banco */
 function patchDaAnalise(d, r) {
   const cta = textoDoCampo(d.cta);
+  const blocos = (Array.isArray(d.roteiro_em_blocos) ? d.roteiro_em_blocos : [])
+    .map(b => ({ t: textoDoCampo(b.tempo || b.t), o: textoDoCampo(b.o_que_acontece || b.o) }))
+    .filter(b => b.o);
+  const analise = {
+    estilo: textoDoCampo(d.estilo),
+    por_que_funciona: textoDoCampo(d.por_que_funciona || d.por_que_funcionou),
+    diferencial: textoDoCampo(d.diferencial),
+    erro_comum: textoDoCampo(d.erro_comum),
+    blocos
+  };
+  Object.keys(analise).forEach(k => { if (!analise[k] || (Array.isArray(analise[k]) && !analise[k].length)) delete analise[k]; });
+  analise.feita_em = new Date().toISOString();
   const patch = {
     gancho: textoDoCampo(d.gancho) || null,
     corpo: textoDoCampo(d.corpo) || null,
     cta: cta && !/^sem cta\.?$/i.test(cta) ? cta : null,
-    analise: [["🪝 Tipo de gancho", d.tipo_de_gancho], ["💡 Por que funcionou", d.por_que_funcionou], ["🎯 Gatilhos", d.gatilhos], ["♻️ O que reaproveitar", d.o_que_reaproveitar]]
-      .map(([rot, v]) => [rot, textoDoCampo(v)]).filter(([, v]) => v).map(([rot, v]) => rot + ": " + v).join("\n\n") || null
+    analise
   };
   if (!r.titulo && textoDoCampo(d.titulo)) patch.titulo = textoDoCampo(d.titulo).slice(0, 80);
   return patch;
@@ -1802,12 +1877,50 @@ function patchDaAnalise(d, r) {
 
 async function guardarAnalise(r, patch) {
   const salvo = await salvarLinha("roteiros", patch, r.id);
-  if (!salvo) return false;
+  if (!salvo) {
+    mostraAviso("erro", "⚠️ A análise ficou pronta, mas não consegui guardar. " +
+      '<button type="button" class="btn btn--linha" id="rGuardarDeNovo">💾 Tentar guardar de novo</button>');
+    $("#rGuardarDeNovo").addEventListener("click", () => guardarAnalise(D.roteiros.find(x => x.id === r.id) || r, patch));
+    return false;
+  }
   troca(D.roteiros, salvo);
   mostraCartao(salvo.id);
-  const c = $('#rCartoes [data-id="' + salvo.id + '"] .rot__analise');
-  if (c) c.open = true;
+  mostraAviso("ok", "✅ Análise pronta.");
+  abrirFicha(salvo);
   return true;
+}
+
+/* a ficha: igual à das Referências de vídeo */
+function abrirFicha(r) {
+  const a = r.analise || {};
+  const numeros = linhaMetricas(r).replace(/<[^>]+>/g, "");
+  const meta = [a.estilo, comArroba(r.perfil), numeros].filter(Boolean).join(" · ");
+  const secao = (rot, t, classe) => t ? "<h3>" + rot + "</h3><p" + (classe ? ' class="' + classe + '"' : "") + ">" + esc(t) + "</p>" : "";
+  abrirJanela({
+    titulo: "🎬 " + (r.titulo || "Análise do vídeo"), larga: true,
+    corpo: '<div class="ficha">' +
+      (meta ? '<p class="mudo pequeno">' + esc(meta) + "</p>" : "") +
+      secao("Gancho", r.gancho, "ficha__gancho") +
+      secao("Corpo", r.corpo) +
+      secao("CTA", r.cta) +
+      secao("Por que funciona", a.por_que_funciona) +
+      secao("O diferencial", a.diferencial) +
+      secao("Erro comum", a.erro_comum) +
+      (a.blocos && a.blocos.length ? "<h3>Roteiro em blocos de tempo</h3>" +
+        '<div class="blocos">' + a.blocos.map(b => '<div class="blocos__linha"><span class="blocos__t">' + esc(b.t) + "</span><span>" + destacaNome(b.o) + "</span></div>").join("") + "</div>" : "") +
+      (!temAnalise(r) && !r.gancho ? '<p class="vazio">Esse vídeo ainda não foi analisado.</p>' : "") +
+      "</div>",
+    rodape: (r.url ? '<a class="btn btn--linha" href="' + esc(r.url) + '" target="_blank" rel="noopener">▶ Assistir</a>' : "") +
+      '<span class="espaco"></span><button class="btn btn--linha" type="button" data-f-editar>✏️ Editar</button>' +
+      '<button class="btn btn--linha" type="button" data-f-denovo>🔍 Analisar de novo</button>'
+  });
+  $("[data-f-editar]").addEventListener("click", () => editorRoteiro(D.roteiros.find(x => x.id === r.id) || r));
+  $("[data-f-denovo]").addEventListener("click", () => { fecharJanela(); analisar(D.roteiros.find(x => x.id === r.id) || r); });
+}
+/* "Nome do bloco. resto" vira nome em negrito, como nas Referências */
+function destacaNome(t) {
+  const m = String(t || "").match(/^([^.!?]{3,60}[.!?])\s+([\s\S]*)$/);
+  return m ? "<b>" + esc(m[1]) + "</b> " + esc(m[2]) : esc(t);
 }
 
 async function analisar(r) {
@@ -1857,12 +1970,13 @@ async function analisar(r) {
     return;
   }
   const atual = D.roteiros.find(x => x.id === r.id) || r;
-  if (await guardarAnalise(atual, patchDaAnalise(dados || {}, atual))) mostraAviso("ok", "✅ Análise pronta. Está aberta no cartão, em 🔍 Ver gancho, corpo, CTA e por que funcionou.");
+  await guardarAnalise(atual, patchDaAnalise(dados || {}, atual));
 }
 
 /* plano B, grátis: um pedido pronto para colar no Claude, e a resposta volta para cá */
-const ROTULOS_CLAUDE = [["TÍTULO", "titulo"], ["TITULO", "titulo"], ["TIPO DE GANCHO", "tipo_de_gancho"], ["GANCHO", "gancho"], ["CORPO", "corpo"], ["CTA", "cta"],
-  ["POR QUE FUNCIONOU", "por_que_funcionou"], ["GATILHOS", "gatilhos"], ["O QUE REAPROVEITAR", "o_que_reaproveitar"]];
+const ROTULOS_CLAUDE = [["TÍTULO", "titulo"], ["TITULO", "titulo"], ["ESTILO", "estilo"], ["GANCHO", "gancho"], ["CORPO", "corpo"], ["CTA", "cta"],
+  ["POR QUE FUNCIONA", "por_que_funciona"], ["O DIFERENCIAL", "diferencial"], ["DIFERENCIAL", "diferencial"], ["ERRO COMUM", "erro_comum"],
+  ["ROTEIRO EM BLOCOS", "roteiro_em_blocos"]];
 function lerRespostaClaude(texto) {
   const limpo = String(texto || "").replace(/\*\*/g, "").replace(/^\s*#+\s*/gm, "");
   const re = new RegExp("^\\s*(" + ROTULOS_CLAUDE.map(x => x[0]).join("|") + ")\\s*:\\s*", "gim");
@@ -1875,22 +1989,28 @@ function lerRespostaClaude(texto) {
     const campo = (ROTULOS_CLAUDE.find(x => x[0] === a.rot) || [])[1];
     if (campo) d[campo] = limpo.slice(a.fim, i + 1 < achados.length ? achados[i + 1].ini : undefined).trim();
   });
+  /* blocos: uma linha por bloco, "0 a 3s | o que acontece" */
+  if (typeof d.roteiro_em_blocos === "string") {
+    d.roteiro_em_blocos = d.roteiro_em_blocos.split("\n").map(l => l.replace(/^\s*[-•*\d.)]+\s*/, "").trim()).filter(Boolean)
+      .map(l => { const p = l.split(/\s*\|\s*/); return p.length > 1 ? { tempo: p[0], o_que_acontece: p.slice(1).join(" ") } : { tempo: "", o_que_acontece: l }; });
+  }
   return d;
 }
 function pedidoParaClaude(r) {
   const m = r.metricas || {};
   const numeros = [m.views != null && m.views + " visualizações", m.likes != null && m.likes + " curtidas", m.comments != null && m.comments + " comentários", m.duracao != null && Math.round(m.duracao) + " segundos"].filter(Boolean).join(", ");
   return "Você é especialista em vídeos curtos de UGC. Analise o vídeo abaixo pela transcrição" + (r.legenda ? " e pela legenda" : "") + ".\n\n" +
-    "Separe a fala em gancho, corpo e CTA, copiando os trechos exatamente como foram falados, no idioma original. Depois explique em português do Brasil por que esse vídeo funciona.\n\n" +
-    "Responda EXATAMENTE neste formato, com estes títulos em maiúsculas, um por linha, sem nada antes:\n" +
+    "Separe a fala em gancho, corpo e CTA, copiando os trechos exatamente como foram falados, no idioma original. Todo o resto em português do Brasil, simples e direto.\n\n" +
+    "Responda EXATAMENTE neste formato, com estes títulos em maiúsculas, sem nada antes:\n" +
     "TÍTULO: um título curto em português, até 60 caracteres\n" +
+    "ESTILO: o formato em até 3 palavras (Demonstração, Problema e solução, React, Rotina...)\n" +
     "GANCHO: o trecho exato da abertura\n" +
     "CORPO: o trecho exato do meio\n" +
     "CTA: o trecho exato da chamada final, ou \"sem CTA\"\n" +
-    "TIPO DE GANCHO: que tipo de gancho é e por que prende\n" +
-    "POR QUE FUNCIONOU: de 3 a 6 frases\n" +
-    "GATILHOS: separados por vírgula\n" +
-    "O QUE REAPROVEITAR: a estrutura que eu posso usar num vídeo meu, sem copiar o conteúdo\n\n" +
+    "POR QUE FUNCIONA: de 3 a 5 frases\n" +
+    "O DIFERENCIAL: de 2 a 3 frases, o que esse vídeo faz que a maioria não faz\n" +
+    "ERRO COMUM: o erro que faria esse formato não funcionar se alguém reproduzisse\n" +
+    "ROTEIRO EM BLOCOS:\n0 a 3s | Nome do bloco. O que é falado e o que aparece\n3 a 10s | Nome do bloco. ...\n(de 4 a 6 linhas, até o final)\n\n" +
     "Escreva como gente fala, sem ficar robotizado, e nunca use travessão.\n\n" +
     "=== O VÍDEO ===\n" +
     (r.perfil ? "Perfil: " + comArroba(r.perfil) + "\n" : "") + (r.url ? "Link: " + r.url + "\n" : "") + (numeros ? "Números: " + numeros + "\n" : "") +
@@ -1918,15 +2038,13 @@ async function analisarComClaude(r, motivo) {
   });
   $("#rGuardarAnalise", j).addEventListener("click", async () => {
     const texto = $("#rResposta", j).value.trim();
-    const aviso = $("#rRespostaErro", j);
-    if (!texto) { aviso.textContent = "Cole a resposta do Claude no campo acima."; aviso.classList.remove("escondido"); return; }
+    const erro = $("#rRespostaErro", j);
+    if (!texto) { erro.textContent = "Cole a resposta do Claude no campo acima."; erro.classList.remove("escondido"); return; }
     const d = lerRespostaClaude(texto);
+    if (!d) { erro.textContent = "Não achei os títulos GANCHO, CORPO e CTA nessa resposta. Copie a resposta inteira do Claude, do começo ao fim."; erro.classList.remove("escondido"); return; }
+    fecharJanela();
     const atual = D.roteiros.find(x => x.id === r.id) || r;
-    const patch = d ? patchDaAnalise(d, atual) : { analise: semTravessao(texto) };
-    if (await guardarAnalise(atual, patch)) {
-      fecharJanela();
-      mostraAviso("ok", d ? "✅ Análise guardada. Está aberta no cartão." : "✅ Guardei a resposta inteira na Análise, porque ela não veio no formato com GANCHO, CORPO e CTA. Dá para separar à mão em ✏️ Editar.");
-    }
+    await guardarAnalise(atual, patchDaAnalise(d, atual));
   });
 }
 
@@ -1958,7 +2076,7 @@ async function estudarComClaude() {
 /* ============================================================
    10. MENU, GAVETA E SAIR
    ============================================================ */
-const TITULOS = { portfolio: "Portfólio", marcas: "Marcas", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "📜 Roteiros" };
+const TITULOS = { portfolio: "Portfólio", marcas: "Marcas", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo" };
 const lateral = $("#lateral"), cortina = $("#cortina");
 const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classList.remove("aberta"); };
 function irPara(aba) {

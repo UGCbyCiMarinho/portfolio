@@ -96,12 +96,12 @@ revoke all on public.roteiros, public.configuracoes from anon;
 grant select, insert, update, delete on public.roteiros, public.configuracoes to authenticated;
 
 
--- 5. ANÁLISE DO VÍDEO E NÚMEROS DO POST (colunas novas, rodar de novo não estraga nada)
+-- 5. ANÁLISE DO VÍDEO, NÚMEROS E CAPA (colunas novas, rodar de novo não estraga nada)
 alter table public.roteiros add column if not exists gancho   text;   -- a abertura que prende
 alter table public.roteiros add column if not exists corpo    text;   -- o meio do vídeo
 alter table public.roteiros add column if not exists cta      text;   -- a chamada final
-alter table public.roteiros add column if not exists analise  text;   -- por que funcionou
-alter table public.roteiros add column if not exists metricas jsonb;  -- visualizações, curtidas, comentários
-
+alter table public.roteiros add column if not exists analise  jsonb;  -- a ficha: por que funciona, diferencial, erro comum, blocos
+alter table public.roteiros add column if not exists metricas jsonb;  -- visualizações, curtidas, comentários, duração
+alter table public.roteiros add column if not exists capa     text;   -- cópia pequena da capa do vídeo
 
 -- Pronto! Se apareceu "Success. No rows returned", deu tudo certo.
