@@ -3756,7 +3756,9 @@ function instrucaoRedatora() {
     "3. A IDEIA (3 ou 4 frases): \"With that in mind, I had an idea for a video about...\" com o GANCHO ESCOLHIDO por ela (a fala entre aspas e o texto na tela), por que ele gera curiosidade em quem é o cliente, e depois, em linhas gerais e no tom de conversa com uma amiga, a dor explicada de leve, a virada com o produto e o seu diferencial, e ela usando na vida real. Nunca como roteiro, cena por cena, tempos ou termos técnicos (\"label facing camera\", \"close-up\", \"hero moment\", \"b-roll\" pode aparecer só de leve).\n" +
     "4. AS MARCAS + ENTUSIASMO (1 frase): \"I've worked with brands like...\" (2 ou 3, de preferência do mesmo nicho) e que ela está empolgada com a chance de trabalhar com essa marca também. Nunca \"which is why\".\n" +
     "5. O FECHO: oferecer mandar a ideia completa do roteiro (\"Would you like me to send the full script idea for this video?\")" + (F.estrategia && F.estrategia.uso === "ads" && F.ganchoB ? ", podendo citar que também tem um segundo gancho para teste A/B" : "") + ", e o convite para o portfólio dizendo o que a marca vai encontrar lá (feedback de marcas, vídeos que ela produziu, o estilo dela): " + portfolio + "\n" +
-    "O roteiro inteiro NUNCA vai dentro da mensagem: só a ideia, o gancho e o caminho em linhas gerais.\n\n" +
+    "O roteiro inteiro NUNCA vai dentro da mensagem: só a ideia, o gancho e o caminho em linhas gerais.\n" +
+    "SEMPRE, em qualquer versão: o gancho aparece ESCRITO (a fala exata entre aspas e o texto na tela) e com o motivo de ele prender. Nunca escreva só \"opens on the hook\".\n" +
+    "NUNCA pergunte sobre valores, preços ou \"rates\", nem ofereça mandar a tabela de preços. O fecho é sempre: oferecer a ideia completa do roteiro, convidar para o portfólio (o trabalho dela, o estilo de criar e o feedback das marcas) e um tom de \"vamos fazer isso juntos\".\n\n" +
     "Tamanho: parecido com os modelos, no máximo " + (F.tipo === "plataforma" ? "140" : "160") + " palavras.\n" +
     "Do guia de estilo, use a VOZ, os FATOS dela e a lista do que nunca dizer. A ESTRUTURA é a dos modelos. Imite o ritmo e a lógica dos modelos, nunca as frases nem os produtos deles.\n\n" +
     "=== MODELOS (de outra creator; só para você ver o nível e a estrutura) ===\n" + MODELOS_PITCH;
@@ -3779,7 +3781,7 @@ async function escrever(comentario, rotulo) {
   if (F.gancho) pedido += "\n=== O GANCHO QUE ELA APROVOU (use exatamente) ===\nO que aparece: " + F.gancho.visual + "\nFala: \"" + F.gancho.fala + "\"\nTexto na tela: \"" + F.gancho.texto + "\"\n" +
     (F.ganchoB ? "Segundo gancho para teste A/B: \"" + F.ganchoB.fala + "\" (texto: \"" + F.ganchoB.texto + "\")\n" : "");
   if (comentario && anterior) pedido += "\n=== A VERSÃO ATUAL ===\n" + (anterior.assunto ? "ASSUNTO: " + anterior.assunto + "\n" : "") + anterior.mensagem +
-    "\n\n=== O COMENTÁRIO DELA SOBRE ESSA VERSÃO ===\n" + comentario + "\n\nReescreva corrigindo EXATAMENTE o que ela apontou. Mantenha o que ela não criticou. Se ela disser que algo não faz sentido, tire ou troque por algo que faça.";
+    "\n\n=== O COMENTÁRIO DELA SOBRE ESSA VERSÃO ===\n" + comentario + "\n\nReescreva corrigindo EXATAMENTE o que ela apontou. Mantenha o que ela não criticou. Se ela disser que algo não faz sentido, tire ou troque por algo que faça. Mesmo que o comentário diga outra coisa, continuam valendo: o gancho escrito com a fala e o texto na tela, nada de preços ou rates, e o roteiro inteiro nunca vai na mensagem.";
   const r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "low", 6000);
   if (r.erro) return falhou2(r.erro);
   const limpo = semTravessao(r.texto).replace(/\*\*/g, "");
