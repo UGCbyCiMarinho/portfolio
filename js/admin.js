@@ -1038,20 +1038,29 @@ async function lerPlanilha(arquivo) {
   if (texto.includes("�")) texto = new TextDecoder("windows-1252").decode(buf);   /* CSV antigo do Excel */
   const linhas = lerCSV(texto);
   if (linhas.length < 2) { torrada("Não achei nenhuma marca nesse arquivo. Confira se é o CSV certo.", true); return; }
-  const cab = linhas[0].map(campoDaColuna);
-  if (!cab.includes("nome")) {
-    abrirJanela({ titulo: "📥 Não achei a coluna Marca", corpo: "<p>A primeira linha da planilha precisa ter os nomes das colunas, e uma delas precisa se chamar <b>Marca</b> (ou Empresa, ou Nome). A primeira linha do seu arquivo é:</p><p class=\"mudo\" style=\"margin-top:8px\">" + esc(linhas[0].join(" | ")) + "</p><p style=\"margin-top:8px\">Dica: baixe o 📄 modelo e copie os seus dados para ele.</p>" });
-    return;
-  }
-  const ignoradas = [], plano = [];
+  const cabecalho = linhas[0].map(c => String(c).trim());
+  /* ligação automática: cada campo do painel pega a primeira coluna que parece com ele */
+  const mapa = {};
+  cabecalho.forEach((nome, i) => { const campo = campoDaColuna(nome); if (campo && mapa[campo] == null) mapa[campo] = i; });
+  previaImportacao({ nome: arquivo.name, cabecalho, linhas: linhas.slice(1), mapa });
+}
+
+/* monta o plano: o que cada linha da planilha vira */
+function planoDaPlanilha(pl) {
   const ix = indicesDaBase(D.base);
   const daPlanilha = indicesDaBase([]);
-  linhas.slice(1).forEach((l, i) => {
+  const valor = (l, campo) => {
+    const m = pl.mapa[campo];
+    if (m == null) return "";
+    if (typeof m === "string" && m.startsWith("fixo:")) return m.slice(5);     /* o mesmo valor para todas as linhas */
+    return String(l[m] == null ? "" : l[m]).trim();
+  };
+  return pl.linhas.map((l, i) => {
     const d = {};
-    cab.forEach((campo, c) => { if (campo && d[campo] == null) d[campo] = String(l[c] == null ? "" : l[c]).trim(); });
-    const numLinha = i + 2;
-    if (!d.nome) { ignoradas.push(numLinha + " (sem nome da marca)"); return; }
-    if (/apague esta linha|marca exemplo/i.test(d.nome)) { ignoradas.push(numLinha + " (linha de exemplo)"); return; }
+    COLUNAS_MODELO.forEach(([, campo]) => { d[campo] = valor(l, campo); });
+    const item = { linha: i + 2 };
+    if (!d.nome) return Object.assign(item, { tipo: "ignorada", motivo: "sem nome da marca", dados: { nome: "" } });
+    if (/apague esta linha/i.test(d.nome)) return Object.assign(item, { tipo: "ignorada", motivo: "linha de exemplo", dados: { nome: d.nome } });
     const limpo = {
       nome: d.nome.slice(0, 200),
       instagram: d.instagram ? "@" + arroba(d.instagram) : null,
@@ -1065,44 +1074,114 @@ async function lerPlanilha(arquivo) {
       ultimo_contato: dataDoTexto(d.ultimo_contato),
       nao_enviar: /^(sim|s|yes|y|x|1|true)$/i.test(d.nao_enviar || "")
     };
-    if (limpo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpo.email)) { limpo.obs = [limpo.obs, "E-mail na planilha: " + limpo.email].filter(Boolean).join("\n"); limpo.email = null; }
-    if (marcaExistente(limpo, daPlanilha)) { ignoradas.push(numLinha + " (" + limpo.nome + " repetida na planilha)"); return; }
+    if (limpo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpo.email)) { limpo.obs = [limpo.obs, "E-mail na planilha: " + limpo.email].filter(Boolean).join("\n"); limpo.email = null; item.alerta = "e-mail com erro, foi para a observação"; }
+    if (d.ultimo_contato && !limpo.ultimo_contato) item.alerta = "data não reconhecida: " + d.ultimo_contato;
+    item.dados = limpo;
+    if (marcaExistente(limpo, daPlanilha)) return Object.assign(item, { tipo: "ignorada", motivo: "repetida na planilha" });
     [["email", limpo.email], ["ig", limpo.instagram && arroba(limpo.instagram).toLowerCase()], ["nome", chaveNome(limpo.nome)]].forEach(([k, v]) => { if (v) daPlanilha[k].set(v, limpo); });
     const existe = marcaExistente(limpo, ix);
-    if (!existe) { plano.push({ tipo: "nova", dados: limpo }); return; }
+    if (!existe) return Object.assign(item, { tipo: "nova" });
     /* já existe: a planilha só preenche e atualiza o que veio escrito, nunca apaga */
     const mudar = {};
     ["instagram", "email", "telefone", "site", "nicho", "obs", "ultimo_contato"].forEach(k => { if (limpo[k] && limpo[k] !== existe[k]) mudar[k] = limpo[k]; });
     if (d.origem && limpo.origem !== existe.origem) mudar.origem = limpo.origem;
     if (d.situacao && limpo.situacao !== existe.situacao) mudar.situacao = limpo.situacao;
     if (d.nao_enviar && limpo.nao_enviar !== !!existe.nao_enviar) mudar.nao_enviar = limpo.nao_enviar;
-    plano.push(Object.keys(mudar).length ? { tipo: "atualiza", dados: limpo, existe, mudar } : { tipo: "igual", dados: limpo, existe });
+    return Object.assign(item, Object.keys(mudar).length ? { tipo: "atualiza", existe, mudar } : { tipo: "igual", existe });
   });
-  previaImportacao(arquivo.name, plano, ignoradas);
 }
 
-function previaImportacao(nome, plano, ignoradas) {
-  const novas = plano.filter(p => p.tipo === "nova"), atualiza = plano.filter(p => p.tipo === "atualiza"), iguais = plano.filter(p => p.tipo === "igual");
-  const ROT = { nova: ["nova", "c-verde"], atualiza: ["atualiza", "c-azul"], igual: ["já está igual", "c-cinza"] };
-  const amostra = plano.slice(0, 50);
+function previaImportacao(pl) {
+  let plano = [];
+  let marcadas = new Set();
   const j = abrirJanela({
     titulo: "📥 Prévia da importação", larga: true,
-    corpo: '<p class="mudo pequeno" style="margin-bottom:10px">Arquivo: ' + esc(nome) + ". Nada foi gravado ainda.</p>" +
-      '<div class="numeros">' +
-        numero("Marcas novas", inteiro(novas.length), "vão entrar na base") +
-        numero("Vão ser atualizadas", inteiro(atualiza.length), "já existiam, a planilha completa os dados") +
-        numero("Já estão iguais", inteiro(iguais.length), "nada muda") +
-        numero("Ignoradas", inteiro(ignoradas.length), ignoradas.length ? "veja embaixo" : "") +
-      "</div>" +
-      (amostra.length ? '<div class="tabela-caixa" style="max-height:320px;overflow:auto"><table class="tabela"><thead><tr><th></th><th>Marca</th><th>Nicho</th><th>Origem</th><th>Situação</th><th>E-mail</th></tr></thead><tbody>' +
-        amostra.map(p => '<tr><td><span class="pil ' + ROT[p.tipo][1] + '">' + ROT[p.tipo][0] + "</span></td><td><b>" + esc(p.dados.nome) + "</b></td><td>" + esc(p.dados.nicho || "") +
-          "</td><td>" + esc(bOrigem(p.dados.origem)[1]) + "</td><td>" + esc(bSituacao(p.dados.situacao)[1]) + '</td><td class="corta">' + esc(p.dados.email || "") + "</td></tr>").join("") +
-        "</tbody></table></div>" + (plano.length > amostra.length ? '<p class="mudo pequeno" style="margin-top:6px">Mostrando as primeiras 50 de ' + plano.length + ".</p>" : "") : "") +
-      (ignoradas.length ? '<details style="margin-top:10px"><summary class="link">Ver as linhas ignoradas</summary><ul class="lista-simples" style="margin-top:6px">' + ignoradas.map(x => "<li>Linha " + esc(x) + "</li>").join("") + "</ul></details>" : ""),
-    rodape: '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Cancelar</button>' +
-      '<button class="btn" type="button" id="bConfirmar"' + (novas.length + atualiza.length ? "" : " disabled") + ">📥 Importar " + plural(novas.length, "nova", "novas") + " e atualizar " + inteiro(atualiza.length) + "</button>"
+    corpo: '<p class="mudo pequeno" style="margin-bottom:12px">Arquivo: <b>' + esc(pl.nome) + "</b>. Nada foi gravado ainda.</p>" +
+      '<div class="imp__bloco"><div class="imp__titulo">De qual coluna da planilha vem cada campo</div><div class="imp__mapa" id="impMapa"></div>' +
+      '<p class="mudo pequeno" style="margin-top:8px">Já liguei sozinha pelo nome das colunas. Se alguma estiver errada, troque aqui e a planilha embaixo se atualiza. Se a planilha não tem uma coluna, como Origem, escolha um valor em "O mesmo para todas as linhas".</p></div>' +
+      '<div class="imp__bloco"><div class="imp__cab"><div class="imp__titulo">Confira linha por linha antes de importar</div><span class="espaco"></span>' +
+        '<button type="button" class="btn btn--linha" id="impTodos">marcar todos</button><button type="button" class="btn btn--linha" id="impNenhum">desmarcar todos</button></div>' +
+        '<div class="imp__planilha" id="impTabela"></div><p class="mudo pequeno" id="impResumo" style="margin-top:8px"></p></div>' +
+      '<div class="faixa faixa--aviso" id="impAviso"></div>',
+    rodape: '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Voltar</button><button class="btn" type="button" id="impOk"></button>'
   });
-  $("#bConfirmar", j).addEventListener("click", () => importar(novas, atualiza, $("#bConfirmar", j)));
+  $(".janela__caixa", j).classList.add("janela__caixa--planilha");
+
+  /* seletores das colunas */
+  const FIXOS = {
+    origem: B_ORIGENS.map(o => o[1]),
+    situacao: B_SITUACOES.map(s => s[1].replace(/^\S+\s/, "")),
+    nicho: B_NICHOS
+  };
+  const opcoes = (campo, atual) => '<option value="">não importar</option>' +
+    '<optgroup label="Coluna da planilha">' + pl.cabecalho.map((c, i) => '<option value="' + i + '"' + (atual === i ? " selected" : "") + ">" + esc(c || "(coluna " + (i + 1) + ")") + "</option>").join("") + "</optgroup>" +
+    (FIXOS[campo] ? '<optgroup label="O mesmo para todas as linhas">' + FIXOS[campo].map(v => '<option value="fixo:' + esc(v) + '"' + (atual === "fixo:" + v ? " selected" : "") + ">" + esc(v) + " (todas)</option>").join("") + "</optgroup>" : "");
+  $("#impMapa", j).innerHTML = COLUNAS_MODELO.map(([rot, campo]) =>
+    '<label class="imp__linha"><span>' + esc(rot) + (campo === "nome" ? " *" : "") + '</span><select class="entrada" data-campo="' + campo + '">' + opcoes(campo, pl.mapa[campo]) + "</select></label>").join("");
+  $("#impMapa", j).addEventListener("change", (e) => {
+    const s = e.target.closest("[data-campo]");
+    if (!s) return;
+    if (s.value === "") delete pl.mapa[s.dataset.campo];
+    else pl.mapa[s.dataset.campo] = s.value.startsWith("fixo:") ? s.value : Number(s.value);
+    recalcula();
+  });
+
+  const ROT = { nova: ["🟢 nova", "c-verde"], atualiza: ["🔵 completa", "c-azul"], igual: ["⚪ já está igual", "c-cinza"], ignorada: ["ignorada", "c-vermelho"] };
+  function recalcula() {
+    plano = planoDaPlanilha(pl);
+    marcadas = new Set(plano.map((p, i) => (p.tipo === "nova" || p.tipo === "atualiza") ? i : -1).filter(i => i >= 0));
+    desenha();
+  }
+  function desenha() {
+    const semNome = pl.mapa.nome == null;
+    const cel = (t, classe) => "<td" + (classe ? ' class="' + classe + '"' : "") + ' title="' + esc(t || "") + '">' + esc(t || "·") + "</td>";
+    $("#impTabela", j).innerHTML = semNome
+      ? '<p class="vazio">Escolha lá em cima de qual coluna vem o nome da <b>Marca</b>. Sem ele não dá para importar.</p>'
+      : '<table class="tabela"><thead><tr><th></th><th>#</th><th></th><th>Marca</th><th>Instagram</th><th>E-mail</th><th>Telefone</th><th>Site</th><th>Nicho</th><th>Origem</th><th>Situação</th><th>Observação</th><th>Último contato</th><th>🚫</th></tr></thead><tbody>' +
+        plano.map((p, i) => {
+          const d = p.dados, pode = p.tipo === "nova" || p.tipo === "atualiza";
+          return '<tr class="' + (marcadas.has(i) ? "" : "apagado") + '">' +
+            '<td class="curta"><input type="checkbox" data-i="' + i + '"' + (marcadas.has(i) ? " checked" : "") + (pode ? "" : " disabled") + "></td>" +
+            '<td class="curta mudo">' + p.linha + "</td>" +
+            '<td class="curta"><span class="pil ' + ROT[p.tipo][1] + '" title="' + esc(p.motivo || "") + '">' + ROT[p.tipo][0] + (p.motivo ? ": " + esc(p.motivo) : "") + "</span>" +
+              (p.alerta ? '<div class="pequeno" style="color:var(--c-vermelho)">⚠️ ' + esc(p.alerta) + "</div>" : "") + "</td>" +
+            "<td><b>" + esc(d.nome || "·") + "</b></td>" +
+            cel(d.instagram) + cel(d.email) + cel(d.telefone) + cel(d.site) + cel(d.nicho) +
+            (d.origem ? cel(bOrigem(d.origem)[1]) : cel("")) +
+            (d.situacao ? '<td><span class="pil ' + bSituacao(d.situacao)[2] + '">' + esc(bSituacao(d.situacao)[1]) + "</span></td>" : cel("")) +
+            cel(d.obs, "corta") + cel(dataBR(d.ultimo_contato)) + cel(d.nao_enviar ? "sim" : "") + "</tr>";
+        }).join("") + "</tbody></table>";
+    const conta = (t) => plano.filter(p => p.tipo === t).length;
+    const escolhidas = [...marcadas].filter(i => plano[i]);
+    const novas = escolhidas.filter(i => plano[i].tipo === "nova").length, completa = escolhidas.length - novas;
+    $("#impResumo", j).textContent = plural(plano.length, "linha lida", "linhas lidas") + " · " + plural(conta("nova"), "nova", "novas") + " · " +
+      conta("atualiza") + " já na base, com dados para completar · " + conta("igual") + " já na base, iguais · " + plural(conta("ignorada"), "ignorada", "ignoradas") +
+      ". Desmarque qualquer linha que você não quiser importar.";
+    const repetidas = conta("atualiza") + conta("igual");
+    $("#impAviso", j).innerHTML = repetidas
+      ? "As " + repetidas + " linhas marcadas como 🔵 ou ⚪ foram encontradas na sua base pelo e-mail, pelo @ ou pelo nome. Elas <b>não entram de novo</b>, para não duplicar. As 🔵 só completam o que estava vazio ou mudou."
+      : "Nenhuma dessas marcas está na sua base ainda. Tudo o que estiver marcado entra como marca nova.";
+    const ok = $("#impOk", j);
+    ok.disabled = semNome || !escolhidas.length;
+    ok.textContent = "📥 Importar " + plural(escolhidas.length, "marca", "marcas") + (completa && novas ? " (" + plural(novas, "nova", "novas") + ", " + plural(completa, "completada", "completadas") + ")" : "");
+  }
+  $("#impTabela", j).addEventListener("change", (e) => {
+    const c = e.target.closest("[data-i]");
+    if (!c) return;
+    const i = Number(c.dataset.i);
+    if (c.checked) marcadas.add(i); else marcadas.delete(i);
+    c.closest("tr").classList.toggle("apagado", !c.checked);
+    const tabela = $("#impTabela", j), topo = tabela.scrollTop, lado = tabela.scrollLeft;
+    desenha();
+    tabela.scrollTop = topo; tabela.scrollLeft = lado;
+  });
+  $("#impTodos", j).addEventListener("click", () => { plano.forEach((p, i) => { if (p.tipo === "nova" || p.tipo === "atualiza") marcadas.add(i); }); desenha(); });
+  $("#impNenhum", j).addEventListener("click", () => { marcadas.clear(); desenha(); });
+  $("#impOk", j).addEventListener("click", () => {
+    const escolhidas = [...marcadas].map(i => plano[i]).filter(Boolean);
+    importar(escolhidas.filter(p => p.tipo === "nova"), escolhidas.filter(p => p.tipo === "atualiza"), $("#impOk", j));
+  });
+  recalcula();
 }
 
 async function importar(novas, atualiza, botao) {
