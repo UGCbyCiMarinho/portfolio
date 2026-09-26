@@ -4044,7 +4044,14 @@ function rascunhoPadrao() {
       "Warmly,\n" + nome,
     botaoTexto: "See my portfolio",
     botaoLink: p.portfolio || "https://cimarinho.com",
-    html: ""
+    html: "",
+    assinar: true,
+    assNome: "Cintia Marinho",
+    assCargo: "UGC Creator & Creative Strategist",
+    assFoto: "https://cimarinho.com/img/assinatura.jpg",
+    assPortfolio: "https://cimarinho.com",
+    assInsta: "https://instagram.com/ccimarinho",
+    assTiktok: "https://tiktok.com/@cimarinhougc"
   };
 }
 let R = (() => {
@@ -4083,13 +4090,29 @@ function corpoComBotao(texto, botao) {
     return paragrafosHTML(partes.slice(0, -1).join("\n\n")) + botao + paragrafosHTML(partes[partes.length - 1]);
   return paragrafosHTML(texto) + botao;
 }
+/* a assinatura igual à do Gmail: foto redonda, nome, cargo e os links */
+const LINKS_ASS = [["assPortfolio", "Portfolio"], ["assInsta", "Instagram"], ["assTiktok", "TikTok"]];
+function assinaturaHTML(r) {
+  if (!r.assinar || !r.assNome) return "";
+  const links = LINKS_ASS.filter(l => /^https?:\/\//i.test(r[l[0]] || "")).map(l => '<a href="' + esc(r[l[0]]) + '" style="color:#1a5fb4;text-decoration:underline">' + l[1] + "</a>").join(" | ");
+  return '<div style="margin-top:18px">' +
+    (/^https:\/\//i.test(r.assFoto || "") ? '<img src="' + esc(r.assFoto) + '" width="72" height="72" alt="' + esc(r.assNome) + '" style="display:block;width:72px;height:72px;border-radius:50%;margin-bottom:8px">' : "") +
+    '<div style="font-weight:bold;font-size:15px;color:#2b2420">' + esc(r.assNome) + "</div>" +
+    (r.assCargo ? '<div style="font-size:13px;color:#2b2420">' + esc(r.assCargo) + "</div>" : "") +
+    (links ? '<div style="font-size:13px;margin-top:2px">' + links + "</div>" : "") + "</div>";
+}
+function assinaturaTexto() {
+  if (!R.assinar || !R.assNome) return "";
+  const links = LINKS_ASS.filter(l => R[l[0]]).map(l => l[1] + ": " + R[l[0]]).join("\n");
+  return "\n\n--\n" + R.assNome + (R.assCargo ? "\n" + R.assCargo : "") + (links ? "\n" + links : "");
+}
 function htmlFacil(r) {
   const botao = r.botaoTexto && /^https?:\/\//i.test(r.botaoLink || "")
     ? '<p style="margin:6px 0 18px"><a href="' + esc(r.botaoLink) + '" style="display:inline-block;background:#8c5c3b;color:#ffffff;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:8px">' + esc(r.botaoTexto) + "</a></p>" : "";
   return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>' +
     '<body style="margin:0;padding:0;background:#ffffff">' +
     '<div style="max-width:560px;margin:0 auto;padding:24px 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#2b2420">' +
-    corpoComBotao(r.texto, botao) +
+    corpoComBotao(r.texto, botao) + assinaturaHTML(r) +
     '<p style="margin:26px 0 0;padding-top:12px;border-top:1px solid #eeeeee;font-size:12px;color:#8a7a6e">' + esc(RODAPE) + "</p>" +
     "</div></body></html>";
 }
@@ -4103,7 +4126,8 @@ function textoSimples(comRodape) {
   if (botao && partes.length > 1 && partes[partes.length - 1].split("\n").length <= 3) partes.splice(partes.length - 1, 0, botao.trim());
   else if (botao) partes.push(botao.trim());
   t = partes.join("\n\n");
-  return comRodape ? t + "\n\n" + RODAPE : t;
+  /* no Gmail a sua assinatura entra sozinha; no Resend vai a daqui */
+  return comRodape ? t + assinaturaTexto() + "\n\n" + RODAPE : t;
 }
 const emailDe = (m) => emailsDoTexto(m.email).principal;
 const jaRecebeu = (m) => {
@@ -4162,6 +4186,16 @@ function montarProspeccao() {
               '<button type="button" class="rot__chip" data-var="{{marca}}">{{marca}} vira o nome da marca</button></div>' +
             '<div class="grade-form"><div class="campo"><label for="pBotaoTexto">Botão (opcional)</label><input class="entrada" id="pBotaoTexto" placeholder="Escreva aqui. Ex.: See my portfolio"></div>' +
               '<div class="campo"><label for="pBotaoLink">Link do botão</label><input class="entrada" id="pBotaoLink" placeholder="https://cimarinho.com"></div></div>' +
+            '<details class="linha__passo" style="margin-top:12px"><summary>✒️ Assinatura<span class="mudo pequeno" style="font-weight:400" id="pAssResumo"></span></summary><div class="linha__corpo">' +
+              '<label class="campo--check pequeno" style="display:flex;margin-bottom:10px"><input type="checkbox" class="caixa" id="pAssinar"> Colocar a assinatura no final (só no Resend: no Gmail entra a sua assinatura do Gmail)</label>' +
+              '<div class="grade-form">' +
+                '<div class="campo"><label for="pAssNome">Nome</label><input class="entrada" id="pAssNome"></div>' +
+                '<div class="campo"><label for="pAssCargo">Cargo</label><input class="entrada" id="pAssCargo"></div>' +
+                '<div class="campo"><label for="pAssPortfolio">Link do portfólio</label><input class="entrada" id="pAssPortfolio"></div>' +
+                '<div class="campo"><label for="pAssInsta">Link do Instagram</label><input class="entrada" id="pAssInsta"></div>' +
+                '<div class="campo"><label for="pAssTiktok">Link do TikTok</label><input class="entrada" id="pAssTiktok"></div>' +
+                '<div class="campo"><label for="pAssFoto">Link da foto (https://)</label><input class="entrada" id="pAssFoto"></div>' +
+              "</div><p class=\"mudo pequeno\" style=\"margin-top:8px\">Link em branco some da assinatura.</p></div></details>" +
             '<p class="mudo pequeno" style="margin-top:10px">Links escritos no texto (com https://) viram clicáveis sozinhos. O rodapé com "unsubscribe" entra sozinho no final.</p>' +
           "</div>" +
           '<div id="pHtml" class="escondido">' +
@@ -4192,6 +4226,9 @@ function montarProspeccao() {
   $("#pBotaoTexto").value = R.botaoTexto;
   $("#pBotaoLink").value = R.botaoLink;
   $("#pCodigo").value = R.html;
+  CAMPOS_ASS.forEach(([id, k]) => { $("#" + id).value = R[k] || ""; });
+  $("#pAssinar").checked = !!R.assinar;
+  $("#pAssinar").addEventListener("change", () => { R.assinar = $("#pAssinar").checked; guardaRascunho(); desenharProspeccao(); });
   $("#pPular").checked = P.pular;
   $("#pQuentesPor").value = P.quentesPor;
 
@@ -4214,11 +4251,12 @@ function montarProspeccao() {
     R.assunto = $("#pAssunto").value; R.texto = $("#pTexto").value;
     R.botaoTexto = $("#pBotaoTexto").value.trim(); R.botaoLink = $("#pBotaoLink").value.trim();
     R.html = $("#pCodigo").value;
+    CAMPOS_ASS.forEach(([id, k]) => { R[k] = $("#" + id).value.trim(); });
     guardaRascunho();
     clearTimeout(timerPrevia);
     timerPrevia = setTimeout(desenharProspeccao, 300);
   };
-  ["#pAssunto", "#pTexto", "#pBotaoTexto", "#pBotaoLink", "#pCodigo"].forEach(s => $(s).addEventListener("input", digitou));
+  ["#pAssunto", "#pTexto", "#pBotaoTexto", "#pBotaoLink", "#pCodigo"].concat(CAMPOS_ASS.map(c => "#" + c[0])).forEach(s => $(s).addEventListener("input", digitou));
   $(".rot__chip[data-var]", el).addEventListener("click", (e) => {
     const t = $("#pTexto"), v = e.target.closest("[data-var]").dataset.var;
     const i = t.selectionStart != null ? t.selectionStart : t.value.length;
@@ -4231,6 +4269,7 @@ function montarProspeccao() {
     const modo = R.modo;
     R = Object.assign(rascunhoPadrao(), { modo, html: modo === "html" ? htmlFacil(rascunhoPadrao()) : "" });
     $("#pAssunto").value = R.assunto; $("#pTexto").value = R.texto; $("#pBotaoTexto").value = R.botaoTexto; $("#pBotaoLink").value = R.botaoLink; $("#pCodigo").value = R.html;
+    CAMPOS_ASS.forEach(([id, k]) => { $("#" + id).value = R[k] || ""; }); $("#pAssinar").checked = !!R.assinar;
     guardaRascunho(); desenharProspeccao();
   }, "Clique de novo: o texto atual some");
   $("#pTeste").addEventListener("click", enviarTeste);
@@ -4250,6 +4289,7 @@ function montarProspeccao() {
   $("#pPalco").addEventListener("change", (e) => { if (e.target.id === "pPara") { P.previa = e.target.value; desenhaPrevia(); } });
   desenhaModo();
 }
+const CAMPOS_ASS = [["pAssNome", "assNome"], ["pAssCargo", "assCargo"], ["pAssPortfolio", "assPortfolio"], ["pAssInsta", "assInsta"], ["pAssTiktok", "assTiktok"], ["pAssFoto", "assFoto"]];
 const VIAS_EMAIL = { resend: "📨 Resend", gmail: "✍️ Gmail", teste: "🧪 Teste" };
 
 function desenhaModo() {
@@ -4306,6 +4346,7 @@ function desenharProspeccao() {
     btn.textContent = P.quem === "eu" ? "🧪 Mandar o teste" : d.resend.length ? "📨 Enviar " + plural(d.resend.length, "e-mail", "e-mails") + " pelo Resend" : "📨 Nada para o Resend agora";
   }
 
+  $("#pAssResumo").textContent = R.assinar ? " · ligada" : " · desligada";
   if (R.modo === "html") $("#pAvisoRodape").innerHTML = TEM_SAIDA.test(R.html) ? "" :
     '<div class="rot__aviso rot__aviso--erro">⚠️ Não achei o rodapé com "unsubscribe". Ele é obrigatório: é o jeito da marca pedir para sair. Clique em 🧩 Começar do modelo pronto para ele voltar.</div>';
 
