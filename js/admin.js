@@ -1549,10 +1549,12 @@ const VIAS = ["PayPal", "Wise", "Transferência", "Outro"];
 const CANAIS = [
   ["inbound", "📥 Inbound (portfólio)", "c-verde"],
   ["plataforma", "🧩 Plataforma", "c-roxo"],
-  ["manual", "🔎 Prospecção manual", "c-azul"],
+  ["email", "✉️ E-mail (admin)", "c-azul"],
+  ["dm", "💬 DM (admin)", "c-verde"],
   ["instagram_auto", "📸 Instagram automático", "c-coral"],
-  ["onbento", "✉️ onBento", "c-mostarda"],
+  ["onbento", "🤖 onBento", "c-mostarda"],
   ["indicacao", "🤝 Indicação", "c-destaque"],
+  ["manual", "🔎 Prospecção manual (outra)", "c-azul"],
   ["outro", "Outro", "c-cinza"]
 ];
 const canalDe = (v) => CANAIS.find(c => c[0] === v) || null;
@@ -3032,18 +3034,23 @@ async function estudarComClaude() {
    Abordagens (tabela abordagens) × contratos (tabela campanhas), por canal.
    ============================================================ */
 const CANAIS_ABORDAGEM = [
-  ["manual", "🔎 Prospecção manual", "var(--c-azul)"],
-  ["instagram_auto", "📸 Instagram automático", "var(--c-coral)"],
-  ["onbento", "✉️ onBento", "var(--c-mostarda)"],
+  ["email", "✉️ E-mail (admin)", "var(--c-azul)"],
+  ["dm", "💬 DM (admin)", "var(--c-verde)"],
   ["plataforma", "🧩 Plataformas", "var(--c-roxo)"],
-  ["outro", "Outro", "var(--c-cinza)"]
+  ["onbento", "🤖 onBento", "var(--c-mostarda)"],
+  ["instagram_auto", "📸 Instagram automático", "var(--c-coral)"],
+  ["manual", "🔎 Prospectei (aba Marcas)", "var(--c-cinza)"],
+  ["outro", "Outro", "var(--red)"]
 ];
 let mesFunil = new Date(); mesFunil.setDate(1); mesFunil.setHours(0, 0, 0, 0);
 let escalaFunil = "dia";
 
 /* conta as abordagens de "📨 Prospectei": uma linha por marca, com a origem dela */
-async function registrarProspeccao(marcas) {
-  const linhas = marcas.map(m => ({ data: isoLocal(new Date()), canal: "manual", quantidade: 1, detalhe: bOrigem(m.origem)[1], marca_id: m.id }));
+async function registrarProspeccao(marcas, canal) {
+  const hojeISO = isoLocal(new Date());
+  /* trava: a mesma marca não conta duas vezes no mesmo dia */
+  marcas = marcas.filter(m => !D.abordagens.some(a => a.marca_id === m.id && String(a.data).slice(0, 10) === hojeISO));
+  const linhas = marcas.map(m => ({ data: hojeISO, canal: canal || "manual", quantidade: 1, detalhe: bOrigem(m.origem)[1], marca_id: m.id }));
   if (!linhas.length || falhou.abordagens) return;
   const { data, error } = await banco.from("abordagens").insert(linhas).select();
   if (error) { aviso("abordagens-gravar", "As abordagens não estão sendo contadas: " + traduzErro(error, "abordagens")); return; }
@@ -3134,7 +3141,7 @@ function desenharFunil() {
   contratos.forEach(c => { const k = c.canal || "sem"; (porCanal[k] = porCanal[k] || []).push(c); });
   const valorCAD = (lista) => somaMoedas(lista.filter(c => !c.gift), c => c.valor);
   const valorMes = valorCAD(contratos);
-  const deProspeccao = contratos.filter(c => ["manual", "instagram_auto", "onbento", "plataforma"].includes(c.canal)).length;
+  const deProspeccao = contratos.filter(c => ["email", "dm", "manual", "instagram_auto", "onbento", "plataforma"].includes(c.canal)).length;
   const inbound = D.marcas.filter(m => noMes(String(m.criado_em || "").slice(0, 10), mesFunil)).length +
     D.base.filter(m => m.origem === "portfolio" && noMes(String(m.created_at || "").slice(0, 10), mesFunil)).length;
 
@@ -3928,14 +3935,21 @@ function ligaSaida(m) {
     const v = F.versoes[Number(b.dataset.flEnviei)];
     if (F.versoes.some(x => x.enviada)) { torrada("Essa candidatura já foi contada."); return; }
     b.disabled = true;
-    if (F.tipo !== "plataforma" && m && m.situacao === "quero_prospectar") {
-      /* marca da lista: vira Prospectada e conta como abordagem manual */
-      const salvo = await salvarLinha("base_marcas", { situacao: "prospectada", ultimo_contato: isoLocal(new Date()) }, m.id);
-      if (!salvo) { b.disabled = false; return; }
-      troca(D.base, salvo); desenharBase(); await registrarProspeccao([salvo]);
+    const canalEnvio = F.tipo === "plataforma" ? "plataforma" : F.tipo === "dm" ? "dm" : "email";
+    if (F.tipo !== "plataforma" && m) {
+      /* marca da lista: vira Prospectada (se ainda não era) e conta uma vez só por dia */
+      let alvo = m;
+      if (m.situacao === "quero_prospectar") {
+        const salvo = await salvarLinha("base_marcas", { situacao: "prospectada", ultimo_contato: isoLocal(new Date()) }, m.id);
+        if (!salvo) { b.disabled = false; return; }
+        troca(D.base, salvo); desenharBase(); alvo = salvo;
+      }
+      const jaHoje = D.abordagens.some(a => a.marca_id === m.id && String(a.data).slice(0, 10) === isoLocal(new Date()));
+      if (jaHoje) torrada("Essa marca já tinha sido contada hoje (pelo Prospectei). Marquei como enviada, sem somar de novo.");
+      else await registrarProspeccao([alvo], canalEnvio);
     } else {
       const plat = ($("#abPlat") && $("#abPlat").value.trim()) || "";
-      const salvo = await salvarLinha("abordagens", { data: isoLocal(new Date()), canal: F.tipo === "plataforma" ? "plataforma" : "manual", quantidade: 1,
+      const salvo = await salvarLinha("abordagens", { data: isoLocal(new Date()), canal: canalEnvio, quantidade: 1,
         detalhe: F.tipo === "plataforma" ? (plat || "Plataforma") : "Abordagem pelo admin", obs: F.marca + (F.tipo === "plataforma" ? "" : " (" + (F.tipo === "dm" ? "DM" : "e-mail") + ")") });
       if (!salvo) { b.disabled = false; return; }
       D.abordagens.push(salvo); desenharFunil();
