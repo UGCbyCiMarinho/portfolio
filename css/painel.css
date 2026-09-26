@@ -511,6 +511,7 @@ a.btn { text-decoration: none; }
 .abordar__opcao { display: flex; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card-2); cursor: pointer; }
 .abordar__opcao.escolhido { border-color: var(--red); background: var(--suave); }
 .abordar__opcao input { accent-color: var(--red); margin-top: 3px; flex: none; }
+.abordar__passos { font-size: 12.5px; padding: 8px 10px; margin-bottom: 10px; border-radius: var(--radius); background: var(--suave); line-height: 1.6; }
 .abordar__editar-gancho { margin-top: 12px; padding: 12px; border: 1px solid var(--red); border-radius: var(--radius); display: flex; flex-direction: column; gap: 8px; }
 .abordar__gancho { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--red); background: var(--card); border-radius: 0 var(--radius) var(--radius) 0; font-size: 12.5px; line-height: 1.5; }
 .abordar__botoes { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-top: 12px; }
