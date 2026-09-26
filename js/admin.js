@@ -4076,13 +4076,20 @@ function paragrafosHTML(texto) {
   return String(texto || "").trim().split(/\n\s*\n/).map(p =>
     '<p style="margin:0 0 14px">' + link(esc(p.trim())).replace(/\n/g, "<br>") + "</p>").join("");
 }
+/* o botão entra antes da despedida (Warmly, Best...), não depois da assinatura */
+function corpoComBotao(texto, botao) {
+  const partes = String(texto || "").trim().split(/\n\s*\n/);
+  if (botao && partes.length > 1 && partes[partes.length - 1].split("\n").length <= 3)
+    return paragrafosHTML(partes.slice(0, -1).join("\n\n")) + botao + paragrafosHTML(partes[partes.length - 1]);
+  return paragrafosHTML(texto) + botao;
+}
 function htmlFacil(r) {
   const botao = r.botaoTexto && /^https?:\/\//i.test(r.botaoLink || "")
     ? '<p style="margin:6px 0 18px"><a href="' + esc(r.botaoLink) + '" style="display:inline-block;background:#8c5c3b;color:#ffffff;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:8px">' + esc(r.botaoTexto) + "</a></p>" : "";
   return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>' +
     '<body style="margin:0;padding:0;background:#ffffff">' +
     '<div style="max-width:560px;margin:0 auto;padding:24px 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#2b2420">' +
-    paragrafosHTML(r.texto) + botao +
+    corpoComBotao(r.texto, botao) +
     '<p style="margin:26px 0 0;padding-top:12px;border-top:1px solid #eeeeee;font-size:12px;color:#8a7a6e">' + esc(RODAPE) + "</p>" +
     "</div></body></html>";
 }
