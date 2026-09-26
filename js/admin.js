@@ -4031,6 +4031,7 @@ const TEM_SAIDA = /unsubscribe/i;   /* o rodapé de descadastro precisa ter esta
 const LOTE = 100;
 const P = { quem: "selecionadas", situacoes: new Set(["em_conversa", "ja_trabalhei"]), pular: true, quentesPor: "resend", previa: "", pulei: new Set(), enviando: false, busca: "" };
 
+const FOTO_ASS = "https://cimarinho.com/img/assinatura.jpg?v=2";
 function rascunhoPadrao() {
   const p = cfgPerfil();
   const nome = p.nome || "Cintia Marinho";
@@ -4041,14 +4042,14 @@ function rascunhoPadrao() {
       "I'm " + nome.split(/\s+/)[0] + ", a UGC creator based in " + (p.cidade || "Toronto") + ". I make short, natural videos that brands use on their own pages and in their ads, the kind that feel like a real recommendation from a friend.\n\n" +
       "I'd love to create content for {{marca}}. In my portfolio you can see videos I've produced, feedback from brands and a feel for my style.\n\n" +
       "Would you be open to a quick chat about what you're planning next?\n\n" +
-      "Warmly,\n" + nome,
+      "Warmly,",
     botaoTexto: "See my portfolio",
     botaoLink: p.portfolio || "https://cimarinho.com",
     html: "",
     assinar: true,
     assNome: "Cintia Marinho",
     assCargo: "UGC Creator & Creative Strategist",
-    assFoto: "https://cimarinho.com/img/assinatura.jpg",
+    assFoto: FOTO_ASS,
     assPortfolio: "https://cimarinho.com",
     assInsta: "https://instagram.com/ccimarinho",
     assTiktok: "https://tiktok.com/@cimarinhougc"
@@ -4058,7 +4059,10 @@ let R = (() => {
   let salvo = null;
   try { salvo = JSON.parse(D.config.prospeccao_rascunho || "null"); } catch (e) {}
   if (!salvo) { try { salvo = JSON.parse(localStorage.getItem("admin-prospeccao") || "null"); } catch (e) {} }
-  return Object.assign(rascunhoPadrao(), salvo || {});
+  const r = Object.assign(rascunhoPadrao(), salvo || {});
+  /* foto trocada: quem ainda aponta para a antiga passa para a nova */
+  if (r.assFoto === "https://cimarinho.com/img/assinatura.jpg") r.assFoto = FOTO_ASS;
+  return r;
 })();
 let timerRascunho;
 function guardaRascunho() {
