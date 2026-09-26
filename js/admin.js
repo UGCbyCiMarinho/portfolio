@@ -98,12 +98,13 @@ function torrada(texto, erro) {
 }
 
 /* ----- traduz os erros do banco para português ----- */
+const ARQUIVO_SQL = { base_marcas: "sql-marcas.sql", roteiros: "sql-roteiros.sql", configuracoes: "sql-roteiros.sql", abordagens: "sql-resultados.sql", email_envios: "disparo.sql", email_optout: "disparo.sql" };
 function traduzErro(e, tabela) {
   const cod = (e && e.code) || "";
   const msg = (e && e.message) || String(e || "");
   const m = msg.toLowerCase();
   if (cod === "PGRST205" || cod === "42P01" || m.includes("could not find the table") || (m.includes("relation") && m.includes("does not exist")))
-    return 'A tabela "' + tabela + '" não existe no banco ainda. Rode o arquivo banco.sql no SQL Editor do Supabase. O resto do painel continua funcionando.';
+    return 'A tabela "' + tabela + '" não existe no banco ainda. Rode o arquivo ' + (ARQUIVO_SQL[tabela] || "banco.sql") + ' no SQL Editor do Supabase. O resto do painel continua funcionando.';
   if (cod === "PGRST204" || cod === "42703" || (m.includes("column") && (m.includes("not") || m.includes("does"))))  {
     const achou = msg.match(/'([^']+)' column|column "?([\w.]+)"?/i);
     const campo = achou ? (achou[1] || achou[2] || "").split(".").pop() : "";
@@ -343,10 +344,10 @@ const numero = (rot, val, sub) =>
 /* ============================================================
    4. CARREGAR OS DADOS
    ============================================================ */
-const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], config: {}, marcados: new Set() };
+const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], envios: [], optout: [], config: {}, marcados: new Set() };
 const inicio14 = hoje(); inicio14.setDate(inicio14.getDate() - 13);
 
-const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens] = await Promise.all([
+const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens, envios, optout] = await Promise.all([
   ler("videos", q => q.order("ordem", { ascending: true }).order("criado_em", { ascending: true })),
   ler("visitas", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
   ler("marcas", q => q.order("criado_em", { ascending: false })),
@@ -356,9 +357,11 @@ const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, confi
   ler("roteiros", q => q.order("created_at", { ascending: false })),
   ler("configuracoes"),
   ler("base_marcas", q => q.order("created_at", { ascending: false })),
-  ler("abordagens", q => q.order("data", { ascending: true }))
+  ler("abordagens", q => q.order("data", { ascending: true })),
+  ler("email_envios", q => q.order("data", { ascending: false })),
+  ler("email_optout", q => q.order("data", { ascending: false }))
 ]);
-Object.assign(D, { videos, visitas, marcas, calendario, campanhas, roteiros, base, abordagens, marcados: new Set(marcados.map(m => m.chave)) });
+Object.assign(D, { videos, visitas, marcas, calendario, campanhas, roteiros, base, abordagens, envios, optout, marcados: new Set(marcados.map(m => m.chave)) });
 configuracoes.forEach(c => { D.config[c.chave] = c.valor; });
 
 const nomesDeMarcas = () => Array.from(new Set(D.marcas.map(m => m.nome).concat(D.base.map(m => m.nome), D.campanhas.map(c => c.cliente), D.videos.map(v => v.marca)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -699,8 +702,36 @@ const bSituacao = (v) => B_SITUACOES.find(s => s[0] === v) || B_SITUACOES[0];
 const bOrigem = (v) => B_ORIGENS.find(o => o[0] === v) || B_ORIGENS[B_ORIGENS.length - 1];
 let bVisao = "semana";
 const bFiltro = { situacao: "", origem: "", nicho: "", favoritas: false, email: "" };
-const bSelecao = new Set();   /* marcas marcadas na caixinha */
+const bSelecao = new Set();   /* marcas marcadas na caixinha (fica salva no banco, campo selecionada) */
 let bVisiveis = [];
+D.base.forEach(m => { if (m.selecionada) bSelecao.add(m.id); });
+/* grava a seleção no banco um instante depois do clique, tudo junto */
+const selPendente = new Map();
+let selTimer;
+function marcaSelecao(ids, ligada) {
+  ids.forEach(id => {
+    if (ligada) bSelecao.add(id); else bSelecao.delete(id);
+    const m = D.base.find(x => x.id === id);
+    if (m && !!m.selecionada !== ligada) { m.selecionada = ligada; selPendente.set(id, ligada); }
+  });
+  clearTimeout(selTimer);
+  selTimer = setTimeout(gravaSelecao, 500);
+  if (typeof desenharProspeccao === "function" && $("#aba-prospeccao.ativa")) desenharProspeccao();
+}
+async function gravaSelecao() {
+  if (!selPendente.size || falhou.base_marcas) return;
+  const liga = [], desliga = [];
+  selPendente.forEach((v, id) => (v ? liga : desliga).push(id));
+  selPendente.clear();
+  for (const [ids, v] of [[liga, true], [desliga, false]]) {
+    for (let i = 0; i < ids.length; i += 200) {
+      const { error } = await banco.from("base_marcas").update({ selecionada: v }).in("id", ids.slice(i, i + 200));
+      if (error) { aviso("sel-banco", ehErroDeCampo(error) ? "A seleção da aba Marcas ainda não fica salva: rode o disparo.sql no Supabase. Enquanto isso ela funciona, mas some ao recarregar." : traduzErro(error, "base_marcas")); return; }
+    }
+  }
+}
+/* editar e apagar em massa valem só para as selecionadas que estão aparecendo */
+const idsMassa = () => [...bSelecao].filter(id => bVisiveis.includes(id));
 const bCampanha = { nichos: new Set(), situacoes: new Set(["prospectada", "em_conversa", "ja_trabalhei"]) };
 
 const nichosDaBase = () => Array.from(new Set(B_NICHOS.concat(D.base.map(m => m.nicho).filter(Boolean)))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -731,7 +762,8 @@ function montarBase() {
       '<input type="file" id="bArquivo" accept=".csv,.txt,text/csv" hidden>' +
     "</div>" +
     '<div id="bCampanha"></div>' +
-    '<div class="massa escondido" id="bMassa"><b id="bMassaConta"></b><span class="espaco"></span>' +
+    '<div class="massa escondido" id="bMassa"><b id="bMassaConta"></b><span class="mudo pequeno" id="bMassaSub"></span><span class="espaco"></span>' +
+      '<button type="button" class="btn btn--linha" id="bMassaEmail" title="Abrir a aba Prospecção com estas marcas">📨 Mandar e-mail</button>' +
       '<button type="button" class="btn" id="bMassaEditar">✏️ Editar em massa</button>' +
       '<button type="button" class="btn btn--perigo" id="bMassaApagar">🗑️ Apagar selecionadas</button>' +
       '<button type="button" class="btn btn--linha" id="bMassaLimpar">Limpar seleção</button></div>' +
@@ -752,18 +784,19 @@ function montarBase() {
   $("#bFFav").addEventListener("click", () => { bFiltro.favoritas = !bFiltro.favoritas; desenharBase(); });
   $("#bFEmail").addEventListener("change", () => { bFiltro.email = $("#bFEmail").value; desenharBase(); });
   $("#bTodas").addEventListener("change", (e) => {
-    bVisiveis.forEach(id => { if (e.target.checked) bSelecao.add(id); else bSelecao.delete(id); });
+    marcaSelecao(bVisiveis, e.target.checked);
     desenharBase();
   });
-  $("#bMassaLimpar").addEventListener("click", () => { bSelecao.clear(); desenharBase(); });
+  $("#bMassaLimpar").addEventListener("click", () => { marcaSelecao([...bSelecao], false); desenharBase(); });
+  $("#bMassaEmail").addEventListener("click", () => irPara("prospeccao"));
   $("#bMassaEditar").addEventListener("click", editarEmMassa);
   duploClique($("#bMassaApagar"), async () => {
-    const ids = [...bSelecao];
+    const ids = idsMassa();
     if (!ids.length) return;
     const { error } = await banco.from("base_marcas").delete().in("id", ids);
     if (error) { torrada(traduzErro(error, "base_marcas"), true); return; }
-    D.base = D.base.filter(m => !bSelecao.has(m.id));
-    bSelecao.clear();
+    D.base = D.base.filter(m => !ids.includes(m.id));
+    ids.forEach(id => bSelecao.delete(id));
     desenharBase();
     torrada("🗑️ " + plural(ids.length, "marca apagada", "marcas apagadas") + ".");
   }, "Clique de novo para apagar");
@@ -785,7 +818,7 @@ function montarBase() {
     if (caixa || e.target.closest(".td-sel")) {
       if (!caixa) { const c = $("[data-sel]", tr); c.checked = !c.checked; }
       const marcada = $("[data-sel]", tr).checked;
-      if (marcada) bSelecao.add(m.id); else bSelecao.delete(m.id);
+      marcaSelecao([m.id], marcada);
       tr.classList.toggle("selecionada", marcada);
       atualizaMassa();
       return;
@@ -875,7 +908,6 @@ function desenharBase() {
   $("#bFFav").setAttribute("aria-pressed", String(bFiltro.favoritas));
   /* a seleção vale só para o que está aparecendo: nunca apaga uma marca escondida pelo filtro */
   bVisiveis = lista.map(m => m.id);
-  [...bSelecao].forEach(id => { if (!bVisiveis.includes(id)) bSelecao.delete(id); });
   atualizaMassa();
   $("#bConta").textContent = lista.length === D.base.length ? plural(D.base.length, "marca", "marcas") : lista.length + " de " + D.base.length;
 
@@ -914,7 +946,10 @@ function desenharBase() {
 function atualizaMassa() {
   const n = bSelecao.size;
   $("#bMassa").classList.toggle("escondido", !n);
-  $("#bMassaConta").textContent = plural(n, "marca selecionada", "marcas selecionadas");
+  const sel = D.base.filter(m => bSelecao.has(m.id));
+  const comEmail = sel.filter(m => m.email).length, fora = n - idsMassa().length;
+  $("#bMassaConta").textContent = plural(n, "marca selecionada", "marcas selecionadas") + ", " + comEmail + " com e-mail";
+  $("#bMassaSub").textContent = fora ? "(" + fora + " fora deste filtro: editar e apagar valem só para as que aparecem)" : "";
   const todas = $("#bTodas");
   if (todas) {
     todas.checked = n > 0 && bVisiveis.length > 0 && bVisiveis.every(id => bSelecao.has(id));
@@ -923,7 +958,7 @@ function atualizaMassa() {
 }
 
 function editarEmMassa() {
-  const ids = [...bSelecao];
+  const ids = idsMassa();
   if (!ids.length) return;
   const NAO = [["", "não mudar"]];
   editor({
@@ -944,12 +979,12 @@ function editarEmMassa() {
       if (d.favorita) patch.favorita = d.favorita === "sim";
       if (d.nao_enviar) patch.nao_enviar = d.nao_enviar === "sim";
       if (!Object.keys(patch).length) { erro("Escolha pelo menos uma coisa para mudar."); return false; }
-      const eramParaProspectar = D.base.filter(m => bSelecao.has(m.id) && m.situacao === "quero_prospectar").map(m => m.id);
+      const eramParaProspectar = D.base.filter(m => ids.includes(m.id) && m.situacao === "quero_prospectar").map(m => m.id);
       const { data, error } = await banco.from("base_marcas").update(patch).in("id", ids).select();
       if (error) { erro(traduzErro(error, "base_marcas")); return false; }
       if (patch.situacao === "prospectada") registrarProspeccao((data || []).filter(m => eramParaProspectar.includes(m.id)));
       (data || []).forEach(m => troca(D.base, m));
-      bSelecao.clear();
+      marcaSelecao(ids, false);
       desenharBase();
       torrada("✅ " + plural((data || []).length, "marca atualizada", "marcas atualizadas") + ".");
       return true;
@@ -3986,9 +4021,553 @@ function guardaHistorico() {
 }
 
 /* ============================================================
+   9c. ABA PROSPECÇÃO (um e-mail para várias marcas de uma vez)
+   As marcas vêm da aba Marcas. As que já te conhecem vão pelo
+   Resend, sozinhas. As frias vão para a fila do Gmail, uma por uma.
+   ============================================================ */
+const QUENTES = ["em_conversa", "ja_trabalhei"];
+const ehQuente = (m) => QUENTES.includes(m.situacao) || m.origem === "portfolio";
+const TEM_SAIDA = /unsubscribe/i;   /* o rodapé de descadastro precisa ter esta palavra */
+const LOTE = 100;
+const P = { quem: "selecionadas", situacoes: new Set(["em_conversa", "ja_trabalhei"]), pular: true, quentesPor: "resend", previa: "", pulei: new Set(), enviando: false, busca: "" };
+
+function rascunhoPadrao() {
+  const p = cfgPerfil();
+  const nome = p.nome || "Cintia Marinho";
+  return {
+    modo: "facil",
+    assunto: "UGC videos for {{marca}}",
+    texto: "Hello {{marca}} team,\n\n" +
+      "I'm " + nome.split(/\s+/)[0] + ", a UGC creator based in " + (p.cidade || "Toronto") + ". I make short, natural videos that brands use on their own pages and in their ads, the kind that feel like a real recommendation from a friend.\n\n" +
+      "I'd love to create content for {{marca}}. In my portfolio you can see videos I've produced, feedback from brands and a feel for my style.\n\n" +
+      "Would you be open to a quick chat about what you're planning next?\n\n" +
+      "Warmly,\n" + nome,
+    botaoTexto: "See my portfolio",
+    botaoLink: p.portfolio || "https://cimarinho.com",
+    html: ""
+  };
+}
+let R = (() => {
+  let salvo = null;
+  try { salvo = JSON.parse(D.config.prospeccao_rascunho || "null"); } catch (e) {}
+  if (!salvo) { try { salvo = JSON.parse(localStorage.getItem("admin-prospeccao") || "null"); } catch (e) {} }
+  return Object.assign(rascunhoPadrao(), salvo || {});
+})();
+let timerRascunho;
+function guardaRascunho() {
+  clearTimeout(timerRascunho);
+  timerRascunho = setTimeout(() => {
+    const json = JSON.stringify(R);
+    try { localStorage.setItem("admin-prospeccao", json); } catch (e) {}
+    if (!falhou.configuracoes && D.config.prospeccao_rascunho !== json) salvaConfig("prospeccao_rascunho", json);
+  }, 900);
+}
+
+/* ----- montar o e-mail ----- */
+const RODAPE = "Not the right time? Just reply \"unsubscribe\" and I won't email you again.";
+function preenche(t, m, html) {
+  const marca = (m && m.nome || "").trim() || "your brand";
+  const nome = marca + " team";
+  const v = (x) => html ? esc(x) : x;
+  return String(t || "").replace(/\{\{\s*nome\s*\}\}/gi, v(nome)).replace(/\{\{\s*marca\s*\}\}/gi, v(marca));
+}
+function paragrafosHTML(texto) {
+  const link = (t) => t.replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" style="color:#8c5c3b">$1</a>');
+  return String(texto || "").trim().split(/\n\s*\n/).map(p =>
+    '<p style="margin:0 0 14px">' + link(esc(p.trim())).replace(/\n/g, "<br>") + "</p>").join("");
+}
+function htmlFacil(r) {
+  const botao = r.botaoTexto && /^https?:\/\//i.test(r.botaoLink || "")
+    ? '<p style="margin:6px 0 18px"><a href="' + esc(r.botaoLink) + '" style="display:inline-block;background:#8c5c3b;color:#ffffff;text-decoration:none;font-weight:bold;padding:11px 20px;border-radius:8px">' + esc(r.botaoTexto) + "</a></p>" : "";
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>' +
+    '<body style="margin:0;padding:0;background:#ffffff">' +
+    '<div style="max-width:560px;margin:0 auto;padding:24px 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#2b2420">' +
+    paragrafosHTML(r.texto) + botao +
+    '<p style="margin:26px 0 0;padding-top:12px;border-top:1px solid #eeeeee;font-size:12px;color:#8a7a6e">' + esc(RODAPE) + "</p>" +
+    "</div></body></html>";
+}
+const htmlDoEmail = () => R.modo === "html" && R.html.trim() ? R.html : htmlFacil(R);
+/* versão só texto: vai junto no Resend e é o que vai pela fila do Gmail */
+function textoSimples(comRodape) {
+  const botao = R.botaoTexto && R.botaoLink ? "\n\n" + R.botaoTexto + ": " + R.botaoLink : "";
+  let t = String(R.texto || "").trim();
+  /* o botão entra antes da despedida (Warmly, Best...) */
+  const partes = t.split(/\n\s*\n/);
+  if (botao && partes.length > 1 && partes[partes.length - 1].split("\n").length <= 3) partes.splice(partes.length - 1, 0, botao.trim());
+  else if (botao) partes.push(botao.trim());
+  t = partes.join("\n\n");
+  return comRodape ? t + "\n\n" + RODAPE : t;
+}
+const emailDe = (m) => emailsDoTexto(m.email).principal;
+const jaRecebeu = (m) => {
+  const e = emailDe(m), assunto = normaliza(preenche(R.assunto, m));
+  return D.envios.some(x => x.status === "ok" && x.via !== "teste" && String(x.email).toLowerCase() === e && normaliza(x.assunto) === assunto);
+};
+
+/* ----- quem recebe ----- */
+function destinatarios() {
+  const optout = new Set(D.optout.map(o => String(o.email).toLowerCase()));
+  let lista = P.quem === "selecionadas" ? D.base.filter(m => bSelecao.has(m.id))
+    : P.quem === "situacao" ? D.base.filter(m => P.situacoes.has(m.situacao))
+    : P.quem === "todas" ? D.base.slice() : [];
+  const fora = { semEmail: 0, naoEnviar: 0, semInteresse: 0, optout: 0, jaRecebeu: 0, repetido: 0 };
+  const vistos = new Set(), resend = [], gmail = [];
+  lista.forEach(m => {
+    if (m.exemplo) return;
+    const e = emailDe(m);
+    if (!e) { fora.semEmail++; return; }
+    if (m.nao_enviar) { fora.naoEnviar++; return; }
+    if (m.situacao === "sem_interesse") { fora.semInteresse++; return; }
+    if (optout.has(e)) { fora.optout++; return; }
+    if (vistos.has(e)) { fora.repetido++; return; }
+    vistos.add(e);
+    if (P.pular && jaRecebeu(m)) { fora.jaRecebeu++; return; }
+    if (ehQuente(m) && P.quentesPor === "resend") resend.push(m); else gmail.push(m);
+  });
+  return { resend, gmail, fora, total: lista.length };
+}
+
+function montarProspeccao() {
+  const el = $("#aba-prospeccao");
+  el.innerHTML =
+    '<div id="pCapa"></div>' +
+    '<div class="pros__cartoes" id="pCartoes"></div>' +
+    '<div class="pros">' +
+      '<div class="pros__lado">' +
+        '<div class="bloco"><div class="bloco__cab"><span class="linha__num">1</span><h2>Para quem</h2><span class="mudo pequeno">os e-mails vêm da sua aba Marcas</span></div>' +
+          '<div class="pilulas" id="pQuem" style="margin-bottom:10px;flex-wrap:wrap">' +
+            '<button type="button" data-q="selecionadas">☑️ Selecionadas na aba Marcas</button>' +
+            '<button type="button" data-q="situacao">Por situação</button>' +
+            '<button type="button" data-q="todas">Todas com e-mail</button>' +
+            '<button type="button" data-q="eu">Só pra mim (teste)</button>' +
+          "</div>" +
+          '<div class="rot__chips escondido" id="pSituacoes"></div>' +
+          '<label class="campo--check pequeno" style="display:flex;margin-bottom:6px"><input type="checkbox" class="caixa" id="pPular"> Pular quem já recebeu um e-mail com este mesmo assunto</label>' +
+          '<label class="campo--check pequeno" style="display:flex;margin-bottom:10px;gap:8px">As marcas que já te conhecem vão por <select class="entrada entrada--sel" id="pQuentesPor" style="height:30px;width:auto"><option value="resend">📨 Resend (automático)</option><option value="gmail">✍️ Fila do Gmail também</option></select></label>' +
+          '<div id="pResumo"></div>' +
+        "</div>" +
+        '<div class="bloco"><div class="bloco__cab"><span class="linha__num">2</span><h2>O e-mail</h2><span class="espaco"></span>' +
+            '<div class="pilulas" id="pModo"><button type="button" data-m="facil">✍️ Texto fácil</button><button type="button" data-m="html">&lt;/&gt; HTML</button></div></div>' +
+          '<div class="campo"><label for="pAssunto">Assunto</label><input class="entrada" id="pAssunto" maxlength="200"></div>' +
+          '<div id="pFacil">' +
+            '<div class="campo" style="margin-top:10px"><label for="pTexto">Texto</label><textarea class="entrada linha__texto" id="pTexto" style="min-height:280px"></textarea></div>' +
+            '<div class="rot__chips" style="margin:8px 0 10px"><span class="mudo pequeno" style="align-self:center">Colocar no texto:</span>' +
+              '<button type="button" class="rot__chip" data-var="{{marca}}">{{marca}} vira o nome da marca</button></div>' +
+            '<div class="grade-form"><div class="campo"><label for="pBotaoTexto">Botão (opcional)</label><input class="entrada" id="pBotaoTexto" placeholder="Escreva aqui. Ex.: See my portfolio"></div>' +
+              '<div class="campo"><label for="pBotaoLink">Link do botão</label><input class="entrada" id="pBotaoLink" placeholder="https://cimarinho.com"></div></div>' +
+            '<p class="mudo pequeno" style="margin-top:10px">Links escritos no texto (com https://) viram clicáveis sozinhos. O rodapé com "unsubscribe" entra sozinho no final.</p>' +
+          "</div>" +
+          '<div id="pHtml" class="escondido">' +
+            '<div class="ferramentas" style="margin:10px 0 6px"><button type="button" class="btn btn--linha" id="pModelo">🧩 Começar do modelo pronto</button><span class="mudo pequeno">Use {{marca}} onde quiser o nome da marca.</span></div>' +
+            '<textarea class="entrada linha__texto" id="pCodigo" spellcheck="false" style="min-height:320px;font-family:ui-monospace,Menlo,monospace;font-size:12px"></textarea>' +
+            '<div id="pAvisoRodape"></div>' +
+            '<p class="mudo pequeno" style="margin-top:8px">O HTML vale só para o Resend. Na fila do Gmail vai o texto do modo fácil, com a sua assinatura do Gmail.</p>' +
+          "</div>" +
+          '<div class="ferramentas" style="margin:12px 0 0"><button type="button" class="btn btn--linha" id="pPadrao">↩️ Voltar ao texto padrão</button></div>' +
+        "</div>" +
+        '<div class="bloco"><div class="bloco__cab"><span class="linha__num">3</span><h2>Enviar</h2></div>' +
+          '<div class="ferramentas" style="margin:0"><button type="button" class="btn btn--linha" id="pTeste">📧 Mandar teste pra mim</button>' +
+            '<button type="button" class="btn" id="pEnviar"></button></div>' +
+          '<div id="pProgresso"></div>' +
+        "</div>" +
+        '<div id="pFila"></div>' +
+      "</div>" +
+      '<div class="pros__palco" id="pPalco"></div>' +
+    "</div>" +
+    '<div class="bloco" id="pHistBloco"><div class="bloco__cab"><h2>🗂️ Histórico de envios</h2><span class="espaco"></span>' +
+      '<input class="entrada" id="pBusca" type="search" placeholder="Buscar marca, e-mail ou assunto" style="max-width:260px">' +
+      '<button type="button" class="btn btn--linha" id="pSair">🚫 Alguém pediu para sair</button>' +
+      '<button type="button" class="btn btn--linha" id="pBaixar">' + ic("baixar") + " Baixar</button></div>" +
+      '<div id="pHist"></div></div>';
+
+  $("#pAssunto").value = R.assunto;
+  $("#pTexto").value = R.texto;
+  $("#pBotaoTexto").value = R.botaoTexto;
+  $("#pBotaoLink").value = R.botaoLink;
+  $("#pCodigo").value = R.html;
+  $("#pPular").checked = P.pular;
+  $("#pQuentesPor").value = P.quentesPor;
+
+  $("#pQuem").addEventListener("click", (e) => { const b = e.target.closest("[data-q]"); if (!b) return; P.quem = b.dataset.q; desenharProspeccao(); });
+  $("#pSituacoes").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-s]"); if (!b) return;
+    if (P.situacoes.has(b.dataset.s)) P.situacoes.delete(b.dataset.s); else P.situacoes.add(b.dataset.s);
+    desenharProspeccao();
+  });
+  $("#pPular").addEventListener("change", () => { P.pular = $("#pPular").checked; desenharProspeccao(); });
+  $("#pQuentesPor").addEventListener("change", () => { P.quentesPor = $("#pQuentesPor").value; desenharProspeccao(); });
+  $("#pModo").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-m]"); if (!b) return;
+    R.modo = b.dataset.m;
+    if (R.modo === "html" && !R.html.trim()) { R.html = htmlFacil(R); $("#pCodigo").value = R.html; }
+    guardaRascunho(); desenhaModo(); desenharProspeccao();
+  });
+  let timerPrevia;
+  const digitou = () => {
+    R.assunto = $("#pAssunto").value; R.texto = $("#pTexto").value;
+    R.botaoTexto = $("#pBotaoTexto").value.trim(); R.botaoLink = $("#pBotaoLink").value.trim();
+    R.html = $("#pCodigo").value;
+    guardaRascunho();
+    clearTimeout(timerPrevia);
+    timerPrevia = setTimeout(desenharProspeccao, 300);
+  };
+  ["#pAssunto", "#pTexto", "#pBotaoTexto", "#pBotaoLink", "#pCodigo"].forEach(s => $(s).addEventListener("input", digitou));
+  $(".rot__chip[data-var]", el).addEventListener("click", (e) => {
+    const t = $("#pTexto"), v = e.target.closest("[data-var]").dataset.var;
+    const i = t.selectionStart != null ? t.selectionStart : t.value.length;
+    t.value = t.value.slice(0, i) + v + t.value.slice(t.selectionEnd != null ? t.selectionEnd : i);
+    t.focus(); t.selectionStart = t.selectionEnd = i + v.length;
+    digitou();
+  });
+  $("#pModelo").addEventListener("click", () => { $("#pCodigo").value = htmlFacil(R); digitou(); torrada("🧩 Modelo colocado. Agora é só mexer no código."); });
+  duploClique($("#pPadrao"), async () => {
+    const modo = R.modo;
+    R = Object.assign(rascunhoPadrao(), { modo, html: modo === "html" ? htmlFacil(rascunhoPadrao()) : "" });
+    $("#pAssunto").value = R.assunto; $("#pTexto").value = R.texto; $("#pBotaoTexto").value = R.botaoTexto; $("#pBotaoLink").value = R.botaoLink; $("#pCodigo").value = R.html;
+    guardaRascunho(); desenharProspeccao();
+  }, "Clique de novo: o texto atual some");
+  $("#pTeste").addEventListener("click", enviarTeste);
+  $("#pEnviar").addEventListener("click", () => { if (P.quem === "eu") enviarTeste(); else confirmarDisparo(); });
+  $("#pBusca").addEventListener("input", () => { P.busca = $("#pBusca").value; desenhaHistorico(); });
+  $("#pSair").addEventListener("click", descadastrar);
+  $("#pBaixar").addEventListener("click", () => {
+    if (!D.envios.length) { torrada("Nenhum envio ainda."); return; }
+    baixarCSV("envios", ["Data", "Marca", "E-mail", "Assunto", "Por onde", "Situação", "Erro"],
+      D.envios.map(x => [String(x.data).slice(0, 16).replace("T", " "), x.marca, x.email, x.assunto, VIAS_EMAIL[x.via] || x.via, x.status === "ok" ? "enviado" : "falhou", x.erro]));
+  });
+  $("#aba-prospeccao").addEventListener("click", (e) => {
+    if (e.target.closest("[data-irmarcas]")) irPara("base");
+    if (e.target.closest("[data-optout]")) listaOptout();
+    if (e.target.closest("[data-cheia]")) telaCheia();
+  });
+  $("#pPalco").addEventListener("change", (e) => { if (e.target.id === "pPara") { P.previa = e.target.value; desenhaPrevia(); } });
+  desenhaModo();
+}
+const VIAS_EMAIL = { resend: "📨 Resend", gmail: "✍️ Gmail", teste: "🧪 Teste" };
+
+function desenhaModo() {
+  $$("#pModo button").forEach(b => b.classList.toggle("ativo", b.dataset.m === R.modo));
+  $("#pFacil").classList.toggle("escondido", R.modo !== "facil");
+  $("#pHtml").classList.toggle("escondido", R.modo !== "html");
+}
+
+function desenharProspeccao() {
+  if (!$("#pCapa")) return;
+  const reais = D.envios.filter(x => x.via !== "teste");
+  const ok = reais.filter(x => x.status === "ok");
+  const receberam = new Set(ok.map(x => String(x.email).toLowerCase())).size;
+  const comEmail = D.base.filter(m => !m.exemplo && emailDe(m) && !m.nao_enviar).length;
+  const d = destinatarios();
+  const aEnviar = d.resend.length + d.gmail.length;
+  const ultimo = ok[0];
+
+  $("#pCapa").innerHTML = '<div class="pros__capa"><div class="pros__envelope">✉️</div><div>' +
+    '<div class="pros__capa-rot">Prospecção por e-mail</div>' +
+    '<div class="pros__capa-num">' + (ok.length ? inteiro(ok.length) : "0") + '</div>' +
+    '<div class="pros__capa-sub">' + (ok.length ? plural(ok.length, "e-mail enviado", "e-mails enviados") + " até hoje · o último em " + dataBR(String(ultimo.data).slice(0, 10)) : "nenhum e-mail enviado ainda") + "</div></div></div>";
+  const cartao = (cor, rot, val, sub, attr) => '<div class="pros__cartao ' + cor + '"' + (attr || "") + '><div class="pros__cartao-rot">' + rot + '</div><div class="pros__cartao-val">' + inteiro(val) + "</div>" + (sub ? '<div class="pros__cartao-sub">' + sub + "</div>" : "") + "</div>";
+  $("#pCartoes").innerHTML =
+    cartao("c-azul", "🏷️ Marcas com e-mail", comEmail, "na aba Marcas") +
+    cartao("c-mostarda", "📬 A enviar agora", aEnviar, d.resend.length + " Resend · " + d.gmail.length + " Gmail") +
+    cartao("c-verde", "✅ Já receberam", receberam, "e-mails diferentes") +
+    cartao("c-vermelho", "⚠️ Falhas", reais.filter(x => x.status === "erro").length, "veja no histórico") +
+    cartao("c-cinza", "🚫 Descadastrados", D.optout.length, "ver a lista", ' data-optout role="button" tabindex="0"');
+
+  $$("#pQuem button").forEach(b => b.classList.toggle("ativo", b.dataset.q === P.quem));
+  const qtdSel = D.base.filter(m => bSelecao.has(m.id)).length;
+  $('#pQuem [data-q="selecionadas"]').textContent = "☑️ Selecionadas na aba Marcas (" + qtdSel + ")";
+  $("#pSituacoes").classList.toggle("escondido", P.quem !== "situacao");
+  $("#pSituacoes").innerHTML = B_SITUACOES.filter(s => s[0] !== "sem_interesse").map(s => '<button type="button" class="rot__chip' + (P.situacoes.has(s[0]) ? " ativo" : "") + '" data-s="' + s[0] + '">' + s[1] + "</button>").join("");
+
+  /* resumo de quem recebe */
+  const f = d.fora;
+  const foraTxt = [f.semEmail && plural(f.semEmail, "sem e-mail", "sem e-mail"), f.naoEnviar && f.naoEnviar + " com 🚫 Não enviar", f.semInteresse && f.semInteresse + " sem interesse",
+    f.optout && plural(f.optout, "pediu para sair", "pediram para sair"), f.repetido && plural(f.repetido, "e-mail repetido", "e-mails repetidos"), f.jaRecebeu && plural(f.jaRecebeu, "já recebeu este assunto", "já receberam este assunto")].filter(Boolean);
+  let resumo;
+  if (P.quem === "eu") resumo = '<div class="rot__aviso rot__aviso--info">🧪 Vai só para <b>' + esc(sessao.user.email) + "</b>, com o nome da primeira marca da lista no lugar de {{marca}}. Ótimo para abrir no celular e conferir.</div>";
+  else if (!comEmail) resumo = '<div class="rot__aviso">Nenhuma marca com e-mail na sua base ainda. <button type="button" class="btn btn--linha" data-irmarcas style="margin-left:6px">Ir para a aba Marcas</button></div>';
+  else if (P.quem === "selecionadas" && !qtdSel) resumo = '<div class="rot__aviso">Nenhuma marca selecionada. Marque as caixinhas na aba Marcas (elas ficam salvas) e volte aqui. <button type="button" class="btn btn--linha" data-irmarcas style="margin-left:6px">Ir para a aba Marcas</button></div>';
+  else resumo = '<div class="pros__rotas">' +
+      '<div class="pros__rota c-verde"><b>📨 ' + plural(d.resend.length, "vai", "vão") + " pelo Resend</b><span>marcas que já te conhecem (em conversa, já trabalhei ou vieram do portfólio). Saem sozinhas, de 100 em 100.</span></div>" +
+      '<div class="pros__rota c-mostarda"><b>✍️ ' + plural(d.gmail.length, "vai", "vão") + " para a fila do Gmail</b><span>marcas frias. Você abre cada uma no Gmail, confere e envia. Assim a sua conta do Resend fica segura.</span></div></div>" +
+      (foraTxt.length ? '<p class="mudo pequeno" style="margin-top:8px">Ficam de fora sozinhas: ' + esc(foraTxt.join(", ")) + ".</p>" : "");
+  $("#pResumo").innerHTML = resumo;
+
+  const btn = $("#pEnviar");
+  if (!P.enviando) {
+    btn.disabled = P.quem !== "eu" && !d.resend.length;
+    btn.textContent = P.quem === "eu" ? "🧪 Mandar o teste" : d.resend.length ? "📨 Enviar " + plural(d.resend.length, "e-mail", "e-mails") + " pelo Resend" : "📨 Nada para o Resend agora";
+  }
+
+  if (R.modo === "html") $("#pAvisoRodape").innerHTML = TEM_SAIDA.test(R.html) ? "" :
+    '<div class="rot__aviso rot__aviso--erro">⚠️ Não achei o rodapé com "unsubscribe". Ele é obrigatório: é o jeito da marca pedir para sair. Clique em 🧩 Começar do modelo pronto para ele voltar.</div>';
+
+  /* prévia: escolhe para quem mostrar */
+  const todos = P.quem === "eu" ? [] : d.resend.concat(d.gmail);
+  if (!todos.some(m => m.id === P.previa)) P.previa = todos[0] ? todos[0].id : "";
+  desenhaPrevia(todos, d);
+  desenhaFila(d.gmail);
+  desenhaHistorico();
+}
+
+function marcaDaPrevia(todos) {
+  return (todos || []).find(m => m.id === P.previa) || D.base.find(m => m.id === P.previa) || { nome: (D.base.find(m => !m.exemplo) || {}).nome || "Marca Exemplo", email: sessao.user.email };
+}
+function desenhaPrevia(todos, d) {
+  if (!todos) { d = destinatarios(); todos = P.quem === "eu" ? [] : d.resend.concat(d.gmail); }
+  const m = marcaDaPrevia(todos);
+  const viaGmail = d && d.gmail.some(x => x.id === m.id);
+  const para = P.quem === "eu" ? sessao.user.email : emailDe(m) || "";
+  const opcoes = todos.slice(0, 300).map(x => '<option value="' + esc(x.id) + '"' + (x.id === m.id ? " selected" : "") + ">" + esc(x.nome) + (d.gmail.includes(x) ? " (Gmail)" : " (Resend)") + "</option>").join("");
+  $("#pPalco").innerHTML = '<div class="pros__tela">' +
+    '<div class="pros__tela-topo"><span class="mudo pequeno">Prévia</span>' +
+      (opcoes ? '<select class="entrada entrada--sel" id="pPara" style="height:30px;width:auto;max-width:60%">' + opcoes + "</select>" : "") +
+      '<span class="espaco"></span><button type="button" class="btn btn--linha" data-cheia style="height:30px">⛶ Tela cheia</button></div>' +
+    '<div class="pros__envelope-cab"><span class="pros__avatar">' + esc(((cfgPerfil().nome || "Cintia").trim()[0] || "C").toUpperCase()) + "</span>" +
+      '<div style="min-width:0"><div class="pros__assunto">' + esc(preenche(R.assunto, m) || "(sem assunto)") + "</div>" +
+      '<div class="mudo pequeno corta">' + (viaGmail ? "do seu Gmail, com a sua assinatura" : "Cintia Marinho &lt;hello@cimarinho.com&gt;") + "</div>" +
+      '<div class="mudo pequeno corta">para ' + esc(m.nome) + " &lt;" + esc(para) + "&gt;</div></div></div>" +
+    '<iframe class="pros__iframe" id="pIframe" title="Prévia do e-mail" sandbox></iframe>' +
+    '<p class="mudo pequeno" style="padding:8px 12px">' + (viaGmail ? "✍️ Esta marca vai pela fila do Gmail: chega como texto simples, com a sua assinatura." : "📱 Confira também no celular: mande um teste pra você e abra lá.") + "</p></div>";
+  $("#pIframe").srcdoc = viaGmail ? htmlDeTexto(preenche(textoSimples(false), m)) : preenche(htmlDoEmail(), m, true);
+}
+const htmlDeTexto = (t) => '<!DOCTYPE html><html><body style="margin:0;padding:20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222;white-space:pre-wrap">' + esc(t) + "</body></html>";
+function telaCheia() {
+  const d = destinatarios(), todos = d.resend.concat(d.gmail), m = marcaDaPrevia(todos);
+  const viaGmail = d.gmail.some(x => x.id === m.id);
+  abrirJanela({ titulo: preenche(R.assunto, m) || "Prévia", larga: true, corpo: '<iframe class="pros__iframe" id="pCheia" sandbox style="height:72vh"></iframe>' });
+  $("#janela .janela__caixa").classList.add("janela__caixa--planilha");
+  $("#pCheia").srcdoc = viaGmail ? htmlDeTexto(preenche(textoSimples(false), m)) : preenche(htmlDoEmail(), m, true);
+}
+
+/* ----- a fila do Gmail: uma por uma ----- */
+function linkGmail(m) {
+  return "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(emailDe(m)) +
+    "&su=" + encodeURIComponent(preenche(R.assunto, m)) + "&body=" + encodeURIComponent(preenche(textoSimples(false), m));
+}
+function desenhaFila(gmail) {
+  const fila = gmail.filter(m => !P.pulei.has(m.id));
+  if (!gmail.length) { $("#pFila").innerHTML = ""; return; }
+  $("#pFila").innerHTML = '<div class="bloco"><div class="bloco__cab"><h2>✍️ Fila do Gmail</h2><span class="pil c-mostarda">' + fila.length + "</span>" +
+      '<span class="mudo pequeno">Abra no Gmail, confira e envie. Depois clique em ✅ Enviei: ela sai da fila e conta no Prospectado × Fechado.</span></div>' +
+    (fila.length ? '<div class="pros__fila">' + fila.map((m, i) =>
+      '<div class="pros__item' + (i === 0 ? " pros__item--primeira" : "") + '" data-id="' + esc(m.id) + '">' +
+        '<div style="min-width:0;flex:1"><b>' + esc(m.nome) + '</b> <span class="mudo pequeno">' + esc(emailDe(m)) + "</span>" +
+          '<div class="mudo pequeno corta">' + esc(preenche(R.assunto, m)) + "</div></div>" +
+        '<span class="acoes"><button type="button" class="btn btn--linha" data-ver title="Ver na prévia">👁️</button>' +
+          '<button type="button" class="btn btn--linha" data-copiar>📋 Copiar</button>' +
+          '<a class="btn btn--linha" data-abrir href="' + esc(linkGmail(m)) + '" target="_blank" rel="noopener">↗️ Abrir no Gmail</a>' +
+          '<button type="button" class="btn" data-enviei>✅ Enviei</button>' +
+          '<button type="button" class="btn btn--linha" data-pular title="Tirar da fila por agora">Pular</button></span></div>').join("") + "</div>"
+      : '<p class="vazio">Fila vazia. 🎉' + (P.pulei.size ? ' <button type="button" class="btn btn--linha" data-voltar>Trazer de volta as puladas</button>' : "") + "</p>") +
+    "</div>";
+  const caixa = $("#pFila");
+  caixa.onclick = async (e) => {
+    if (e.target.closest("[data-voltar]")) { P.pulei.clear(); desenharProspeccao(); return; }
+    const item = e.target.closest("[data-id]"); if (!item) return;
+    const m = D.base.find(x => x.id === item.dataset.id); if (!m) return;
+    if (e.target.closest("[data-ver]")) { P.previa = m.id; desenhaPrevia(); $("#pPalco").scrollIntoView({ behavior: "smooth", block: "start" }); }
+    if (e.target.closest("[data-pular]")) { P.pulei.add(m.id); desenharProspeccao(); }
+    if (e.target.closest("[data-copiar]")) {
+      try { await navigator.clipboard.writeText(preenche(textoSimples(false), m)); torrada("📋 Texto copiado. O assunto é: " + preenche(R.assunto, m)); }
+      catch (x) { abrirJanela({ titulo: preenche(R.assunto, m), corpo: '<textarea class="entrada" style="height:300px;padding:10px" readonly>' + esc(preenche(textoSimples(false), m)) + "</textarea>" }); }
+    }
+    if (e.target.closest("[data-abrir]")) item.classList.add("pros__item--aberto");
+    const b = e.target.closest("[data-enviei]");
+    if (b) {
+      b.disabled = true;
+      const linha = { email: emailDe(m), marca: m.nome, marca_id: m.id, assunto: preenche(R.assunto, m), via: "gmail", status: "ok" };
+      const { data, error } = await banco.from("email_envios").insert(linha).select().single();
+      if (error) { b.disabled = false; torrada(traduzErro(error, "email_envios"), true); return; }
+      D.envios.unshift(data);
+      await depoisDeEnviar([m]);
+      torrada("✅ " + m.nome + " saiu da fila e contou como e-mail enviado.");
+      desenharProspeccao();
+    }
+  };
+}
+
+/* depois de enviar: a marca vira prospectada (se era fria), ganha a data de hoje e conta no funil */
+async function depoisDeEnviar(marcas) {
+  if (!marcas.length) return;
+  const hojeISO = isoLocal(new Date());
+  const frias = marcas.filter(m => m.situacao === "quero_prospectar").map(m => m.id);
+  const outras = marcas.filter(m => m.situacao !== "quero_prospectar").map(m => m.id);
+  for (const [ids, patch] of [[frias, { situacao: "prospectada", ultimo_contato: hojeISO }], [outras, { ultimo_contato: hojeISO }]]) {
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data, error } = await banco.from("base_marcas").update(patch).in("id", ids.slice(i, i + 200)).select();
+      if (error) { aviso("pros-marcas", "Os e-mails foram, mas não consegui atualizar as marcas: " + traduzErro(error, "base_marcas")); break; }
+      (data || []).forEach(m => troca(D.base, m));
+    }
+  }
+  await registrarProspeccao(marcas, "email");
+  if ($("#bCorpo")) desenharBase();
+}
+
+/* ----- falar com a função enviar-emails (no Supabase) ----- */
+async function chamaFuncao(corpo) {
+  let data, error;
+  try { ({ data, error } = await banco.functions.invoke("enviar-emails", { body: corpo })); }
+  catch (e) { error = e; }
+  if (!error) return { ok: true, data };
+  let msg = "", status = error.context && error.context.status;
+  try { const j = await error.context.json(); msg = j.erro || j.message || j.msg || ""; } catch (e) {}
+  if (status === 404 || /not found|failed to send a request/i.test(msg + " " + (error.message || "")))
+    return { ok: false, erro: "A função enviar-emails ainda não está no Supabase (ou não respondeu). Siga o passo a passo para colocar ela lá. Enquanto isso, mude \"As marcas que já te conhecem vão por\" para a fila do Gmail." };
+  if (status === 401) return { ok: false, erro: "A função não reconheceu você. Clique em Sair, entre de novo e tente outra vez." };
+  return { ok: false, erro: msg || error.message || "A função não respondeu." };
+}
+const explicaErro = (t) => /domain.*not verified|verify a domain|not verified/i.test(t || "") ? "O domínio cimarinho.com ainda não foi verificado no Resend. Termine a verificação lá e tente de novo."
+  : /api key is invalid|invalid.*api key|unauthorized/i.test(t || "") ? "A chave do Resend guardada no Supabase não está valendo. Crie uma nova no Resend e cole de novo no segredo RESEND_API_KEY."
+  : t;
+
+function pedidoBase() {
+  const html = htmlDoEmail();
+  return { assunto: R.assunto.trim(), html, texto: textoSimples(true) };
+}
+function confereTexto() {
+  if (!R.assunto.trim()) { torrada("Escreva o assunto do e-mail.", true); $("#pAssunto").focus(); return false; }
+  if (R.modo === "facil" && !R.texto.trim()) { torrada("Escreva o texto do e-mail.", true); $("#pTexto").focus(); return false; }
+  if (R.modo === "html" && !TEM_SAIDA.test(R.html)) { torrada('Falta o rodapé com "unsubscribe" no HTML.', true); return false; }
+  return true;
+}
+
+async function enviarTeste() {
+  if (!confereTexto() || P.enviando) return;
+  const d = destinatarios(), m = marcaDaPrevia(d.resend.concat(d.gmail));
+  const b = $("#pTeste");
+  b.disabled = true; b.textContent = "Enviando o teste...";
+  const r = await chamaFuncao(Object.assign(pedidoBase(), { teste: true, destinatarios: [{ email: sessao.user.email, marca: m.nome }] }));
+  b.disabled = false; b.textContent = "📧 Mandar teste pra mim";
+  D.envios = await ler("email_envios", q => q.order("data", { ascending: false }));
+  desenharProspeccao();
+  if (!r.ok) { torrada(explicaErro(r.erro), true); return; }
+  if (r.data.enviados) torrada("🧪 Teste enviado para " + sessao.user.email + ". Abra no celular e no computador.");
+  else {
+    const ultimo = D.envios.find(x => x.via === "teste");
+    torrada("O teste não foi: " + explicaErro((ultimo && ultimo.erro) || (r.data.parouNaCota ? "a cota do dia do Resend acabou." : "erro desconhecido")), true);
+  }
+}
+
+function confirmarDisparo() {
+  if (!confereTexto() || P.enviando) return;
+  const lista = destinatarios().resend;
+  if (!lista.length) return;
+  const nomes = lista.slice(0, 8).map(m => esc(m.nome)).join(", ") + (lista.length > 8 ? " e mais " + (lista.length - 8) : "");
+  abrirJanela({
+    titulo: "📨 Enviar pelo Resend?",
+    corpo: '<p style="font-size:14px;line-height:1.7">Vou mandar <b>' + plural(lista.length, "e-mail", "e-mails") + "</b>, um para cada marca, com o assunto <b>" + esc(R.assunto) + "</b>.</p>" +
+      '<p class="mudo pequeno" style="margin-top:8px">Para: ' + nomes + ".</p>" +
+      '<p class="mudo pequeno" style="margin-top:8px">Vai de ' + LOTE + " em " + LOTE + ". Quem pediu para sair fica de fora sozinho. No plano grátis o Resend manda até 100 por dia: se a cota acabar, eu paro e te aviso quantos faltaram.</p>",
+    rodape: '<span class="espaco"></span><button type="button" class="btn btn--linha" data-fechar>Cancelar</button><button type="button" class="btn" id="pSim">Sim, enviar agora</button>'
+  });
+  $("#pSim").addEventListener("click", () => { fecharJanela(); disparar(lista); });
+}
+
+async function disparar(lista) {
+  P.enviando = true;
+  const btn = $("#pEnviar"); btn.disabled = true;
+  const prog = $("#pProgresso");
+  const total = lista.length, lotes = Math.ceil(total / LOTE);
+  let enviados = 0, falhas = 0, pulados = 0, faltaram = [], parouNaCota = false, erro = "";
+  const mostra = (feitos, txt) => {
+    prog.innerHTML = '<div style="margin-top:12px"><div class="progresso"><span style="width:' + Math.round(feitos / total * 100) + '%"></span></div>' +
+      '<p class="mudo pequeno" style="margin-top:6px">' + esc(txt) + "</p></div>";
+  };
+  const base = pedidoBase();
+  for (let l = 0; l < lotes; l++) {
+    const lote = lista.slice(l * LOTE, (l + 1) * LOTE);
+    mostra(l * LOTE, "Enviando o lote " + (l + 1) + " de " + lotes + " (" + lote.length + " e-mails). Deixe esta aba aberta, leva uns segundos por e-mail.");
+    btn.textContent = "Enviando... " + (l * LOTE) + " de " + total;
+    const r = await chamaFuncao(Object.assign({}, base, { destinatarios: lote.map(m => ({ email: emailDe(m), marca: m.nome, marca_id: m.id })) }));
+    if (!r.ok) { erro = explicaErro(r.erro); faltaram = faltaram.concat(lista.slice(l * LOTE).map(emailDe)); break; }
+    enviados += r.data.enviados || 0; falhas += r.data.falhas || 0; pulados += (r.data.pulados || []).length;
+    if (r.data.parouNaCota) { parouNaCota = true; faltaram = faltaram.concat(r.data.faltaram || [], lista.slice((l + 1) * LOTE).map(emailDe)); break; }
+  }
+  mostra(total, "Terminou.");
+  D.envios = await ler("email_envios", q => q.order("data", { ascending: false }));
+  /* só as marcas que receberam de verdade mudam de situação */
+  const agora = Date.now() - 30 * 60e3;
+  const foram = new Set(D.envios.filter(x => x.via === "resend" && x.status === "ok" && new Date(x.data).getTime() > agora).map(x => String(x.email).toLowerCase()));
+  await depoisDeEnviar(lista.filter(m => foram.has(emailDe(m))));
+  P.enviando = false;
+  prog.innerHTML = "";
+  desenharProspeccao();
+
+  const eramSelecionadas = P.quem === "selecionadas" && bSelecao.size;
+  abrirJanela({
+    titulo: erro && !enviados ? "⚠️ Não deu para enviar" : "📨 Envio terminado",
+    corpo: '<div class="pros__fim">' +
+      (enviados ? '<p>✅ <b>' + plural(enviados, "e-mail enviado", "e-mails enviados") + "</b></p>" : "") +
+      (falhas ? '<p>⚠️ ' + plural(falhas, "falhou", "falharam") + ": o motivo está no histórico, lá embaixo.</p>" : "") +
+      (pulados ? '<p>🚫 ' + plural(pulados, "ficou de fora porque pediu para sair", "ficaram de fora porque pediram para sair") + ".</p>" : "") +
+      (parouNaCota ? '<div class="rot__aviso rot__aviso--info" style="margin-top:10px">A cota do dia do Resend acabou. Faltaram <b>' + faltaram.length + "</b>. Amanhã é só clicar em Enviar de novo com \"Pular quem já recebeu\" marcado: ele continua de onde parou.</div>" : "") +
+      (erro ? '<div class="rot__aviso rot__aviso--erro" style="margin-top:10px">' + esc(erro) + (faltaram.length ? "<br>Não foram: " + faltaram.length + "." : "") + "</div>" : "") +
+      (eramSelecionadas ? '<p class="mudo pequeno" style="margin-top:12px">As marcas continuam selecionadas na aba Marcas. Quer limpar a seleção?</p>' : "") +
+      "</div>",
+    rodape: '<span class="espaco"></span>' + (eramSelecionadas ? '<button type="button" class="btn btn--linha" id="pLimparSel">Limpar a seleção</button>' : "") + '<button type="button" class="btn" data-fechar>Ok</button>'
+  });
+  const limpar = $("#pLimparSel");
+  if (limpar) limpar.addEventListener("click", () => { marcaSelecao([...bSelecao], false); if ($("#bCorpo")) desenharBase(); desenharProspeccao(); fecharJanela(); torrada("Seleção limpa."); });
+}
+
+/* ----- histórico ----- */
+function desenhaHistorico() {
+  const alvo = $("#pHist"); if (!alvo) return;
+  if (falhou.email_envios) { alvo.innerHTML = '<p class="vazio">O histórico ainda não existe no banco. Rode o disparo.sql no Supabase.</p>'; return; }
+  const busca = normaliza(P.busca.trim());
+  const lista = D.envios.filter(x => !busca || normaliza([x.marca, x.email, x.assunto].join(" ")).includes(busca));
+  if (!lista.length) { alvo.innerHTML = '<p class="vazio">' + (D.envios.length ? "Nada com essa busca." : "Nenhum e-mail enviado ainda. Quando enviar, cada um aparece aqui.") + "</p>"; return; }
+  alvo.innerHTML = '<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Data</th><th>Marca</th><th>E-mail</th><th>Assunto</th><th>Por onde</th><th>Situação</th></tr></thead><tbody>' +
+    lista.slice(0, 300).map(x => {
+      const dt = new Date(x.data);
+      return "<tr><td style=\"white-space:nowrap\">" + dataBR(isoLocal(dt)) + " " + pad(dt.getHours()) + ":" + pad(dt.getMinutes()) + "</td>" +
+        "<td>" + esc(x.marca || "") + '</td><td class="corta">' + esc(x.email) + '</td><td class="corta" title="' + esc(x.assunto || "") + '">' + esc(x.assunto || "") + "</td>" +
+        '<td style="white-space:nowrap">' + esc(VIAS_EMAIL[x.via] || x.via) + "</td>" +
+        "<td>" + (x.status === "ok" ? '<span class="pil c-verde">enviado</span>' : '<span class="pil c-vermelho" title="' + esc(x.erro || "") + '">falhou</span><div class="mudo pequeno corta" title="' + esc(x.erro || "") + '">' + esc(explicaErro(x.erro || "")) + "</div>") + "</td></tr>";
+    }).join("") + "</tbody></table></div>" +
+    (lista.length > 300 ? '<p class="mudo pequeno" style="margin-top:8px">Mostrando os 300 mais recentes. Use a busca ou baixe tudo.</p>' : "");
+}
+
+/* ----- quem pediu para sair ----- */
+function descadastrar() {
+  editor({
+    titulo: "🚫 Alguém pediu para sair",
+    topo: '<p class="mudo pequeno" style="margin-bottom:12px">Quando uma marca responder "unsubscribe" (ou pedir para não receber mais), cole o e-mail dela aqui. Ela nunca mais recebe nada daqui, nem pelo Resend nem pela fila do Gmail, e ganha 🚫 Não enviar na aba Marcas.</p>',
+    valores: {},
+    campos: [{ nome: "email", rot: "E-mail", tipo: "email", obrigatorio: true, inteiro: true }, { nome: "motivo", rot: "Observação (opcional)", inteiro: true }],
+    aoSalvar: async (d, erro) => {
+      const e = String(d.email || "").trim().toLowerCase();
+      if (D.optout.some(o => String(o.email).toLowerCase() === e)) { erro("Esse e-mail já está na lista."); return false; }
+      const { data, error } = await banco.from("email_optout").insert({ email: e, motivo: d.motivo || null }).select().single();
+      if (error) { erro(traduzErro(error, "email_optout")); return false; }
+      D.optout.unshift(data);
+      const ids = D.base.filter(m => emailDe(m) === e).map(m => m.id);
+      if (ids.length) {
+        const r = await banco.from("base_marcas").update({ nao_enviar: true }).in("id", ids).select();
+        (r.data || []).forEach(m => troca(D.base, m));
+        if ($("#bCorpo")) desenharBase();
+      }
+      desenharProspeccao();
+      torrada("🚫 " + e + " não recebe mais nada.");
+      return true;
+    }
+  });
+}
+function listaOptout() {
+  abrirJanela({
+    titulo: "🚫 Pediram para sair",
+    corpo: D.optout.length ? '<div class="dia-lista">' + D.optout.map(o => '<div class="atrasado"><span class="atrasado__tit"><b>' + esc(o.email) + "</b>" + (o.motivo ? ' <span class="mudo pequeno">' + esc(o.motivo) + "</span>" : "") + '</span><span class="mudo pequeno">' + dataBR(String(o.data).slice(0, 10)) + "</span></div>").join("") + "</div>"
+      : '<p class="vazio">Ninguém pediu para sair. 🎉</p>',
+    rodape: '<span class="espaco"></span><button type="button" class="btn btn--linha" id="pOptNovo">Adicionar e-mail</button><button type="button" class="btn" data-fechar>Fechar</button>'
+  });
+  $("#pOptNovo").addEventListener("click", () => { fecharJanela(); descadastrar(); });
+}
+
+/* ============================================================
    10. MENU, GAVETA E SAIR
    ============================================================ */
-const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", abordar: "✍️ Abordagens", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo" };
+const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", abordar: "✍️ Abordagens", prospeccao: "📨 Prospecção", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo" };
 const lateral = $("#lateral"), cortina = $("#cortina");
 const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classList.remove("aberta"); };
 function irPara(aba) {
@@ -3998,6 +4577,7 @@ function irPara(aba) {
   $("#titulo").textContent = TITULOS[aba];
   document.title = TITULOS[aba] + " · Admin";
   if (location.hash !== "#" + aba) history.replaceState(null, "", "#" + aba);
+  if (aba === "prospeccao") seguro("Prospecção", desenharProspeccao);
   fechaGaveta();
   window.scrollTo(0, 0);
 }
@@ -4027,6 +4607,7 @@ seguro("Calendário", () => { montarCalendario(); desenharCalendario(); });
 seguro("Campanhas", () => { montarCampanhas(); desenharCampanhas(); });
 seguro("Prospectado × Fechado", () => { montarFunil(); desenharFunil(); });
 seguro("Abordagens", montarAbordar);
+seguro("Prospecção", () => { montarProspeccao(); desenharProspeccao(); });
 seguro("Checklist", montarChecklist);
 seguro("Roteiros", montarRoteiros);
 
