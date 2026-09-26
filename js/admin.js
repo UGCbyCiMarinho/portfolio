@@ -3762,7 +3762,21 @@ function instrucaoRedatora() {
     "NUNCA pergunte sobre valores, preços ou \"rates\", nem ofereça mandar a tabela de preços. O fecho é sempre: oferecer a ideia completa do roteiro, convidar para o portfólio (o trabalho dela, o estilo de criar e o feedback das marcas) e um tom de \"vamos fazer isso juntos\".\n\n" +
     "Tamanho: parecido com os modelos, no máximo " + (F.tipo === "plataforma" ? "140" : "160") + " palavras.\n" +
     "Do guia de estilo, use a VOZ, os FATOS dela e a lista do que nunca dizer. A ESTRUTURA é a dos modelos. Imite o ritmo e a lógica dos modelos, nunca as frases nem os produtos deles.\n\n" +
+    exemplosAprovados() +
     "=== MODELOS (de outra creator; só para você ver o nível e a estrutura) ===\n" + MODELOS_PITCH;
+}
+/* mensagens que ela aprovou: a referência mais forte de todas */
+const lerAprovados = () => { try { return JSON.parse(D.config.abordagem_exemplos || "[]") || []; } catch (e) { return []; } };
+function exemplosAprovados() {
+  const lista = lerAprovados().filter(x => x.tipo === F.tipo).slice(0, 3);
+  if (!lista.length) return "";
+  return "=== EXEMPLOS QUE ELA APROVOU (a referência MAIS importante: escreva no mesmo nível, estrutura e tom; nunca copie frases nem produtos) ===\n" +
+    lista.map((x, i) => "EXEMPLO APROVADO " + (i + 1) + " (" + x.marca + "):\n" + (x.assunto ? "ASSUNTO: " + x.assunto + "\n" : "") + x.mensagem).join("\n\n") + "\n\n";
+}
+async function aprovarVersao(v) {
+  const lista = lerAprovados();
+  lista.unshift({ tipo: F.tipo, marca: F.marca, assunto: v.assunto || "", mensagem: v.mensagem, quando: new Date().toISOString() });
+  if (await salvaConfig("abordagem_exemplos", JSON.stringify(lista.slice(0, 12)))) { v.aprovada = true; guardaFluxo(); desenhaSaida(); torrada("⭐ Aprovada! A IA vai usar essa mensagem como exemplo nas próximas."); }
 }
 
 /* PASSO 3: escrever (ou reescrever com o comentário dela) */
@@ -3840,6 +3854,7 @@ function desenhaSaida(carregandoTexto) {
       (F.tipo === "email" ? '<div class="campo"><label>Assunto</label><input data-fl-assunto="' + k + '" value="' + esc(v.assunto) + '"></div>' : "") +
       '<textarea class="entrada linha__texto" data-fl-texto="' + k + '">' + esc(v.mensagem) + "</textarea>" +
       '<div class="ferramentas" style="margin:8px 0 0"><button type="button" class="btn" data-fl-copiar="' + k + '">📋 Copiar</button>' +
+        (v.aprovada ? '<span class="pil c-verde">⭐ aprovada como exemplo</span>' : '<button type="button" class="btn btn--linha" data-fl-aprovar="' + k + '" title="A IA passa a usar esta mensagem como exemplo nas próximas">⭐ Aprovar como exemplo</button>') +
         ((F.tipo === "email" || F.tipo === "followup") ? '<button type="button" class="btn btn--linha" data-fl-gmail="' + k + '">✉️ Abrir no Gmail</button>' : "") +
         (!ultima ? '<button type="button" class="btn btn--linha" data-fl-voltar="' + k + '">↩️ Continuar desta versão</button>' : "") +
         (ultima && m && m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" id="flProspectei">📨 Prospectei esta marca</button>' : "") +
@@ -3896,6 +3911,7 @@ function ligaSaida(m) {
     const v = F.versoes[Number(b.dataset.flGmail)];
     window.open("https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(m && m.email ? m.email : "") + "&su=" + encodeURIComponent(v.assunto || "") + "&body=" + encodeURIComponent(v.mensagem), "_blank", "noopener");
   });
+  clique("[data-fl-aprovar]", (b) => aprovarVersao(F.versoes[Number(b.dataset.flAprovar)]));
   clique("[data-fl-voltar]", (b) => {
     const v = F.versoes[Number(b.dataset.flVoltar)];
     F.versoes.push(Object.assign({}, v, { nota: "Voltei para a versão " + (Number(b.dataset.flVoltar) + 1), quando: new Date().toISOString() }));
