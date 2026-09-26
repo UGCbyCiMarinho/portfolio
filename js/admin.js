@@ -3711,6 +3711,7 @@ async function pensarGanchos() {
   const d = lerJSON(r.texto);
   if (!d || !Array.isArray(d.ganchos) || !d.ganchos.length) return falhou2("A IA não trouxe os ganchos no formato certo. Tente de novo.");
   F.ganchos = d.ganchos.slice(0, 5).map(limpaObj);
+  F.ganchosPorIdeia = Object.assign({}, F.ganchosPorIdeia, { [F.ideia.nome]: F.ganchos });
   F.gancho = null; F.ganchoB = null;
   pronto();
 }
@@ -3863,9 +3864,18 @@ function ligaSaida(m) {
   const s = $("#abSaida");
   const clique = (sel, fn) => $$(sel, s).forEach(b => b.addEventListener("click", (e) => { e.preventDefault(); if (!abOcupado) fn(b, e); }));
   clique("#flZerar", () => { F = null; abResultado = null; guardaFluxo(); desenhaSaida(); });
-  clique("[data-fl-ideia]", (b) => { F.ideia = F.ideias[Number(b.dataset.flIdeia)]; F.ganchos = []; F.gancho = null; F.ganchoB = null; guardaFluxo(); pensarGanchos(); });
+  clique("[data-fl-ideia]", (b) => {
+    F.ideia = F.ideias[Number(b.dataset.flIdeia)];
+    F.gancho = null; F.ganchoB = null;
+    const guardados = (F.ganchosPorIdeia || {})[F.ideia.nome];
+    if (guardados && guardados.length) { F.ganchos = guardados; guardaFluxo(); desenhaSaida(); return; }   /* já criados: não gasta crédito */
+    F.ganchos = []; guardaFluxo(); pensarGanchos();
+  });
   clique("#flOutrasIdeias", () => pensarIdeias());
-  clique("[data-fl-trocai]", () => { F.ideia = null; F.ganchos = []; F.gancho = null; F.ganchoB = null; guardaFluxo(); desenhaSaida(); rolaPara(".linha__passo:nth-of-type(2)"); });
+  clique("[data-fl-trocai]", () => {
+    if (F.ideia && F.ganchos.length) { F.ganchosPorIdeia = F.ganchosPorIdeia || {}; F.ganchosPorIdeia[F.ideia.nome] = F.ganchos; }
+    F.ideia = null; F.ganchos = []; F.gancho = null; F.ganchoB = null; guardaFluxo(); desenhaSaida(); rolaPara(".linha__passo:nth-of-type(2)");
+  });
   clique("#flGanchos", () => pensarGanchos());
   clique("[data-fl-trocag]", () => { F.gancho = null; F.ganchoB = null; guardaFluxo(); desenhaSaida(); rolaPara(".abordar__ganchos"); });
   $$('input[name="flG"]', s).forEach(r => r.addEventListener("change", () => { const k = Number(r.value); F.gancho = Object.assign({ _i: k }, F.ganchos[k]); guardaFluxo(); desenhaSaida(); }));
