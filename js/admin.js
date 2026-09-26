@@ -3281,6 +3281,8 @@ function montarAbordar() {
         '<div class="pilulas" id="abTipos">' + TIPOS_ABORDAGEM.map(t => '<button type="button" data-t="' + t[0] + '">' + t[1] + "</button>").join("") + "</div>" +
         '<div class="bloco" style="margin-top:12px">' +
           '<div class="grade-form">' +
+            '<div class="campo inteiro" id="abPlatCampo"><label for="abPlat">Qual plataforma</label><input id="abPlat" list="abPlats" placeholder="Ex.: InSense, Billo, JoinBrands" autocomplete="off">' +
+              '<datalist id="abPlats">' + ["InSense", "Billo", "JoinBrands", "Collabstr", "Trend.io", "Upfluence", "Aspire"].map(x => '<option value="' + x + '">').join("") + "</datalist></div>" +
             '<div class="campo inteiro"><label for="abMarca">Marca</label><input id="abMarca" list="abMarcas" placeholder="Escolha da sua lista de Marcas ou digite" autocomplete="off">' +
               '<datalist id="abMarcas"></datalist><p class="mudo pequeno" id="abMarcaInfo" style="margin-top:4px"></p></div>' +
             '<div class="campo"><label for="abProduto">Produto</label><input id="abProduto" placeholder="Ex.: aspirador sem fio S9" autocomplete="off"></div>' +
@@ -3297,6 +3299,7 @@ function montarAbordar() {
             '<div class="campo"><label for="abUso">Para que é o vídeo</label><select id="abUso"><option value="">Não sei (a IA deduz pela brief)</option><option value="ads">Anúncio pago (ads)</option><option value="organico">Orgânico (perfil da marca)</option></select></div>' +
             '<div class="campo inteiro"><label for="abExtra">Pedido especial (opcional)</label><input id="abExtra" placeholder="Um recado só para esta mensagem. Ex.: o herói é o sabor limão" autocomplete="off"></div>' +
           "</div>" +
+          '<div class="ferramentas" style="margin:10px 0 0;justify-content:flex-end"><button type="button" class="btn btn--linha" id="abLimpar">🧹 Limpar tudo</button></div>' +
           '<div class="abordar__botoes"><button type="button" class="btn btn--linha" id="abPesquisar" title="A IA pesquisa a marca na internet e traz fatos com fonte">🔎 Pesquisar a marca</button>' +
           '<button type="button" class="btn" id="abGerar">✨ Gerar abordagem</button></div>' +
           '<div id="abPesquisa"></div>' +
@@ -3333,6 +3336,13 @@ function montarAbordar() {
   $("#abMarca").addEventListener("input", () => { if (!$("#abMarca").value) { abMarcaId = null; $("#abMarcaInfo").textContent = ""; } });
   $("#abGerar").addEventListener("click", () => gerarAbordagem());
   $("#abPesquisar").addEventListener("click", pesquisarMarca);
+  duploClique($("#abLimpar"), async () => {
+    CAMPOS_FORM.concat(["abPlat"]).forEach(id => { if ($("#" + id) && id !== "abIdioma" && id !== "abUso") $("#" + id).value = ""; });
+    abBriefPDF = ""; abMarcaId = null; $("#abMarcaInfo").textContent = "";
+    $("#abPdfInfo").textContent = "ou arraste o arquivo para cá"; $("#abPostInfo").innerHTML = ""; $("#abPesquisa").innerHTML = "";
+    F = null; abResultado = null; guardaFluxo(); desenhaSaida();
+    torrada("🧹 Tudo limpo. Pronto para uma vaga nova.");
+  }, "Clique de novo para limpar");
   $("#abPuxar").addEventListener("click", puxarPost);
   $("#abPost").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); puxarPost(); } });
   $("#abPdfBtn").addEventListener("click", () => $("#abPdf").click());
@@ -3389,6 +3399,7 @@ async function atualizaResumoIA() {
 
 function desenharAbordar() {
   $$("#abTipos button").forEach(b => b.classList.toggle("ativo", b.dataset.t === abTipo));
+  if ($("#abPlatCampo")) $("#abPlatCampo").classList.toggle("escondido", abTipo !== "plataforma");
   $("#abMarcas").innerHTML = D.base.filter(m => !m.exemplo).map(m => '<option value="' + esc(m.nome) + '">').join("");
   $("#abGerar").textContent = "✨ Gerar " + ({ email: "e-mail", dm: "DM", plataforma: "candidatura", followup: "follow-up" }[abTipo]);
   desenhaSaida();
@@ -3626,7 +3637,7 @@ const precisaIdeia = () => abTipo === "email" || abTipo === "plataforma";
 let F = null;   /* { tipo, marca, estrategia, ideias, ideia, ganchos, gancho, ganchoB, versoes: [{assunto, mensagem, nota, quando}] } */
 let abOcupado = false;
 const guardaFluxo = () => { try { if (F) F.form = Object.assign(leForm(), { briefPDF: abBriefPDF }); localStorage.setItem("admin-fluxo", JSON.stringify(F)); } catch (e) {} };
-const CAMPOS_FORM = ["abMarca", "abProduto", "abLink", "abBrief", "abPost", "abIdioma", "abUso", "abExtra"];
+const CAMPOS_FORM = ["abPlat", "abMarca", "abProduto", "abLink", "abBrief", "abPost", "abIdioma", "abUso", "abExtra"];
 const leForm = () => Object.fromEntries(CAMPOS_FORM.map(id => [id, $("#" + id) ? $("#" + id).value : ""]));
 function carregaFluxo() {
   try { F = JSON.parse(localStorage.getItem("admin-fluxo") || "null"); } catch (e) { F = null; }
@@ -3854,6 +3865,7 @@ function desenhaSaida(carregandoTexto) {
       (F.tipo === "email" ? '<div class="campo"><label>Assunto</label><input data-fl-assunto="' + k + '" value="' + esc(v.assunto) + '"></div>' : "") +
       '<textarea class="entrada linha__texto" data-fl-texto="' + k + '">' + esc(v.mensagem) + "</textarea>" +
       '<div class="ferramentas" style="margin:8px 0 0"><button type="button" class="btn" data-fl-copiar="' + k + '">📋 Copiar</button>' +
+        (F.tipo !== "followup" ? (v.enviada ? '<span class="pil c-azul">📤 enviada e contada</span>' : '<button type="button" class="btn btn--linha" data-fl-enviei="' + k + '" title="Conta na aba Prospectado × Fechado">📤 Enviei</button>') : "") +
         (v.aprovada ? '<span class="pil c-verde">⭐ aprovada como exemplo</span>' : '<button type="button" class="btn btn--linha" data-fl-aprovar="' + k + '" title="A IA passa a usar esta mensagem como exemplo nas próximas">⭐ Aprovar como exemplo</button>') +
         ((F.tipo === "email" || F.tipo === "followup") ? '<button type="button" class="btn btn--linha" data-fl-gmail="' + k + '">✉️ Abrir no Gmail</button>' : "") +
         (!ultima ? '<button type="button" class="btn btn--linha" data-fl-voltar="' + k + '">↩️ Continuar desta versão</button>' : "") +
@@ -3912,6 +3924,25 @@ function ligaSaida(m) {
     window.open("https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(m && m.email ? m.email : "") + "&su=" + encodeURIComponent(v.assunto || "") + "&body=" + encodeURIComponent(v.mensagem), "_blank", "noopener");
   });
   clique("[data-fl-aprovar]", (b) => aprovarVersao(F.versoes[Number(b.dataset.flAprovar)]));
+  clique("[data-fl-enviei]", async (b) => {
+    const v = F.versoes[Number(b.dataset.flEnviei)];
+    if (F.versoes.some(x => x.enviada)) { torrada("Essa candidatura já foi contada."); return; }
+    b.disabled = true;
+    if (F.tipo !== "plataforma" && m && m.situacao === "quero_prospectar") {
+      /* marca da lista: vira Prospectada e conta como abordagem manual */
+      const salvo = await salvarLinha("base_marcas", { situacao: "prospectada", ultimo_contato: isoLocal(new Date()) }, m.id);
+      if (!salvo) { b.disabled = false; return; }
+      troca(D.base, salvo); desenharBase(); await registrarProspeccao([salvo]);
+    } else {
+      const plat = ($("#abPlat") && $("#abPlat").value.trim()) || "";
+      const salvo = await salvarLinha("abordagens", { data: isoLocal(new Date()), canal: F.tipo === "plataforma" ? "plataforma" : "manual", quantidade: 1,
+        detalhe: F.tipo === "plataforma" ? (plat || "Plataforma") : "Abordagem pelo admin", obs: F.marca + (F.tipo === "plataforma" ? "" : " (" + (F.tipo === "dm" ? "DM" : "e-mail") + ")") });
+      if (!salvo) { b.disabled = false; return; }
+      D.abordagens.push(salvo); desenharFunil();
+    }
+    v.enviada = true; guardaFluxo(); desenhaSaida();
+    torrada("📤 Contada na aba Prospectado × Fechado.");
+  });
   clique("[data-fl-voltar]", (b) => {
     const v = F.versoes[Number(b.dataset.flVoltar)];
     F.versoes.push(Object.assign({}, v, { nota: "Voltei para a versão " + (Number(b.dataset.flVoltar) + 1), quando: new Date().toISOString() }));
