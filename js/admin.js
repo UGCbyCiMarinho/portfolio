@@ -3809,7 +3809,7 @@ function desenhaSaida(carregandoTexto) {
   }
   if (F.ideias && F.ideias.length) {
     const corpo = F.ideia
-      ? '<p class="pequeno"><b>' + esc(F.ideia.nome) + ":</b> " + esc(F.ideia.conceito) + '</p><p class="mudo pequeno">✨ ' + esc(F.ideia.fato_dela) + " · 💰 " + esc(F.ideia.por_que_vende) + '</p><button type="button" class="link pequeno" id="flTrocaIdeia">trocar de ideia</button>'
+      ? '<p class="pequeno"><b>' + esc(F.ideia.nome) + ":</b> " + esc(F.ideia.conceito) + '</p><p class="mudo pequeno">✨ ' + esc(F.ideia.fato_dela) + " · 💰 " + esc(F.ideia.por_que_vende) + '</p><button type="button" class="btn btn--linha" data-fl-trocai style="margin-top:8px">💡 Trocar a ideia</button>'
       : '<div class="abordar__ideias">' + F.ideias.map((i, k) => '<div class="abordar__ideia"><div class="abordar__ideia-nome">' + esc(i.nome) + "</div>" + (i.lente ? '<span class="pil c-destaque" style="align-self:flex-start;margin-top:4px">🔍 Lente: ' + esc(i.lente) + "</span>" : "") + '<p class="pequeno" style="margin-top:6px">' + esc(i.conceito) + "</p>" +
           '<p class="mudo pequeno" style="margin-top:6px">✨ ' + esc(i.fato_dela) + "</p><p class=\"mudo pequeno\">💰 " + esc(i.por_que_vende) + "</p>" +
           '<button type="button" class="btn btn--full" data-fl-ideia="' + k + '" style="margin-top:10px">Escolher esta ideia</button></div>').join("") + "</div>" +
@@ -3819,7 +3819,7 @@ function desenhaSaida(carregandoTexto) {
   if (F.ideia) {
     let corpo;
     if (!F.ganchos.length) corpo = '<button type="button" class="btn" id="flGanchos">🪝 Criar 5 ganchos para esta ideia</button>';
-    else if (F.gancho && F.versoes.length) corpo = cartaoGancho(F.gancho) + (F.ganchoB ? '<p class="mudo pequeno" style="margin-top:6px">🅱️ Gancho B: "' + esc(F.ganchoB.fala) + '"</p>' : "") + '<button type="button" class="link pequeno" id="flTrocaGancho">trocar de gancho</button>';
+    else if (F.gancho && F.versoes.length) corpo = cartaoGancho(F.gancho) + (F.ganchoB ? '<p class="mudo pequeno" style="margin-top:6px">🅱️ Gancho B: "' + esc(F.ganchoB.fala) + '"</p>' : "") + '<button type="button" class="btn btn--linha" data-fl-trocag style="margin-top:8px">🪝 Trocar o gancho</button>';
     else corpo = '<p class="mudo pequeno" style="margin-bottom:8px">Escolha o gancho. Você pode editar as 3 camadas antes de escrever.' + (F.estrategia && F.estrategia.uso === "ads" ? " Para ads, dá para marcar um segundo gancho (B) para a marca testar." : "") + "</p>" +
       '<div class="abordar__ganchos">' + F.ganchos.map((g, k) => '<label class="abordar__opcao' + (F.gancho && F.gancho._i === k ? " escolhido" : "") + '"><input type="radio" name="flG" value="' + k + '"' + (F.gancho && F.gancho._i === k ? " checked" : "") + "><div>" +
           '<div class="abordar__ideia-nome" style="font-size:12.5px">' + esc(g.tipo) + "</div>" + cartaoGancho(g) + '<p class="mudo pequeno">' + esc(g.por_que || "") + "</p>" +
@@ -3830,7 +3830,7 @@ function desenhaSaida(carregandoTexto) {
           '<div class="campo"><label>🔤 Texto na tela</label><input id="flGT" value="' + esc(F.gancho.texto) + '"></div>' +
           '<button type="button" class="btn btn--full" id="flEscrever" style="margin-top:10px">✍️ Escrever com este gancho</button></div>' : "") +
       '<div class="ferramentas" style="margin:10px 0 0"><button type="button" class="btn btn--linha" id="flGanchos">🔄 Outros 5 ganchos</button></div>';
-    html += passo(n++, "🪝 Gancho" + (F.gancho ? ': "' + esc(F.gancho.fala) + '"' : " · escolha um"), !F.versoes.length, corpo);
+    html += passo(n++, "🪝 Gancho" + (F.gancho ? ': "' + esc(F.gancho.fala) + '"' : " · escolha um"), true, corpo);
   }
   F.versoes.forEach((v, k) => {
     const ultima = k === F.versoes.length - 1;
@@ -3841,7 +3841,9 @@ function desenhaSaida(carregandoTexto) {
       '<div class="ferramentas" style="margin:8px 0 0"><button type="button" class="btn" data-fl-copiar="' + k + '">📋 Copiar</button>' +
         ((F.tipo === "email" || F.tipo === "followup") ? '<button type="button" class="btn btn--linha" data-fl-gmail="' + k + '">✉️ Abrir no Gmail</button>' : "") +
         (!ultima ? '<button type="button" class="btn btn--linha" data-fl-voltar="' + k + '">↩️ Continuar desta versão</button>' : "") +
-        (ultima && m && m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" id="flProspectei">📨 Prospectei esta marca</button>' : "") + "</div>" +
+        (ultima && m && m.situacao === "quero_prospectar" ? '<button type="button" class="btn btn--linha" id="flProspectei">📨 Prospectei esta marca</button>' : "") +
+        (ultima && F.ganchos && F.ganchos.length ? '<button type="button" class="btn btn--linha" data-fl-trocag>🪝 Trocar o gancho</button>' : "") +
+        (ultima && F.ideias && F.ideias.length ? '<button type="button" class="btn btn--linha" data-fl-trocai>💡 Trocar a ideia</button>' : "") + "</div>" +
       (ultima ? '<div class="linha__comentario"><label class="rotulo" for="flComentario">🗣️ O que não ficou bom? Escreva do seu jeito e a IA refaz</label>' +
           '<textarea id="flComentario" class="entrada" rows="3" placeholder="Ex.: o fato de cozinhar não tem a ver com a marca; o gancho não diz que é suplemento; a última frase ficou solta..."></textarea>' +
           '<div class="ferramentas" style="margin:8px 0 0"><button type="button" class="btn" id="flRefazer">🔁 Refazer com o meu comentário</button>' +
@@ -3856,15 +3858,16 @@ function desenhaSaida(carregandoTexto) {
 }
 const cartaoGancho = (g) => '<div class="abordar__gancho"><div><b>👀</b> ' + esc(g.visual || "") + '</div><div><b>🗣️</b> "' + esc(String(g.fala || "").replace(/^"|"$/g, "")) + '"</div><div><b>🔤</b> ' + esc(g.texto || "") + "</div></div>";
 
+function rolaPara(sel) { const el = $(sel, $("#abSaida")); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
 function ligaSaida(m) {
   const s = $("#abSaida");
   const clique = (sel, fn) => $$(sel, s).forEach(b => b.addEventListener("click", (e) => { e.preventDefault(); if (!abOcupado) fn(b, e); }));
   clique("#flZerar", () => { F = null; abResultado = null; guardaFluxo(); desenhaSaida(); });
   clique("[data-fl-ideia]", (b) => { F.ideia = F.ideias[Number(b.dataset.flIdeia)]; F.ganchos = []; F.gancho = null; F.ganchoB = null; guardaFluxo(); pensarGanchos(); });
   clique("#flOutrasIdeias", () => pensarIdeias());
-  clique("#flTrocaIdeia", () => { F.ideia = null; F.ganchos = []; F.gancho = null; F.ganchoB = null; guardaFluxo(); desenhaSaida(); });
+  clique("[data-fl-trocai]", () => { F.ideia = null; F.ganchos = []; F.gancho = null; F.ganchoB = null; guardaFluxo(); desenhaSaida(); rolaPara(".linha__passo:nth-of-type(2)"); });
   clique("#flGanchos", () => pensarGanchos());
-  clique("#flTrocaGancho", () => { F.gancho = null; guardaFluxo(); desenhaSaida(); });
+  clique("[data-fl-trocag]", () => { F.gancho = null; F.ganchoB = null; guardaFluxo(); desenhaSaida(); rolaPara(".abordar__ganchos"); });
   $$('input[name="flG"]', s).forEach(r => r.addEventListener("change", () => { const k = Number(r.value); F.gancho = Object.assign({ _i: k }, F.ganchos[k]); guardaFluxo(); desenhaSaida(); }));
   clique("[data-fl-b]", (b) => { const k = Number(b.dataset.flB); F.ganchoB = F.ganchoB && F.ganchoB._i === k ? null : Object.assign({ _i: k }, F.ganchos[k]); guardaFluxo(); desenhaSaida(); });
   clique("#flEscrever", () => {
