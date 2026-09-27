@@ -2048,7 +2048,7 @@ function editorCampanha(c) {
    9. ABA CHECKLIST PORTFÓLIO (conteúdo da js/biblioteca.js)
    ============================================================ */
 const B = window.Biblioteca;
-let subaba = "checklist";
+let subaba = "referencias";
 
 function sanfona({ emoji, titulo, sub, direita, corpo, aberta, attrs }) {
   return '<details class="sanfona"' + (aberta ? " open" : "") + (attrs || "") + "><summary>" +
@@ -2074,10 +2074,10 @@ function montarChecklist() {
   const el = $("#aba-checklist");
   if (!B) {
     el.innerHTML = '<p class="vazio">Não encontrei o arquivo js/biblioteca.js, então o conteúdo do checklist não pode aparecer. O resto do painel funciona normalmente.</p>';
-    aviso("biblioteca", "O arquivo js/biblioteca.js não carregou. A aba Checklist fica vazia até ele voltar.");
+    aviso("biblioteca", "O arquivo js/biblioteca.js não carregou. A aba Kit de Roteiro da Lara fica vazia até ele voltar.");
     return;
   }
-  const SUBS = [["checklist", "Checklist do portfólio"], ["referencias", "Referências de vídeo"], ["roteiros", "Roteiros"], ["nichos", "Ideias por nicho"], ["revisar", "Revisar meu roteiro"]];
+  const SUBS = [["referencias", "Referências de vídeo"], ["roteiros", "Roteiros"], ["nichos", "Ideias por nicho"], ["revisar", "Revisar meu roteiro"], ["checklist", "Checklist do portfólio"]];
   const checklist = B.CHECKLIST || [], refs = B.REFERENCIAS || [], tipos = B.TIPOS || [], nichos = B.NICHOS || [], revisao = B.REVISAO || [];
 
   el.innerHTML =
@@ -2141,7 +2141,7 @@ function montarChecklist() {
   $("#sAbas").addEventListener("click", (e) => { const b = e.target.closest("button[data-s]"); if (b) mostra(b.dataset.s); });
   let salva = null;
   try { salva = localStorage.getItem("admin-subaba"); } catch (e) {}
-  mostra(SUBS.some(s => s[0] === salva) ? salva : "checklist");
+  mostra(SUBS.some(s => s[0] === salva) ? salva : "referencias");
 
   /* marcar item do checklist: salva na tabela marcados */
   $$("[data-chave]", el).forEach(cx => { cx.checked = D.marcados.has(cx.dataset.chave); });
@@ -5482,7 +5482,7 @@ async function iaLegenda(insp) {
 /* ============================================================
    10. MENU, GAVETA E SAIR
    ============================================================ */
-const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", abordar: "✍️ Abordagens", prospeccao: "📨 Prospecção", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo", inspiracao: "💡 Inspiração", producao: "🎬 Produção" };
+const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", abordar: "✍️ Abordagens", prospeccao: "📨 Prospecção", calendario: "Calendário", campanhas: "Campanhas", checklist: "📚 Kit de Roteiro da Lara", roteiros: "🎬 Análise de vídeo", inspiracao: "💡 Inspiração", producao: "🎬 Produção" };
 const lateral = $("#lateral"), cortina = $("#cortina");
 const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classList.remove("aberta"); };
 function irPara(aba) {

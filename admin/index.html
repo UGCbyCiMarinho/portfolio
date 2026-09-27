@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../css/painel.css?v=54">
+<link rel="stylesheet" href="../css/painel.css?v=55">
 <script>
   /* usa o mesmo tom escolhido no portfólio */
   try { var t = localStorage.getItem("tema"); if (t === "bege" || t === "espresso") document.documentElement.dataset.tema = t; } catch (e) {}
@@ -29,9 +29,6 @@
     </button>
     <button class="menu__item" data-aba="marcas">
       <svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Inbound
-    </button>
-    <button class="menu__item" data-aba="checklist">
-      <svg class="ic" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Checklist
     </button>
     </div>
   </div>
@@ -75,6 +72,9 @@
     <button class="menu__item" data-aba="producao">
       <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/></svg>Produção
     </button>
+    <button class="menu__item" data-aba="checklist">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M2 4h7a4 4 0 0 1 3 1.5A4 4 0 0 1 15 4h7v15h-7a3 3 0 0 0-3 2 3 3 0 0 0-3-2H2z"/><path d="M12 5.5V21"/></svg>Kit de Roteiro · Lara
+    </button>
     <button class="menu__item" data-aba="calendario">
       <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Calendário
     </button>
@@ -116,9 +116,9 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="../js/banco.js?v=54"></script>
-<script src="../js/biblioteca.js?v=54"></script>
+<script src="../js/banco.js?v=55"></script>
+<script src="../js/biblioteca.js?v=55"></script>
 <!-- quando mudar algum arquivo do painel, aumente o número v= para o navegador buscar a versão nova -->
-<script src="../js/admin.js?v=54"></script>
+<script src="../js/admin.js?v=55"></script>
 </body>
 </html>
