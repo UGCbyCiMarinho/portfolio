@@ -499,16 +499,19 @@ function desenharPortfolio() {
   const bandeira = (cc) => /^[A-Z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc].map(c => 127397 + c.charCodeAt(0))) : "🏳️";
   const nomePais = (() => {
     let dn = null; try { dn = new Intl.DisplayNames(["pt"], { type: "region" }); } catch (e) {}
-    return cc => { try { return (dn && dn.of(cc)) || cc; } catch (e) { return cc; } };
+    return cc => { if (cc === "??") return "Não identificado"; try { return (dn && dn.of(cc)) || cc; } catch (e) { return cc; } };
   })();
   const paises = {}, dispos = {};
   D.visitas.forEach(v => {
-    if (v.pais) paises[v.pais] = (paises[v.pais] || 0) + 1;
+    /* sem país = o serviço que descobre o país não respondeu (bloqueador, rede lenta): conta como "não identificado" */
+    const cc = v.pais || "??";
+    paises[cc] = (paises[cc] || 0) + 1;
     if (v.dispositivo) dispos[v.dispositivo] = (dispos[v.dispositivo] || 0) + 1;
   });
-  const listaPaises = Object.entries(paises).sort((a, b) => b[1] - a[1]);
+  const listaPaises = Object.entries(paises).sort((a, b) => (a[0] === "??") - (b[0] === "??") || b[1] - a[1]);
   const maiorPais = listaPaises.length ? listaPaises[0][1] : 0;
-  if ($("#pPaisesConta")) $("#pPaisesConta").textContent = listaPaises.length ? plural(listaPaises.length, "país", "países") : "";
+  const nPaises = listaPaises.filter(p => p[0] !== "??").length;
+  if ($("#pPaisesConta")) $("#pPaisesConta").textContent = nPaises ? plural(nPaises, "país", "países") : "";
   if ($("#pPaises")) $("#pPaises").innerHTML = (semVisitas || !listaPaises.length)
     ? '<p class="vazio">Aqui vai aparecer de quais países as pessoas abriram o seu portfólio. Começa a contar a partir de agora.</p>'
     : '<div class="origens">' + listaPaises.map(([cc, n]) =>

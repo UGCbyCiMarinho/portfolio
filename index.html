@@ -1456,6 +1456,8 @@ function mostraVideos(lista) {
    ============================================================ */
 (function registraVisita() {
   if (!/^(www\.)?cimarinho\.com$/.test(location.hostname)) return; /* só no site de verdade */
+  /* robôs (buscadores, verificadores de link, navegadores automáticos) não contam como visita */
+  if (navigator.webdriver || /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|embedly|whatsapp|python|curl|wget/i.test(navigator.userAgent || "")) return;
   try {
     /* Conta no máximo uma visita por navegador a cada 30 min. Isso evita contar
        de novo quando a pessoa atualiza a página ou reabre numa aba nova logo depois. */
@@ -1536,7 +1538,8 @@ async function registraEvento(tipo, detalhe) {
 
 /* clique num vídeo (só vídeo, não foto) */
 document.addEventListener("click", (e) => {
-  const botao = e.target.closest(".poster--video .poster__botao");
+  /* todo vídeo tem data-id (os verticais, os deitados e os destaques); foto tem data-foto e não conta */
+  const botao = e.target.closest(".poster__quadro[data-id] .poster__botao");
   if (!botao) return;
   const quadro = botao.closest(".poster__quadro");
   const idv = quadro ? (quadro.dataset.id || "") : "";          /* id do YouTube = único por vídeo */
