@@ -4907,6 +4907,7 @@ function montarInspiracao() {
     }
     if (e.target.closest("[data-editar]")) { editorInspiracao(x); return; }
     if (e.target.closest("[data-produzir]")) { produzirInspiracao(x); return; }
+    if (e.target.closest("[data-remandar]")) { await sincronizaProducao(x, null); desenharInspiracao(); return; }
     if (e.target.closest("[data-descartar]")) {
       const volta = x.usar === "nao";
       await salvaInspiracao(x, { usar: volta ? null : "nao" });
@@ -4918,10 +4919,30 @@ function montarInspiracao() {
 }
 
 async function salvaInspiracao(x, patch) {
+  const antes = x.usar;
   const salvo = await salvarLinha("inspiracoes", patch, x.id);
-  if (salvo) troca(D.inspiracoes, salvo);
+  if (salvo) { troca(D.inspiracoes, salvo); if ("usar" in patch) await sincronizaProducao(salvo, antes); }
   desenharInspiracao();
   return salvo;
+}
+/* marcou SIM: o vídeo cai sozinho na Produção, na coluna Ideia.
+   Tirou o sim: se o cartão ainda está vazio na Ideia, sai da Produção também. */
+async function sincronizaProducao(x, antes, quieto) {
+  if (falhou.producao) return;
+  if (x.usar === "sim" && antes !== "sim") {
+    if (producaoDaInspiracao(x)) return;
+    const naIdeia = D.producao.filter(p => p.fase === "ideia");
+    const novo = await salvarLinha("producao", { titulo: (x.sobre || "Vídeo inspirado em " + (x.criadora || "")).slice(0, 90), fase: "ideia",
+      ordem: naIdeia.length ? Math.max(...naIdeia.map(p => p.ordem)) + 1 : 0, pilar: x.pilar || null, nicho: x.nicho || null, formato: x.formato || null,
+      ideia: x.minha_ideia || null, inspiracao_id: x.id });
+    if (novo) { D.producao.push(novo); desenharProducao(); if (!quieto) torrada("✅ Foi para a Produção, na coluna 💡 Ideia."); }
+  } else if (antes === "sim" && x.usar !== "sim") {
+    const p = producaoDaInspiracao(x); if (!p) return;
+    const vazio = p.fase === "ideia" && !p.roteiro && !p.legenda && !p.hashtags && !p.programado_para;
+    if (vazio) {
+      if (await apagarLinha("producao", p.id)) { D.producao = D.producao.filter(y => y.id !== p.id); desenharProducao(); }
+    } else torrada("Esse vídeo já está sendo produzido (" + faseDe(p.fase)[1] + "), então continua na Produção. Se quiser tirar, apague pela ficha.");
+  }
 }
 function editorInspiracao(x, padrao) {
   const temChave = !!D.config[CHAVE_SUPADATA];
@@ -4948,6 +4969,7 @@ function editorInspiracao(x, padrao) {
       const salvo = await salvarLinha("inspiracoes", dados, x && x.id);
       if (!salvo) return false;
       if (x) troca(D.inspiracoes, salvo); else D.inspiracoes.push(salvo);
+      await sincronizaProducao(salvo, x ? x.usar : null);
       desenharInspiracao();
       if (!x && d.capa_agora) buscarCapas([salvo]);
       return true;
@@ -5090,8 +5112,8 @@ const numerosInsp = (x) => {
 /* o botão que manda a inspiração para a Produção (ou mostra em que fase ela está) */
 function botaoProducao(x, curto) {
   const p = producaoDaInspiracao(x);
-  if (p) return '<button type="button" class="btn btn--linha insp__fase" data-produzir title="Abrir a ficha na Produção">' + faseDe(p.fase)[1] + "</button>";
-  return '<button type="button" class="btn' + (curto ? " btn--linha" : "") + '" data-produzir title="Criar o seu vídeo a partir desta inspiração">🎬 Produzir</button>';
+  if (p) return '<button type="button" class="btn btn--linha insp__fase" data-produzir title="Está na Produção. Clique para abrir a ficha">' + faseDe(p.fase)[1] + "</button>";
+  return curto ? '<span class="mudo pequeno">marque Sim</span>' : "";
 }
 function produzirInspiracao(x) {
   const p = producaoDaInspiracao(x);
@@ -5166,7 +5188,7 @@ function cartaoInspiracao(x) {
       '<div class="rot__acoes">' +
         botaoProducao(x) +
         (x.usar === "nao" ? '<button type="button" class="btn btn--linha" data-descartar>↩️ Voltar para a lista</button>'
-          : '<button type="button" class="btn btn--linha' + (x.usar === "sim" ? " insp__on" : "") + '" data-usar="sim">✅ Vou usar</button>' +
+          : '<button type="button" class="btn btn--linha' + (x.usar === "sim" ? " insp__on" : "") + '" data-usar="sim" title="Vai para a Produção, na coluna Ideia">✅ Vou usar</button>' +
             '<button type="button" class="btn btn--linha" data-descartar>🗑️ Descartar</button>') +
         (!x.capa && D.config[CHAVE_SUPADATA] ? '<button type="button" class="btn btn--linha" data-umacapa title="1 crédito da Supadata">🖼️ Capa</button>' : "") +
         '<button type="button" class="btn btn--linha" data-editar>✏️</button>' +
@@ -5355,6 +5377,9 @@ function abrirFicha(p, padrao) {
   if (p) duploClique($("#fcApagar"), async () => {
     if (!(await apagarLinha("producao", p.id))) return;
     D.producao = D.producao.filter(x => x.id !== p.id);
+    /* a inspiração de origem volta para "ainda não sei", senão ela voltaria para a Produção sozinha */
+    const origem = p.inspiracao_id && D.inspiracoes.find(x => x.id === p.inspiracao_id);
+    if (origem && origem.usar === "sim") { const s2 = await salvarLinha("inspiracoes", { usar: null }, origem.id); if (s2) troca(D.inspiracoes, s2); }
     fecharJanela(); desenharProducao(); desenharInspiracao(); if (typeof desenharCalendario === "function") desenharCalendario();
     torrada("🗑️ Vídeo apagado da produção.");
   });
@@ -5502,6 +5527,13 @@ seguro("Checklist", montarChecklist);
 seguro("Roteiros", montarRoteiros);
 seguro("Inspiração", () => { montarInspiracao(); desenharInspiracao(); });
 seguro("Produção", () => { montarProducao(); desenharProducao(); });
+/* os que já estavam marcados como Sim antes de existir essa regra também vão para a Produção */
+(async () => {
+  if (falhou.producao || falhou.inspiracoes) return;
+  const faltam = D.inspiracoes.filter(x => x.usar === "sim" && !producaoDaInspiracao(x) && !x.postei);
+  for (const x of faltam) await sincronizaProducao(x, null, true);
+  if (faltam.length) { desenharInspiracao(); torrada("✅ " + plural(faltam.length, "vídeo marcado como Sim foi", "vídeos marcados como Sim foram") + " para a Produção, na coluna 💡 Ideia."); }
+})();
 
 /* o link pode trazer um pedido junto: #inspiracao&add=... (botão do navegador) */
 const [abaInicial, ...pedidoInicial] = location.hash.slice(1).split("&");
