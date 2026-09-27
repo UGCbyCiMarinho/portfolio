@@ -98,7 +98,7 @@ function torrada(texto, erro) {
 }
 
 /* ----- traduz os erros do banco para português ----- */
-const ARQUIVO_SQL = { base_marcas: "sql-marcas.sql", roteiros: "sql-roteiros.sql", configuracoes: "sql-roteiros.sql", abordagens: "sql-resultados.sql", email_envios: "disparo.sql", email_optout: "disparo.sql", eventos: "sql-eventos.sql", inspiracoes: "sql-inspiracao.sql" };
+const ARQUIVO_SQL = { base_marcas: "sql-marcas.sql", roteiros: "sql-roteiros.sql", configuracoes: "sql-roteiros.sql", abordagens: "sql-resultados.sql", email_envios: "disparo.sql", email_optout: "disparo.sql", eventos: "sql-eventos.sql", inspiracoes: "sql-inspiracao.sql", producao: "sql-producao.sql" };
 function traduzErro(e, tabela) {
   const cod = (e && e.code) || "";
   const msg = (e && e.message) || String(e || "");
@@ -344,10 +344,10 @@ const numero = (rot, val, sub) =>
 /* ============================================================
    4. CARREGAR OS DADOS
    ============================================================ */
-const D = { videos: [], visitas: [], eventos: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], envios: [], optout: [], inspiracoes: [], config: {}, marcados: new Set() };
+const D = { videos: [], visitas: [], eventos: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], envios: [], optout: [], inspiracoes: [], producao: [], config: {}, marcados: new Set() };
 const inicio14 = hoje(); inicio14.setDate(inicio14.getDate() - 13);
 
-const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens, envios, optout, inspiracoes] = await Promise.all([
+const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens, envios, optout, inspiracoes, producao] = await Promise.all([
   ler("videos", q => q.order("ordem", { ascending: true }).order("criado_em", { ascending: true })),
   ler("visitas", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
   ler("eventos", q => q.order("data", { ascending: true })),
@@ -361,9 +361,10 @@ const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteir
   ler("abordagens", q => q.order("data", { ascending: true })),
   ler("email_envios", q => q.order("data", { ascending: false })),
   ler("email_optout", q => q.order("data", { ascending: false })),
-  ler("inspiracoes", q => q.order("numero", { ascending: true }))
+  ler("inspiracoes", q => q.order("numero", { ascending: true })),
+  ler("producao", q => q.order("ordem", { ascending: true }))
 ]);
-Object.assign(D, { videos, visitas, eventos, marcas, calendario, campanhas, roteiros, base, abordagens, envios, optout, inspiracoes, marcados: new Set(marcados.map(m => m.chave)) });
+Object.assign(D, { videos, visitas, eventos, marcas, calendario, campanhas, roteiros, base, abordagens, envios, optout, inspiracoes, producao, marcados: new Set(marcados.map(m => m.chave)) });
 configuracoes.forEach(c => { D.config[c.chave] = c.valor; });
 
 const nomesDeMarcas = () => Array.from(new Set(D.marcas.map(m => m.nome).concat(D.base.map(m => m.nome), D.campanhas.map(c => c.cliente), D.videos.map(v => v.marca)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -1539,8 +1540,13 @@ function itensCalendario() {
     chave: "camp:" + c.id, titulo: "Prazo: " + (c.campanha || "campanha"), marca: c.cliente, tipo: "prazo",
     data: String(c.prazo).slice(0, 10), feito: c.status === "Entregue" || c.ativa === false, exemplo: c.exemplo
   }));
+  /* os vídeos programados na Produção entram sozinhos */
+  const posts = (D.producao || []).filter(p => p.programado_para).map(p => ({
+    chave: "prod:" + p.id, titulo: "🎬 " + (p.titulo || "vídeo"), marca: faseDe(p.fase)[1], tipo: "postar",
+    data: isoLocal(new Date(p.programado_para)), feito: p.fase === "postado"
+  }));
   const ordemTipo = { prazo: 0, gravar: 1, editar: 2, postar: 3 };
-  return doCal.concat(prazos)
+  return doCal.concat(prazos, posts)
     .filter(i => filtroCal === "todos" || i.tipo === filtroCal)
     .sort((a, b) => (a.feito - b.feito) || (ordemTipo[a.tipo] - ordemTipo[b.tipo]) || String(a.titulo).localeCompare(b.titulo, "pt"));
 }
@@ -1644,6 +1650,7 @@ function desenharCalendario() {
 function abrirItem(chave) {
   const [origem, id] = [chave.slice(0, chave.indexOf(":")), chave.slice(chave.indexOf(":") + 1)];
   if (origem === "camp") { const c = D.campanhas.find(x => x.id === id); if (c) editorCampanha(c); return; }
+  if (origem === "prod") { const p = D.producao.find(x => x.id === id); if (p) abrirFicha(p); return; }
   const c = D.calendario.find(x => x.id === id);
   if (c) editorCal(c);
 }
@@ -4796,7 +4803,7 @@ const PILARES = [
   ["trends", "😂 Trends e humor", "c-cinza", "Trends e humor: alcance rápido para gente nova chegar ao perfil."]
 ];
 const pilarDe = (v) => PILARES.find(p => p[0] === v);
-const I = { vista: "planilha", ordem: "planilha", f: { busca: "", criadora: "", nicho: "", formato: "", pilar: "", usar: "", postei: "" }, capas: false, parar: false };
+const I = { vista: "planilha", ordem: "planilha", verDesc: false, f: { busca: "", criadora: "", nicho: "", formato: "", pilar: "", usar: "", postei: "" }, capas: false, parar: false };
 try { I.vista = localStorage.getItem("admin-insp-vista") || "planilha"; } catch (e) {}
 const semArroba = (t) => String(t || "").replace(/^@/, "");
 const unicos = (campo) => Array.from(new Set(D.inspiracoes.map(x => x[campo]).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -4821,6 +4828,7 @@ function montarInspiracao() {
       '<select class="entrada entrada--sel" id="iFUsar"><option value="">Usar: todos</option><option value="sim">✅ Vou usar</option><option value="nao">✖️ Não vou usar</option><option value="-">Ainda não decidi</option></select>' +
       '<select class="entrada entrada--sel" id="iFPostei"><option value="">Postei: todos</option><option value="sim">☑️ Já postei</option><option value="nao">Ainda não postei</option></select>' +
       '<button type="button" class="btn btn--linha escondido" id="iLimpar">Limpar filtros</button>' +
+      '<button type="button" class="btn btn--linha" id="iDesc"></button>' +
       '<span class="mudo pequeno" id="iConta"></span>' +
     "</div>" +
     '<div class="ferramentas">' +
@@ -4828,6 +4836,7 @@ function montarInspiracao() {
       '<select class="entrada entrada--sel" id="iOrdem" style="width:auto"><option value="planilha">Ordem da planilha</option><option value="novos">Mais novos primeiro</option><option value="views">Mais visualizações</option></select>' +
       '<span class="espaco"></span>' +
       '<button class="btn" id="iNovo">' + ic("mais") + " Adicionar inspiração</button>" +
+      '<button class="btn btn--linha" id="iNavegador" title="Um botão na barra de favoritos para salvar direto do Instagram">🔖 Salvar do navegador</button>' +
       '<button class="btn btn--linha" id="iCapas"></button>' +
       '<button class="btn btn--linha" id="iBaixar">' + ic("baixar") + " Baixar planilha</button>" +
     "</div>" +
@@ -4853,6 +4862,8 @@ function montarInspiracao() {
     rodape: '<span class="espaco"></span><button type="button" class="btn" data-fechar>Entendi</button>'
   }));
   $("#iNovo").addEventListener("click", () => editorInspiracao(null));
+  $("#iDesc").addEventListener("click", () => { I.verDesc = !I.verDesc; desenharInspiracao(); });
+  $("#iNavegador").addEventListener("click", botaoDoNavegador);
   $("#iCapas").addEventListener("click", () => { if (I.capas) { I.parar = true; return; } buscarCapas(); });
   $("#iBaixar").addEventListener("click", () => {
     if (!D.inspiracoes.length) { torrada("Nenhuma inspiração ainda."); return; }
@@ -4868,6 +4879,7 @@ function montarInspiracao() {
     const campo = alvo.dataset.campo;
     const valor = alvo.type === "checkbox" ? alvo.checked : (alvo.value || null);
     await salvaInspiracao(x, { [campo]: valor });
+    if (campo === "usar" && valor === "nao" && !I.verDesc && I.f.usar !== "nao") torrada("🗑️ Descartado. Ele fica guardado em Descartados, se mudar de ideia.");
     if (campo === "postei" && valor && !x.meu_link) pedirMeuLink(D.inspiracoes.find(y => y.id === x.id));
   });
   corpo.addEventListener("click", async (e) => {
@@ -4903,6 +4915,13 @@ function montarInspiracao() {
     if (e.target.closest("[data-ideia]")) { pedirIdeia(x); return; }
     if (e.target.closest("[data-meulink]")) { if (!e.target.closest("a")) pedirMeuLink(x); return; }
     if (e.target.closest("[data-editar]")) { editorInspiracao(x); return; }
+    if (e.target.closest("[data-produzir]")) { produzirInspiracao(x); return; }
+    if (e.target.closest("[data-descartar]")) {
+      const volta = x.usar === "nao";
+      await salvaInspiracao(x, { usar: volta ? null : "nao" });
+      torrada(volta ? "↩️ Voltou para a sua lista." : "🗑️ Descartado. Ele fica guardado em Descartados, se mudar de ideia.");
+      return;
+    }
     if (e.target.closest("[data-umacapa]")) { buscarCapas([x]); return; }
   });
 }
@@ -4936,11 +4955,11 @@ function pedirMeuLink(x) {
   });
 }
 
-function editorInspiracao(x) {
+function editorInspiracao(x, padrao) {
   const temChave = !!D.config[CHAVE_SUPADATA];
   editor({
     titulo: x ? "✏️ Editar inspiração" : "💡 Adicionar inspiração",
-    valores: x || { capa_agora: temChave },
+    valores: x || Object.assign({ capa_agora: temChave }, padrao || {}),
     campos: [
       { nome: "url", rot: "Link do post", obrigatorio: true, inteiro: true, dica: "https://www.instagram.com/reel/..." },
       { nome: "criadora", rot: "Criadora", dica: "@ (se ficar em branco, sai do link)", lista: unicos("criadora") },
@@ -5028,7 +5047,9 @@ function atualizaBotaoCapas(texto) {
 
 function listaInspiracao() {
   const f = I.f, busca = normaliza(f.busca.trim());
-  let lista = D.inspiracoes.filter(x =>
+  /* descartados só aparecem quando ela pede */
+  const verNao = I.verDesc || f.usar === "nao";
+  let lista = D.inspiracoes.filter(x => (verNao ? (I.verDesc ? x.usar === "nao" : true) : x.usar !== "nao") &&
     (!f.criadora || x.criadora === f.criadora) && (!f.nicho || x.nicho === f.nicho) && (!f.formato || x.formato === f.formato) &&
     (!f.pilar || x.pilar === f.pilar) &&
     (!f.usar || (f.usar === "-" ? !x.usar : x.usar === f.usar)) &&
@@ -5071,16 +5092,20 @@ function desenharInspiracao() {
   opcoes("#iFPilar", "Todos os pilares", PILARES.map(p => p[0]), I.f.pilar, v => pilarDe(v)[1]);
   $("#iFUsar").value = I.f.usar; $("#iFPostei").value = I.f.postei; $("#iOrdem").value = I.ordem;
   $$("#iVista button").forEach(b => b.classList.toggle("ativo", b.dataset.v === I.vista));
-  const filtrando = Object.values(I.f).some(Boolean);
-  $("#iLimpar").classList.toggle("escondido", !filtrando);
+  const filtrando = Object.values(I.f).some(Boolean) || I.verDesc;
+  $("#iLimpar").classList.toggle("escondido", !Object.values(I.f).some(Boolean));
+  const nDesc = todos.filter(x => x.usar === "nao").length;
+  $("#iDesc").textContent = I.verDesc ? "↩️ Voltar para a lista" : "🗑️ Descartados (" + nDesc + ")";
+  $("#iDesc").classList.toggle("escondido", !nDesc && !I.verDesc);
   if (!I.capas) atualizaBotaoCapas();
 
   const lista = listaInspiracao();
-  $("#iConta").textContent = filtrando ? lista.length + " de " + todos.length : plural(todos.length, "vídeo", "vídeos");
+  const ativos = todos.filter(x => x.usar !== "nao").length;
+  $("#iConta").textContent = I.verDesc ? plural(lista.length, "descartado", "descartados") : filtrando ? lista.length + " de " + ativos : plural(ativos, "vídeo", "vídeos");
   const corpo = $("#iCorpo");
   if (!lista.length) {
     corpo.innerHTML = '<p class="vazio">' + (falhou.inspiracoes ? "A tabela de inspiração ainda não existe no banco. Rode o sql-inspiracao.sql no Supabase."
-      : todos.length ? "Nenhum vídeo com esses filtros." : "Nenhuma inspiração ainda. Clique em Adicionar inspiração.") + "</p>";
+      : I.verDesc ? "Nenhum vídeo descartado." : todos.length ? "Nenhum vídeo com esses filtros." : "Nenhuma inspiração ainda. Clique em Adicionar inspiração.") + "</p>";
     return;
   }
   corpo.innerHTML = I.vista === "cartoes" ? '<div class="rot__cartoes">' + lista.map(cartaoInspiracao).join("") + "</div>" : tabelaInspiracao(lista);
@@ -5089,16 +5114,60 @@ function desenharInspiracao() {
 const seletorPilar = (x) => '<select class="insp__sel" data-campo="pilar" aria-label="Pilar"><option value="">Escolha</option>' +
   PILARES.map(p => '<option value="' + p[0] + '"' + (x.pilar === p[0] ? " selected" : "") + ">" + p[1] + "</option>").join("") + "</select>";
 const seletorUsar = (x) => '<select class="insp__sel insp__usar' + (x.usar ? " " + x.usar : "") + '" data-campo="usar" aria-label="Usar?"><option value="">Ainda não sei</option>' +
-  '<option value="sim"' + (x.usar === "sim" ? " selected" : "") + ">✅ Sim</option><option value=\"nao\"" + (x.usar === "nao" ? " selected" : "") + ">✖️ Não</option></select>";
+  '<option value="sim"' + (x.usar === "sim" ? " selected" : "") + ">✅ Sim</option><option value=\"nao\"" + (x.usar === "nao" ? " selected" : "") + ">🗑️ Não (descartar)</option></select>";
 const linkCriadora = (x) => x.criadora ? '<a class="link" href="https://www.instagram.com/' + encodeURIComponent(semArroba(x.criadora)) + '/" target="_blank" rel="noopener">' + esc(x.criadora) + "</a>" : "";
 const numerosInsp = (x) => {
   const m = x.metricas || {}, c = new Intl.NumberFormat("pt-BR", { notation: "compact" });
   return [m.views != null && "👁️ " + c.format(m.views), m.likes != null && "❤️ " + c.format(m.likes)].filter(Boolean).join("  ");
 };
 
+/* o botão que manda a inspiração para a Produção (ou mostra em que fase ela está) */
+function botaoProducao(x, curto) {
+  const p = producaoDaInspiracao(x);
+  if (p) return '<button type="button" class="btn btn--linha insp__fase" data-produzir title="Abrir a ficha na Produção">' + faseDe(p.fase)[1] + "</button>";
+  return '<button type="button" class="btn' + (curto ? " btn--linha" : "") + '" data-produzir title="Criar o seu vídeo a partir desta inspiração">🎬 Produzir</button>';
+}
+function produzirInspiracao(x) {
+  const p = producaoDaInspiracao(x);
+  if (p) { abrirFicha(p); return; }
+  if (falhou.producao) { torrada("A tabela da produção ainda não existe. Rode o sql-producao.sql no Supabase.", true); return; }
+  abrirFicha(null, { titulo: (x.sobre || "").slice(0, 90), pilar: x.pilar, nicho: x.nicho, formato: x.formato, ideia: x.minha_ideia || "", inspiracao_id: x.id });
+  if (x.usar !== "sim") salvarLinha("inspiracoes", { usar: "sim" }, x.id).then(s => { if (s) { troca(D.inspiracoes, s); desenharInspiracao(); } });
+}
+/* o botão da barra de favoritos: salva o post do Instagram aberto no navegador */
+function botaoDoNavegador() {
+  const codigo = "javascript:(function(){var m=function(p){var e=document.querySelector('meta[property=\"'+p+'\"]');return e?e.content:''};" +
+    "window.open('" + location.origin + "/admin/#inspiracao&add='+encodeURIComponent(location.href.split('?')[0])+'&t='+encodeURIComponent(m('og:title').slice(0,120))+'&d='+encodeURIComponent(m('og:description').slice(0,400)),'_blank')})();";
+  abrirJanela({
+    titulo: "🔖 Salvar do navegador",
+    corpo: '<p style="font-size:14px;line-height:1.7">Com este botão na sua barra de favoritos, você salva uma inspiração com <b>um clique</b>, direto do Instagram no computador.</p>' +
+      '<div class="insp__marcador"><a href="' + esc(codigo) + '" class="btn" onclick="return false" draggable="true">💡 Salvar na Inspiração</a><span class="mudo pequeno">⬅️ arraste este botão para a sua barra de favoritos</span></div>' +
+      '<p class="rotulo" style="margin:14px 0 6px">Como instalar (uma vez só)</p>' +
+      '<ol class="lista-simples"><li>Deixe a barra de favoritos aparecendo: no Chrome, <b>Cmd + Shift + B</b>. No Safari, menu Visualizar, depois Mostrar Barra de Favoritos.</li>' +
+      "<li>Clique e segure no botão marrom acima e arraste até a barra de favoritos. Solte.</li></ol>" +
+      '<p class="rotulo" style="margin:14px 0 6px">Como usar</p>' +
+      '<ol class="lista-simples"><li>No Instagram, abra o vídeo (o link lá em cima tem que ter /reel/ ou /p/).</li>' +
+      "<li>Clique em <b>💡 Salvar na Inspiração</b> na barra de favoritos.</li>" +
+      "<li>O painel abre numa aba nova com o link, o @ e a legenda já preenchidos. Escolha o pilar, o nicho e o formato e clique em Salvar.</li></ol>" +
+      '<p class="mudo pequeno" style="margin-top:10px">Você precisa estar logada no painel neste navegador. Continue salvando na pastinha Notion também, se quiser: o botão não mexe no Instagram.</p>',
+    rodape: '<span class="espaco"></span><button type="button" class="btn" data-fechar>Entendi</button>'
+  });
+}
+/* chegou pelo botão do navegador: abre o formulário já preenchido */
+function chegouDoNavegador(params) {
+  const url = limpaLink(params.get("add") || "");
+  if (!url) return;
+  const repetido = D.inspiracoes.find(y => y.url === url);
+  if (repetido) { torrada("💡 Esse vídeo já está na sua inspiração (#" + (repetido.numero || "") + ")."); editorInspiracao(repetido); return; }
+  const titulo = params.get("t") || "", desc = params.get("d") || "";
+  const handle = (titulo.match(/@([\w.]+)/) || desc.match(/-\s*([\w.]+)\s+on\s/i) || titulo.match(/^([\w.]+)\s+on\s/i) || [])[1] || perfilDe(url);
+  const legenda = (desc.match(/:\s*"([\s\S]*)"?\s*$/) || [])[1] || "";
+  editorInspiracao(null, { url, criadora: handle ? "@" + handle : "", sobre: legenda.replace(/"\.?$/, "").slice(0, 300) });
+}
+
 function tabelaInspiracao(lista) {
   return '<div class="tabela-caixa"><table class="tabela insp__tabela"><thead><tr>' +
-    "<th>#</th><th></th><th>Criadora</th><th>Nicho</th><th>Formato</th><th>Pilar</th><th>Sobre o que é o vídeo</th><th>Usar?</th><th>Minha ideia</th><th>Postei</th><th>Meu link</th><th></th>" +
+    "<th>#</th><th></th><th>Criadora</th><th>Nicho</th><th>Formato</th><th>Pilar</th><th>Sobre o que é o vídeo</th><th>Usar?</th><th>Minha ideia</th><th>Produção</th><th>Postei</th><th>Meu link</th><th></th>" +
     "</tr></thead><tbody>" + lista.map(x =>
       '<tr data-id="' + esc(x.id) + '"' + (x.postei ? ' class="insp__postado"' : "") + ">" +
         '<td class="curta mudo">' + (x.numero || "") + "</td>" +
@@ -5110,6 +5179,7 @@ function tabelaInspiracao(lista) {
         '<td class="insp__sobre">' + esc(x.sobre || "") + "</td>" +
         "<td>" + seletorUsar(x) + "</td>" +
         '<td class="insp__ideia"><button type="button" class="insp__texto" data-ideia>' + (x.minha_ideia ? esc(x.minha_ideia) : '<span class="mudo">+ ideia</span>') + "</button></td>" +
+        '<td style="white-space:nowrap">' + botaoProducao(x, true) + "</td>" +
         '<td class="curta"><input type="checkbox" class="caixa" data-campo="postei"' + (x.postei ? " checked" : "") + ' aria-label="Já postei"></td>' +
         '<td style="white-space:nowrap" data-meulink>' + (x.meu_link ? '<a class="link" href="' + esc(x.meu_link) + '" target="_blank" rel="noopener">meu vídeo ↗</a> <button type="button" class="btn--icone" title="Trocar o link">' + ic("editar") + "</button>"
           : '<button type="button" class="insp__texto"><span class="mudo">+ link</span></button>') + "</td>" +
@@ -5133,8 +5203,10 @@ function cartaoInspiracao(x) {
         '<span class="mudo pequeno">#' + (x.numero || "") + "</span></div>" +
       (x.minha_ideia ? '<p class="rot__gancho" data-ideia style="cursor:pointer">💡 ' + esc(x.minha_ideia) + "</p>" : "") +
       '<div class="rot__acoes">' +
-        '<button type="button" class="btn btn--linha' + (x.usar === "sim" ? " insp__on" : "") + '" data-usar="sim">✅ Vou usar</button>' +
-        '<button type="button" class="btn btn--linha' + (x.usar === "nao" ? " insp__on" : "") + '" data-usar="nao">✖️ Não</button>' +
+        botaoProducao(x) +
+        (x.usar === "nao" ? '<button type="button" class="btn btn--linha" data-descartar>↩️ Voltar para a lista</button>'
+          : '<button type="button" class="btn btn--linha' + (x.usar === "sim" ? " insp__on" : "") + '" data-usar="sim">✅ Vou usar</button>' +
+            '<button type="button" class="btn btn--linha" data-descartar>🗑️ Descartar</button>') +
         '<button type="button" class="btn btn--linha' + (x.postei ? " insp__on" : "") + '" data-postei>' + (x.postei ? "☑️ Postei" : "☐ Postei") + "</button>" +
         (x.minha_ideia ? "" : '<button type="button" class="btn btn--linha" data-ideia>💡 Minha ideia</button>') +
         '<span data-meulink>' + (x.meu_link ? '<a class="btn btn--linha" href="' + esc(x.meu_link) + '" target="_blank" rel="noopener">🔗 Meu vídeo ↗</a>' : '<button type="button" class="btn btn--linha">🔗 Meu vídeo</button>') + "</span>" +
@@ -5146,9 +5218,303 @@ function cartaoInspiracao(x) {
 }
 
 /* ============================================================
+   9e. ABA PRODUÇÃO (os vídeos dela, da ideia até o post)
+   Um quadro com uma coluna por fase. Cada cartão abre a ficha do
+   vídeo: roteiro, legenda, hashtags, palavras-chave, data e redes.
+   ============================================================ */
+const FASES = [["ideia", "💡 Ideia"], ["roteiro", "📝 Roteiro"], ["gravacao", "🎥 Gravação"], ["edicao", "✂️ Edição"], ["thumbnail", "🖼️ Thumbnail"], ["programado", "📅 Programado"], ["postado", "✅ Postado"]];
+const REDES = [["instagram", "Instagram", "IG"], ["tiktok", "TikTok", "TT"], ["youtube", "YouTube Shorts", "YT"], ["x", "X", "X"]];
+const faseDe = (v) => FASES.find(f => f[0] === v) || FASES[0];
+const PALAVRAS_BASE = "UGC creator Canada, content creator Canada, UGC for brands, Canadian content creator, UGC creator, Beauty UGC, Tech Reviews, Tech UGC, UGC skincare, Toronto UGC, Canada UGC, Toronto content creator";
+const PR = { pilar: "", busca: "", postadosTodos: false, arrastando: null };
+const redesDe = (p) => (p && p.redes && typeof p.redes === "object") ? p.redes : {};
+const producaoDaInspiracao = (x) => D.producao.find(p => p.inspiracao_id === x.id);
+
+function montarProducao() {
+  $("#aba-producao").innerHTML =
+    '<p class="rot__frase">Os seus vídeos, da ideia até o post. Arraste o cartão para a próxima fase. Clique nele para abrir a ficha com roteiro, legenda, hashtags e redes.</p>' +
+    '<div class="ferramentas">' +
+      '<div class="rot__chips" id="prPilares" style="margin:0"></div>' +
+    "</div>" +
+    '<div class="ferramentas">' +
+      '<input class="entrada" id="prBusca" type="search" placeholder="Buscar pelo título ou pela ideia">' +
+      '<span class="espaco"></span>' +
+      '<button class="btn" id="prNovo">' + ic("mais") + " Nova ideia</button>" +
+      '<button class="btn btn--linha" id="prPalavras">⚙️ Palavras-chave base</button>' +
+    "</div>" +
+    '<div class="prod__quadro" id="prQuadro"></div>';
+  $("#prBusca").addEventListener("input", () => { PR.busca = $("#prBusca").value; desenharProducao(); });
+  $("#prPilares").addEventListener("click", (e) => { const b = e.target.closest("[data-p]"); if (!b) return; PR.pilar = PR.pilar === b.dataset.p ? "" : b.dataset.p; desenharProducao(); });
+  $("#prNovo").addEventListener("click", () => abrirFicha(null));
+  $("#prPalavras").addEventListener("click", () => editor({
+    titulo: "⚙️ As suas palavras-chave base",
+    topo: '<p class="mudo pequeno" style="margin-bottom:10px">A IA usa esta lista para montar a caixa de palavras-chave de cada vídeo, escolhendo só as que combinam com o nicho, e completa com palavras do nicho do vídeo. Separe por vírgula.</p>',
+    valores: { lista: D.config.producao_keywords || PALAVRAS_BASE },
+    campos: [{ nome: "lista", rot: "Palavras-chave", tipo: "textarea", linhas: 6, inteiro: true }],
+    aoSalvar: async (d) => salvaConfig("producao_keywords", d.lista || "")
+  }));
+
+  const q = $("#prQuadro");
+  q.addEventListener("click", (e) => {
+    if (e.target.closest("[data-mais]")) { PR.postadosTodos = true; desenharProducao(); return; }
+    const mover = e.target.closest("[data-mover]");
+    const card = e.target.closest("[data-id]"); if (!card) return;
+    const p = D.producao.find(x => x.id === card.dataset.id); if (!p) return;
+    if (mover) {
+      const i = FASES.findIndex(f => f[0] === p.fase) + Number(mover.dataset.mover);
+      if (i >= 0 && i < FASES.length) moverParaFase(p, FASES[i][0]);
+      return;
+    }
+    abrirFicha(p);
+  });
+  /* arrastar e soltar entre as colunas */
+  q.addEventListener("dragstart", (e) => { const c = e.target.closest("[data-id]"); if (!c) return; PR.arrastando = c.dataset.id; c.classList.add("arrastando"); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", c.dataset.id); } catch (x) {} });
+  q.addEventListener("dragend", (e) => { const c = e.target.closest("[data-id]"); if (c) c.classList.remove("arrastando"); $$(".prod__col.sobre", q).forEach(x => x.classList.remove("sobre")); });
+  q.addEventListener("dragover", (e) => { const col = e.target.closest(".prod__col"); if (!col || !PR.arrastando) return; e.preventDefault(); $$(".prod__col.sobre", q).forEach(x => x !== col && x.classList.remove("sobre")); col.classList.add("sobre"); });
+  q.addEventListener("drop", (e) => {
+    const col = e.target.closest(".prod__col"); if (!col || !PR.arrastando) return;
+    e.preventDefault(); col.classList.remove("sobre");
+    const p = D.producao.find(x => x.id === PR.arrastando); PR.arrastando = null;
+    if (!p) return;
+    /* a posição: antes do cartão em que soltou, ou no fim da coluna */
+    const alvo = e.target.closest("[data-id]");
+    const naColuna = D.producao.filter(x => x.fase === col.dataset.fase && x.id !== p.id).sort((a, b) => a.ordem - b.ordem);
+    let ordem;
+    if (alvo && alvo.dataset.id !== p.id) {
+      const i = naColuna.findIndex(x => x.id === alvo.dataset.id);
+      ordem = i <= 0 ? (naColuna[0] ? naColuna[0].ordem - 1 : 0) : (naColuna[i - 1].ordem + naColuna[i].ordem) / 2;
+    } else ordem = naColuna.length ? naColuna[naColuna.length - 1].ordem + 1 : 0;
+    moverParaFase(p, col.dataset.fase, ordem);
+  });
+}
+
+async function moverParaFase(p, fase, ordem) {
+  if (ordem == null) { const naColuna = D.producao.filter(x => x.fase === fase); ordem = naColuna.length ? Math.max(...naColuna.map(x => x.ordem)) + 1 : 0; }
+  const salvo = await salvarLinha("producao", { fase, ordem }, p.id);
+  if (!salvo) return;
+  troca(D.producao, salvo);
+  await sincronizaInspiracao(salvo);
+  desenharProducao();
+  if (fase === "postado" && p.fase !== "postado") torrada("✅ Postado! 🎉");
+}
+
+/* quando o vídeo é postado, a inspiração de onde ele veio ganha o tique e o link */
+async function sincronizaInspiracao(p) {
+  if (!p.inspiracao_id || p.fase !== "postado") return;
+  const x = D.inspiracoes.find(y => y.id === p.inspiracao_id); if (!x) return;
+  const link = REDES.map(r => (redesDe(p)[r[0]] || {}).link).find(Boolean) || null;
+  const patch = {};
+  if (!x.postei) patch.postei = true;
+  if (!x.meu_link && link) patch.meu_link = link;
+  if (!Object.keys(patch).length) return;
+  const salvo = await salvarLinha("inspiracoes", patch, x.id);
+  if (salvo) troca(D.inspiracoes, salvo);
+}
+
+function desenharProducao() {
+  if (!$("#prQuadro")) return;
+  $("#prPilares").innerHTML = '<span class="mudo pequeno" style="align-self:center">Pilar:</span>' + PILARES.map(p => {
+    const n = D.producao.filter(x => x.pilar === p[0] && x.fase !== "postado").length, feitos = D.producao.filter(x => x.pilar === p[0] && x.fase === "postado").length;
+    return '<button type="button" class="rot__chip' + (PR.pilar === p[0] ? " ativo" : "") + '" data-p="' + p[0] + '" title="' + n + " em produção, " + feitos + ' postados">' + p[1] + " <b>" + n + "</b>" + (feitos ? ' <span class="mudo">· ' + feitos + " ✓</span>" : "") + "</button>";
+  }).join("");
+  const busca = normaliza(PR.busca.trim());
+  const lista = D.producao.filter(p => (!PR.pilar || p.pilar === PR.pilar) && (!busca || normaliza([p.titulo, p.ideia, p.nicho].join(" ")).includes(busca)));
+  if (falhou.producao) { $("#prQuadro").innerHTML = '<p class="vazio">A tabela da produção ainda não existe no banco. Rode o sql-producao.sql no Supabase.</p>'; return; }
+  $("#prQuadro").innerHTML = FASES.map(([fase, nome]) => {
+    let col = lista.filter(p => p.fase === fase);
+    if (fase === "postado") col.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+    else if (fase === "programado") col.sort((a, b) => String(a.programado_para || "9").localeCompare(String(b.programado_para || "9")));
+    else col.sort((a, b) => a.ordem - b.ordem);
+    const total = col.length, corta = fase === "postado" && !PR.postadosTodos && total > 12;
+    if (corta) col = col.slice(0, 12);
+    return '<section class="prod__col" data-fase="' + fase + '"><header class="prod__cab"><b>' + nome + '</b><span class="pil c-cinza">' + total + "</span></header>" +
+      '<div class="prod__lista">' + (col.map(cartaoProducao).join("") || '<p class="prod__vazio">Arraste um cartão para cá</p>') +
+      (corta ? '<button type="button" class="btn btn--linha" data-mais style="width:100%">Ver todos os ' + total + "</button>" : "") + "</div></section>";
+  }).join("");
+}
+function cartaoProducao(p) {
+  const pil = pilarDe(p.pilar), r = redesDe(p);
+  const quando = p.programado_para ? new Date(p.programado_para) : null;
+  const i = FASES.findIndex(f => f[0] === p.fase);
+  return '<article class="prod__card" draggable="true" data-id="' + esc(p.id) + '">' +
+    '<div class="prod__titulo">' + (p.inspiracao_id ? '<span title="Nasceu de uma inspiração">💡 </span>' : "") + esc(p.titulo) + "</div>" +
+    '<div class="prod__meta">' + (pil ? '<span class="pil ' + pil[2] + '">' + pil[1] + "</span>" : "") +
+      (quando && !isNaN(quando) ? '<span class="pequeno">📅 ' + dataBR(isoLocal(quando)) + " " + pad(quando.getHours()) + ":" + pad(quando.getMinutes()) + "</span>" : "") + "</div>" +
+    '<div class="prod__redes">' + REDES.map(([k, , s]) => '<span class="prod__rede' + ((r[k] || {}).ok ? " ok" : "") + '" title="' + k + '">' + ((r[k] || {}).ok ? "✓ " : "") + s + "</span>").join("") +
+      '<span class="espaco"></span>' +
+      (i > 0 ? '<button type="button" class="prod__seta" data-mover="-1" title="Voltar uma fase">‹</button>' : "") +
+      (i < FASES.length - 1 ? '<button type="button" class="prod__seta" data-mover="1" title="Próxima fase">›</button>' : "") + "</div>" +
+    "</article>";
+}
+
+/* ----- a ficha do vídeo ----- */
+function abrirFicha(p, padrao) {
+  const v = Object.assign({ fase: "ideia", redes: {} }, padrao || {}, p || {});
+  const r = redesDe(v);
+  const insp = v.inspiracao_id ? D.inspiracoes.find(x => x.id === v.inspiracao_id) : null;
+  const local = v.programado_para ? (() => { const d = new Date(v.programado_para); return isNaN(d) ? "" : isoLocal(d) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes()); })() : "";
+  const opc = (lista, atual, vazio) => (vazio ? '<option value="">' + vazio + "</option>" : "") + lista.map(o => '<option value="' + o[0] + '"' + (o[0] === atual ? " selected" : "") + ">" + esc(o[1]) + "</option>").join("");
+  const temIA = !!D.config.openrouter_api_key;
+  abrirJanela({
+    titulo: p ? "🎬 " + p.titulo : "🎬 Nova ideia de vídeo",
+    larga: true,
+    corpo: '<form class="ficha__form" id="fcForm" novalidate>' +
+      '<div class="grade-form">' +
+        '<div class="campo inteiro"><label for="fcTitulo">Título do vídeo *</label><input id="fcTitulo" name="titulo" value="' + esc(v.titulo || "") + '" placeholder="Ex.: Como eu gravo UGC no meu home office"></div>' +
+        '<div class="campo"><label for="fcFase">Fase</label><select id="fcFase" name="fase">' + opc(FASES, v.fase) + "</select></div>" +
+        '<div class="campo"><label for="fcPilar">Pilar</label><select id="fcPilar" name="pilar">' + opc(PILARES.map(x => [x[0], x[1]]), v.pilar, "Escolha") + "</select></div>" +
+        '<div class="campo"><label for="fcNicho">Nicho</label><input id="fcNicho" name="nicho" value="' + esc(v.nicho || "") + '" list="fcNichoL" placeholder="Ex.: Skincare"><datalist id="fcNichoL">' + unicos("nicho").map(n => '<option value="' + esc(n) + '">').join("") + "</datalist></div>" +
+        '<div class="campo"><label for="fcFormato">Formato</label><input id="fcFormato" name="formato" value="' + esc(v.formato || "") + '" list="fcFormatoL" placeholder="Ex.: Bastidores (BTS)"><datalist id="fcFormatoL">' + unicos("formato").map(n => '<option value="' + esc(n) + '">').join("") + "</datalist></div>" +
+        '<div class="campo"><label for="fcQuando">Programado para</label><input id="fcQuando" name="programado_para" type="datetime-local" value="' + local + '"></div>' +
+        '<div class="campo"><label for="fcCapa">Texto da thumbnail</label><input id="fcCapa" name="texto_capa" value="' + esc(v.texto_capa || "") + '" placeholder="O texto que vai na capa"></div>' +
+      "</div>" +
+      (insp ? '<div class="ficha__insp">💡 Nasceu da inspiração <b>' + esc(insp.criadora || "") + "</b>: " + esc(insp.sobre || "") + ' <a class="link" href="' + esc(insp.url) + '" target="_blank" rel="noopener">ver o vídeo ↗</a></div>' : "") +
+      '<div class="campo" style="margin-top:12px"><label for="fcIdeia">💡 A ideia</label><textarea id="fcIdeia" name="ideia" rows="3" placeholder="Sobre o que é o seu vídeo e como você vai fazer">' + esc(v.ideia || "") + "</textarea></div>" +
+
+      '<div class="ficha__secao"><div class="ficha__cab"><h3>📝 Roteiro</h3><span class="espaco"></span>' +
+        '<select id="fcIdioma" class="entrada entrada--sel" style="height:30px;width:auto"><option value="inglês">Inglês</option><option value="português do Brasil">Português</option></select>' +
+        '<button type="button" class="btn btn--linha" id="fcIARoteiro"' + (temIA ? "" : " disabled title=\"Falta a chave do OpenRouter na aba Abordagens\"") + ">✨ Escrever com IA</button></div>" +
+        '<input class="entrada" id="fcPedido" placeholder="Pedido para a IA (opcional). Ex.: mais curto, com a Maya aparecendo no fim" style="margin-bottom:8px">' +
+        '<textarea class="entrada linha__texto" id="fcRoteiro" name="roteiro" placeholder="HOOK, depois as cenas com What I say e What we see, e o CTA">' + esc(v.roteiro || "") + "</textarea></div>" +
+
+      '<div class="ficha__secao"><div class="ficha__cab"><h3>✍️ Para postar</h3><span class="espaco"></span>' +
+        '<button type="button" class="btn btn--linha" id="fcIALegenda"' + (temIA ? "" : " disabled") + ">✨ Criar legenda, hashtags e palavras-chave</button>" +
+        '<button type="button" class="btn btn--linha" id="fcCopiar">📋 Copiar para postar</button></div>' +
+        '<div class="campo"><label for="fcLegenda">Legenda</label><textarea id="fcLegenda" name="legenda" rows="5">' + esc(v.legenda || "") + "</textarea></div>" +
+        '<div class="campo" style="margin-top:8px"><label for="fcHashtags">Hashtags (até 5) <span class="mudo" id="fcHashConta"></span></label><input id="fcHashtags" name="hashtags" value="' + esc(v.hashtags || "") + '" placeholder="#SkincareRoutine #SkincareUGC #TorontoUGC ..."></div>' +
+        '<div class="campo" style="margin-top:8px"><label for="fcPalavras">Caixa de palavras-chave</label><textarea id="fcPalavras" name="palavras_chave" rows="3" placeholder="skincare UGC Canada, Toronto skincare creator, ...">' + esc(v.palavras_chave || "") + "</textarea></div>" +
+        '<div id="fcIAAviso"></div></div>' +
+
+      '<div class="ficha__secao"><div class="ficha__cab"><h3>📲 Onde já postei</h3><span class="mudo pequeno">marcou uma rede, o vídeo vai para ✅ Postado</span></div>' +
+        REDES.map(([k, nome]) => '<div class="ficha__rede"><label class="campo--check"><input type="checkbox" class="caixa" data-rede="' + k + '"' + ((r[k] || {}).ok ? " checked" : "") + "> " + nome + "</label>" +
+          '<input class="entrada" data-rede-link="' + k + '" value="' + esc((r[k] || {}).link || "") + '" placeholder="link do post no ' + nome + '"></div>').join("") + "</div>" +
+      '<div class="campo" style="margin-top:12px"><label for="fcObs">Observações</label><textarea id="fcObs" name="obs" rows="2">' + esc(v.obs || "") + "</textarea></div>" +
+      '<div class="faixa escondido" id="fcErro" style="margin-top:10px"></div>' +
+    "</form>",
+    rodape: (p ? '<button class="btn btn--perigo" type="button" id="fcApagar">' + ic("lixo") + " Apagar</button>" : "") +
+      '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Cancelar</button><button class="btn" type="button" id="fcSalvar">Salvar</button>'
+  });
+  $("#janela .janela__caixa").classList.add("janela__caixa--ficha");
+  const conta = () => { const n = ($("#fcHashtags").value.match(/#[^\s#]+/g) || []).length; $("#fcHashConta").textContent = n ? "(" + n + ")" : ""; $("#fcHashConta").style.color = n > 5 ? "var(--c-vermelho)" : ""; };
+  $("#fcHashtags").addEventListener("input", conta); conta();
+  /* marcou a rede: o link fica em evidência */
+  $$("[data-rede]").forEach(c => c.addEventListener("change", () => { if (c.checked) $('[data-rede-link="' + c.dataset.rede + '"]').focus(); }));
+  $$("[data-rede-link]").forEach(inp => inp.addEventListener("input", () => { if (inp.value.trim()) $('[data-rede="' + inp.dataset.redeLink + '"]').checked = true; }));
+
+  $("#fcCopiar").addEventListener("click", async () => {
+    const t = [$("#fcLegenda").value.trim(), $("#fcPalavras").value.trim(), $("#fcHashtags").value.trim()].filter(Boolean).join("\n\n");
+    if (!t) { torrada("Ainda não tem legenda para copiar."); return; }
+    try { await navigator.clipboard.writeText(t); torrada("📋 Legenda, palavras-chave e hashtags copiadas."); } catch (e) { torrada("Não consegui copiar. Selecione e copie à mão.", true); }
+  });
+  $("#fcIARoteiro").addEventListener("click", () => iaRoteiro(insp));
+  $("#fcIALegenda").addEventListener("click", () => iaLegenda(insp));
+  if (p) duploClique($("#fcApagar"), async () => {
+    if (!(await apagarLinha("producao", p.id))) return;
+    D.producao = D.producao.filter(x => x.id !== p.id);
+    fecharJanela(); desenharProducao(); desenharInspiracao(); if (typeof desenharCalendario === "function") desenharCalendario();
+    torrada("🗑️ Vídeo apagado da produção.");
+  });
+  $("#fcSalvar").addEventListener("click", async () => {
+    const f = $("#fcForm");
+    const erro = (t) => { $("#fcErro").textContent = t; $("#fcErro").classList.remove("escondido"); };
+    const titulo = $("#fcTitulo").value.trim();
+    if (!titulo) { erro("Dê um título para o vídeo."); $("#fcTitulo").focus(); return; }
+    const redes = {};
+    REDES.forEach(([k]) => { const ok = $('[data-rede="' + k + '"]').checked, link = $('[data-rede-link="' + k + '"]').value.trim(); if (ok || link) redes[k] = { ok: ok || !!link, link: link || null }; });
+    const quando = f.elements.programado_para.value;
+    const dados = {
+      titulo, fase: f.elements.fase.value, pilar: f.elements.pilar.value || null, nicho: f.elements.nicho.value.trim() || null, formato: f.elements.formato.value.trim() || null,
+      programado_para: quando ? new Date(quando).toISOString() : null, texto_capa: f.elements.texto_capa.value.trim() || null,
+      ideia: f.elements.ideia.value.trim() || null, roteiro: f.elements.roteiro.value.trim() || null, legenda: f.elements.legenda.value.trim() || null,
+      hashtags: f.elements.hashtags.value.trim() || null, palavras_chave: f.elements.palavras_chave.value.trim() || null, obs: f.elements.obs.value.trim() || null, redes
+    };
+    /* postou em alguma rede: vai para Postado */
+    if (Object.values(redes).some(x => x.ok)) dados.fase = "postado";
+    if (!p) {
+      if (padrao && padrao.inspiracao_id) dados.inspiracao_id = padrao.inspiracao_id;
+      const naColuna = D.producao.filter(x => x.fase === dados.fase);
+      dados.ordem = naColuna.length ? Math.max(...naColuna.map(x => x.ordem)) + 1 : 0;
+    }
+    const b = $("#fcSalvar"); b.disabled = true; b.textContent = "Salvando...";
+    const salvo = await salvarLinha("producao", dados, p && p.id);
+    if (!salvo) { b.disabled = false; b.textContent = "Salvar"; return; }
+    if (p) troca(D.producao, salvo); else D.producao.push(salvo);
+    await sincronizaInspiracao(salvo);
+    fecharJanela();
+    desenharProducao(); desenharInspiracao(); if (typeof desenharCalendario === "function") desenharCalendario();
+    torrada(salvo.fase === "postado" && (!p || p.fase !== "postado") ? "✅ Postado! 🎉" : "✅ Salvo.");
+  });
+}
+
+/* ----- a IA da ficha (usa o cérebro dela, pela mesma chave das Abordagens) ----- */
+function dadosDoVideo(insp) {
+  const f = $("#fcForm"), pil = pilarDe(f.elements.pilar.value);
+  return "=== O VÍDEO (para o perfil DELA no Instagram, TikTok, YouTube Shorts e X; não é para uma marca) ===\n" +
+    "Título: " + ($("#fcTitulo").value.trim() || "(sem título)") + "\n" +
+    (pil ? "Pilar de conteúdo: " + pil[1].replace(/^\S+\s/, "") + " (" + pil[3] + ")\n" : "") +
+    (f.elements.nicho.value.trim() ? "Nicho: " + f.elements.nicho.value.trim() + "\n" : "") +
+    (f.elements.formato.value.trim() ? "Formato: " + f.elements.formato.value.trim() + "\n" : "") +
+    (f.elements.ideia.value.trim() ? "A ideia dela: " + f.elements.ideia.value.trim() + "\n" : "") +
+    (insp ? "A inspiração (vídeo de outra criadora que ela quer recriar do jeito dela, nunca copiar): " + (insp.criadora || "") + ": " + (insp.sobre || "") + (insp.minha_ideia ? " | A ideia dela para esse vídeo: " + insp.minha_ideia : "") + "\n" : "");
+}
+async function iaRoteiro(insp) {
+  if (!D.config.openrouter_api_key) { torrada("Falta a chave do OpenRouter, no quadro 🔑 IA da aba Abordagens.", true); return; }
+  if (!$("#fcTitulo").value.trim() && !$("#fcIdeia").value.trim()) { torrada("Escreva pelo menos o título ou a ideia do vídeo.", true); return; }
+  const b = $("#fcIARoteiro"); b.disabled = true; b.textContent = "✍️ Escrevendo... uns 20 segundos";
+  const idioma = $("#fcIdioma").value;
+  const r = await chamarIA([
+    { role: "system", content: "Você é a roteirista de vídeos curtos da Cintia, creator de UGC. Escreve para o perfil DELA, no jeito dela, com ritmo de gente de verdade.\n\n" + contextoDela() },
+    { role: "user", content: dadosDoVideo(insp) + ($("#fcPedido").value.trim() ? "\nPedido especial dela: " + $("#fcPedido").value.trim() + "\n" : "") +
+      "\nEscreva o roteiro em " + idioma + ", de 20 a 45 segundos, neste formato exato (sem markdown, sem asteriscos):\n" +
+      "HOOK\nO que aparece: ...\nFala: \"...\"\nTexto na tela: \"...\"\n\n" +
+      "CENA 1\nWhat I say: ...\nWhat we see: ...\n\n(mais cenas, numeradas, só as necessárias)\n\n" +
+      "CTA\nWhat I say: ...\nWhat we see: ...\n\n" +
+      "Regras: o gancho prende nos 2 primeiros segundos e combina com o pilar; linguagem simples, sem jargão de filmagem; só fatos reais dela (da lista do perfil), nunca invente produto, marca, número ou fato; o formato do vídeo combina com o nicho; se for inspirado em outra criadora, faça do jeito da Cintia, nunca uma cópia; nada de travessão. Não escreva nada antes do HOOK nem depois do CTA." }
+  ], "low", 6000);
+  b.disabled = false; b.textContent = "✨ Escrever com IA";
+  if (r.erro) { torrada(r.erro, true); return; }
+  const t = $("#fcRoteiro");
+  if (t.value.trim() && !confirmaTroca(t)) return;
+  t.value = semTravessao(r.texto).replace(/\*\*/g, "").trim();
+  if ($("#fcFase").value === "ideia") $("#fcFase").value = "roteiro";
+  torrada("📝 Roteiro pronto. Revise e clique em Salvar.");
+}
+/* se já tinha texto, guarda o antigo nas observações para não perder */
+function confirmaTroca(campo) {
+  const obs = $("#fcObs");
+  obs.value = (obs.value.trim() ? obs.value.trim() + "\n\n" : "") + "Versão anterior do roteiro:\n" + campo.value.trim();
+  return true;
+}
+async function iaLegenda(insp) {
+  if (!D.config.openrouter_api_key) { torrada("Falta a chave do OpenRouter, no quadro 🔑 IA da aba Abordagens.", true); return; }
+  if (!$("#fcTitulo").value.trim() && !$("#fcRoteiro").value.trim()) { torrada("Escreva o título ou o roteiro antes.", true); return; }
+  const b = $("#fcIALegenda"); b.disabled = true; b.textContent = "✍️ Criando... uns 20 segundos";
+  const r = await chamarIA([
+    { role: "system", content: "Você cria legendas, hashtags e palavras-chave de busca para os vídeos da Cintia, creator de UGC em Toronto. Responda só em JSON válido.\n\n" + contextoDela() },
+    { role: "user", content: dadosDoVideo(insp) + ($("#fcRoteiro").value.trim() ? "\n=== O ROTEIRO ===\n" + $("#fcRoteiro").value.trim() + "\n" : "") +
+      "\n=== AS PALAVRAS-CHAVE BASE DELA ===\n" + (D.config.producao_keywords || PALAVRAS_BASE) + "\n\n" +
+      "Crie, em " + $("#fcIdioma").value + ":\n" +
+      "1. legenda: de 2 a 5 linhas curtas. A primeira linha é um gancho que faz ler o resto. Termina com uma chamada simples (salvar, comentar ou seguir). Nada de hashtag dentro da legenda. Sem travessão.\n" +
+      "2. hashtags: EXATAMENTE 5, todas do MESMO nicho do vídeo (skincare traz skincare, haircare traz haircare, casa traz casa, tech traz tech). A mistura: 1 do nicho amplo (ex.: #SkincareRoutine), 1 do nicho específico ou do formato (ex.: #GRWM, #HairOilRoutine), 1 de UGC do nicho (ex.: #SkincareUGC, #TechUGC), 1 de lugar (#TorontoUGC ou #CanadaUGC) e 1 em alta no nicho, sem ano. Nada genérico sem relação (#love, #instagood, #fyp).\n" +
+      "3. palavras_chave: de 10 a 15 termos de busca, separados por vírgula, sem #. Use só as palavras-chave base que combinam com o nicho deste vídeo e complete com termos de busca do próprio nicho (ex.: \"skincare routine for sensitive skin\"). Pense no que uma marca ou um seguidor digitaria na busca.\n" +
+      "Responda EXATAMENTE assim: {\"legenda\": \"...\", \"hashtags\": [\"#...\", \"#...\", \"#...\", \"#...\", \"#...\"], \"palavras_chave\": [\"...\", \"...\"]}" }
+  ], "low", 5000);
+  b.disabled = false; b.textContent = "✨ Criar legenda, hashtags e palavras-chave";
+  if (r.erro) { torrada(r.erro, true); return; }
+  const j = lerJSON(r.texto);
+  if (!j || !j.legenda) { torrada("A IA respondeu fora do formato. Tente de novo.", true); return; }
+  const tags = (Array.isArray(j.hashtags) ? j.hashtags : String(j.hashtags || "").split(/\s+/)).map(h => "#" + String(h).replace(/^#+/, "").replace(/\s+/g, "")).filter(h => h.length > 1).slice(0, 5);
+  $("#fcLegenda").value = semTravessao(String(j.legenda)).trim();
+  $("#fcHashtags").value = tags.join(" ");
+  $("#fcHashtags").dispatchEvent(new Event("input"));
+  $("#fcPalavras").value = (Array.isArray(j.palavras_chave) ? j.palavras_chave.join(", ") : String(j.palavras_chave || "")).replace(/#/g, "");
+  torrada("✍️ Legenda, 5 hashtags e palavras-chave prontas. Revise e clique em Salvar.");
+}
+
+/* ============================================================
    10. MENU, GAVETA E SAIR
    ============================================================ */
-const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", abordar: "✍️ Abordagens", prospeccao: "📨 Prospecção", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo", inspiracao: "💡 Inspiração" };
+const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", abordar: "✍️ Abordagens", prospeccao: "📨 Prospecção", calendario: "Calendário", campanhas: "Campanhas", checklist: "Checklist Portfólio", roteiros: "🎬 Análise de vídeo", inspiracao: "💡 Inspiração", producao: "🎬 Produção" };
 const lateral = $("#lateral"), cortina = $("#cortina");
 const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classList.remove("aberta"); };
 function irPara(aba) {
@@ -5192,7 +5558,15 @@ seguro("Prospecção", () => { montarProspeccao(); desenharProspeccao(); });
 seguro("Checklist", montarChecklist);
 seguro("Roteiros", montarRoteiros);
 seguro("Inspiração", () => { montarInspiracao(); desenharInspiracao(); });
+seguro("Produção", () => { montarProducao(); desenharProducao(); });
 
-irPara(location.hash.slice(1));
+/* o link pode trazer um pedido junto: #inspiracao&add=... (botão do navegador) */
+const [abaInicial, ...pedidoInicial] = location.hash.slice(1).split("&");
+irPara(abaInicial);
+if (pedidoInicial.length) {
+  const params = new URLSearchParams(pedidoInicial.join("&"));
+  history.replaceState(null, "", "#" + (TITULOS[abaInicial] ? abaInicial : "portfolio"));
+  if (params.get("add")) seguro("Inspiração", () => chegouDoNavegador(params));
+}
 document.documentElement.classList.remove("travado");
 })();
