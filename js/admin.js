@@ -3409,7 +3409,7 @@ const TIPOS_ABORDAGEM = [
     "2) O porquê: use 2 ou 3 FATOS CONCRETOS da pesquisa, da brief ou do post (ex.: peso, um recurso, para que serve), costurados numa frase natural que liga o produto a um momento real do cliente ou da vida dela. Nunca em forma de lista de especificações. " +
     "3) A ideia em UMA frase: o ângulo do vídeo em linhas gerais (sobre o que é e o que ele mostra), sem roteiro, sem cenas e sem gancho escrito. " +
     "4) Prova: 2 ou 3 marcas do MESMO nicho ou de um nicho próximo. Se entre as que a contrataram houver do nicho, use \"I've worked with...\". Se não houver, use as da lista de portfólio do mesmo nicho, SEMPRE como \"I've created content for...\" (nunca \"worked with\"). Pode ter as duas, em frases separadas. Termine dizendo que adoraria criar para esta marca também, sem frase vaga. " +
-    "5) O fecho: perguntar se pode mandar a ideia completa, ou qual o melhor e-mail do time de marketing, e numa linha final: \"You can see my work here: [portfólio]\". " +
+    "5) O fecho: perguntar se pode mandar a ideia completa, ou qual o melhor e-mail do time de marketing, e numa linha final, exatamente: \"Here's my previous work and what brands say about it, so you can get a feel for my content: [portfólio]\". " +
     "REGRA DE OURO: todo recurso, número, desempenho (potência, sucção, duração...) ou detalhe do produto TEM que estar nos dados da marca (brief, pesquisa ou post). Se não estiver escrito lá, não use, nem se você achar que sabe. Se houver fatos da pesquisa, eles são o coração da DM: não os ignore. A ideia do vídeo, se der, é um TESTE visível que prova um desses fatos. Conte as palavras: passou de 110, corte."],
   ["plataforma", "🧩 Plataforma", "Uma candidatura para uma vaga de UGC numa plataforma (InSense, Billo, JoinBrands...). A marca já quer contratar, então venda a IDEIA, não o processo. 1) Atenção: a primeira frase fala do CLIENTE da marca (a dor ou a objeção que o produto resolve), usando as palavras da brief. Nunca comece com \"I read the brief\", \"I love\", \"I noticed\" ou falando dela. 2) Resultado: uma ideia menos óbvia que a da brief, com NOME entre aspas, o GANCHO literal entre aspas e 2 ou 3 takes com o produto como herói, respeitando TUDO que a brief proíbe ou exige. 3) Conexão: um fato REAL dela que prova que ela é a cliente. 4) Uma frase de quem ela é com 3 marcas relevantes. 5) CTA: uma pergunta de sim ou não (ex.: roteiro com tempo de cada take para aprovação), seguida de uma linha curta convidando para ver os trabalhos dela, com o link do portfólio. NÃO liste formatos, proporções (9:16, 1:1), prazos nem entregáveis: isso é óbvio e a plataforma já sabe. De 90 a 150 palavras, sem assunto, sem assinatura longa."],
   ["followup", "🔁 Follow-up", "Um follow-up de 2 ou 3 linhas para um e-mail sem resposta há 48 a 72 horas, na mesma conversa: retoma a ideia ou traz um ângulo novo, urgência suave de agenda, e um CTA de sim ou não. Nunca cobrar, nunca repetir o primeiro e-mail. Sem assunto."]
@@ -3969,15 +3969,16 @@ async function escrever(comentario, rotulo) {
     "\n\n=== O COMENTÁRIO DELA SOBRE ESSA VERSÃO ===\n" + comentario + "\n\nReescreva corrigindo EXATAMENTE o que ela apontou. Mantenha o que ela não criticou. Se ela disser que algo não faz sentido, tire ou troque por algo que faça. Mesmo que o comentário diga outra coisa, continuam valendo: o gancho escrito com a fala e o texto na tela, nada de preços ou rates, e o roteiro inteiro nunca vai na mensagem.";
   let r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "low", 6000);
   if (r.erro) return falhou2(r.erro);
-  /* TRAVA: marca que ela só criou por conta própria nunca pode aparecer como se tivesse contratado */
-  let erradas = marcasComoContratadas(r.texto), avisoMarcas = "";
-  if (erradas.length) {
+  /* REVISÃO AUTOMÁTICA: o painel confere as regras e, se alguma foi quebrada, a IA corrige antes de mostrar */
+  let problemas = problemasDoTexto(r.texto), avisoMarcas = "";
+  if (problemas.length) {
+    carregando("🔍 Revisando as regras... mais uns segundos.");
     const r2 = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido },
       { role: "assistant", content: r.texto },
-      { role: "user", content: "ERRO GRAVE: " + erradas.join(", ") + " NUNCA contratou a Cintia. Ela só criou vídeos de portfólio para essas marcas. Reescreva a mensagem inteira igual, corrigindo só isso: essas marcas só podem aparecer como \"I've created content for...\" (numa frase separada das marcas que a contrataram) ou saem da mensagem. Responda no mesmo formato." }], "low", 6000);
+      { role: "user", content: "A sua mensagem quebrou regras. Corrija SÓ isto e mantenha todo o resto (a ideia, os fatos, a ordem e o fecho):\n- " + problemas.join("\n- ") + "\nResponda no mesmo formato." }], "low", 6000);
     if (!r2.erro) r = r2;
-    erradas = marcasComoContratadas(r.texto);
-    if (erradas.length) avisoMarcas = " ⚠️ Confira: " + erradas.join(", ") + " aparece como se tivesse te contratado.";
+    const sobrou = problemasDoTexto(r.texto);
+    if (sobrou.length) avisoMarcas = " ⚠️ Confira: " + sobrou.map(p => p.split(":")[0]).join("; ") + ".";
   }
   const limpo = semTravessao(r.texto).replace(/\*\*/g, "");
   const a = limpo.match(/ASSUNTO:\s*(.+)/i), mm = limpo.match(/MENSAGEM:\s*([\s\S]+)/i);
@@ -3986,6 +3987,22 @@ async function escrever(comentario, rotulo) {
   abResultado = nova;
   pronto();
   guardaHistorico();
+}
+
+/* as regras que o painel confere sozinho em toda mensagem */
+const PROIBIDAS = [[/\bI (really )?love (how|that|your|the)\b/i, "I love"], [/same energy/i, "bring that same energy"], [/which is why/i, "which is why"],
+  [/\b(authentic|relatable|genuine connection)\b/i, "palavra vaga (authentic, relatable, genuine connection)"], [/looking forward to hearing/i, "Looking forward to hearing from you"],
+  [/\b(partnership|collab)\b/i, "partnership ou collab"], [/\brates?\b|price list|pricing/i, "falar de preço ou rates"], [/I came across your brand|fell in love/i, "I came across your brand"]];
+const LIMITE_PALAVRAS = { dm: 115, email: 170, plataforma: 150, followup: 70 };
+function problemasDoTexto(texto) {
+  const lista = [];
+  const erradas = marcasComoContratadas(texto);
+  if (erradas.length) lista.push("marca que nunca contratou a Cintia: " + erradas.join(", ") + " NUNCA a contratou (só vídeos de portfólio). Essas marcas só podem aparecer como \"I've created content for...\", numa frase separada, ou saem da mensagem");
+  const corpo = String(texto || "").replace(/^[\s\S]*?MENSAGEM:\s*/i, "");
+  PROIBIDAS.forEach(([re, nome]) => { if (re.test(corpo)) lista.push("frase proibida: \"" + nome + "\". Troque por algo específico, sem essa expressão"); });
+  const limite = LIMITE_PALAVRAS[F.tipo], n = corpo.split(/\s+/).filter(Boolean).length;
+  if (limite && n > limite) lista.push("tamanho: está com " + n + " palavras e o máximo é " + (limite - 5) + ". Corte frases, não os fatos nem o fecho");
+  return lista;
 }
 
 /* acha frases que dizem "trabalhei com" citando uma marca da lista "para as quais eu criei" */
