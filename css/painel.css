@@ -148,6 +148,12 @@ svg.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor
 .lateral__marca { font-weight: 700; font-size: 14px; padding: 0 10px 18px; letter-spacing: .02em; }
 .lateral__marca span { color: var(--red); }
 .lateral__secao { font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); padding: 14px 10px 6px; }
+button.lateral__secao { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; border-radius: 6px; }
+button.lateral__secao:hover { color: var(--text); }
+.menu__seta { width: 14px; height: 14px; margin-left: auto; transition: transform .2s; }
+.menu__grupo.fechado .menu__seta { transform: rotate(-90deg); }
+.menu__grupo.fechado .menu__itens { display: none; }
+.lateral { overflow-y: auto; }
 .menu__item {
   width: 100%; display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px;
   border-radius: var(--radius); font-size: 13px; color: var(--muted); text-align: left;

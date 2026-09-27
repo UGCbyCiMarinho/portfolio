@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../css/painel.css?v=53">
+<link rel="stylesheet" href="../css/painel.css?v=54">
 <script>
   /* usa o mesmo tom escolhido no portfólio */
   try { var t = localStorage.getItem("tema"); if (t === "bege" || t === "espresso") document.documentElement.dataset.tema = t; } catch (e) {}
@@ -21,45 +21,65 @@
 <aside class="lateral" id="lateral">
   <div class="lateral__marca">Ci <span>Marinho</span></div>
 
-  <div class="lateral__secao">meu site</div>
-  <button class="menu__item" data-aba="portfolio">
-    <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>Portfólio
-  </button>
-  <button class="menu__item" data-aba="marcas">
-    <svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Inbound
-  </button>
+  <div class="menu__grupo" data-grupo="site">
+    <button type="button" class="lateral__secao" data-alterna aria-expanded="true">🌐 Meu site<svg class="ic menu__seta" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="menu__itens">
+    <button class="menu__item" data-aba="portfolio">
+      <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>Portfólio
+    </button>
+    <button class="menu__item" data-aba="marcas">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Inbound
+    </button>
+    <button class="menu__item" data-aba="checklist">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Checklist
+    </button>
+    </div>
+  </div>
 
-  <div class="lateral__secao">minha rotina</div>
-  <button class="menu__item" data-aba="base">
-    <svg class="ic" viewBox="0 0 24 24"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.5"/></svg>Marcas
-  </button>
-  <button class="menu__item" data-aba="abordar">
-    <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Abordagens
-  </button>
-  <button class="menu__item" data-aba="prospeccao">
-    <svg class="ic" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>Prospecção
-  </button>
-  <button class="menu__item" data-aba="funil">
-    <svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Prospectado × Fechado
-  </button>
-  <button class="menu__item" data-aba="calendario">
-    <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Calendário
-  </button>
-  <button class="menu__item" data-aba="campanhas">
-    <svg class="ic" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Campanhas
-  </button>
-  <button class="menu__item" data-aba="checklist">
-    <svg class="ic" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Checklist
-  </button>
-  <button class="menu__item" data-aba="roteiros">
-    <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>Análise de vídeo
-  </button>
-  <button class="menu__item" data-aba="inspiracao">
-    <svg class="ic" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>Inspiração
-  </button>
-  <button class="menu__item" data-aba="producao">
-    <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/></svg>Produção
-  </button>
+  <div class="menu__grupo" data-grupo="prospeccao">
+    <button type="button" class="lateral__secao" data-alterna aria-expanded="true">🎯 Prospecção<svg class="ic menu__seta" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="menu__itens">
+    <button class="menu__item" data-aba="base">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.5"/></svg>Marcas
+    </button>
+    <button class="menu__item" data-aba="abordar">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Abordagens
+    </button>
+    <button class="menu__item" data-aba="prospeccao">
+      <svg class="ic" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>Prospecção
+    </button>
+    <button class="menu__item" data-aba="funil">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Prospectado × Fechado
+    </button>
+    </div>
+  </div>
+
+  <div class="menu__grupo" data-grupo="trabalhos">
+    <button type="button" class="lateral__secao" data-alterna aria-expanded="true">💼 Meus trabalhos<svg class="ic menu__seta" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="menu__itens">
+    <button class="menu__item" data-aba="campanhas">
+      <svg class="ic" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Campanhas
+    </button>
+    <button class="menu__item" data-aba="roteiros">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>Análise de vídeo
+    </button>
+    </div>
+  </div>
+
+  <div class="menu__grupo" data-grupo="redes">
+    <button type="button" class="lateral__secao" data-alterna aria-expanded="true">📱 Minhas redes<svg class="ic menu__seta" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="menu__itens">
+    <button class="menu__item" data-aba="inspiracao">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>Inspiração
+    </button>
+    <button class="menu__item" data-aba="producao">
+      <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/></svg>Produção
+    </button>
+    <button class="menu__item" data-aba="calendario">
+      <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Calendário
+    </button>
+    </div>
+  </div>
 
   <div class="lateral__pe">
     <div class="lateral__email" id="meuEmail"></div>
@@ -96,9 +116,9 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="../js/banco.js?v=53"></script>
-<script src="../js/biblioteca.js?v=53"></script>
+<script src="../js/banco.js?v=54"></script>
+<script src="../js/biblioteca.js?v=54"></script>
 <!-- quando mudar algum arquivo do painel, aumente o número v= para o navegador buscar a versão nova -->
-<script src="../js/admin.js?v=53"></script>
+<script src="../js/admin.js?v=54"></script>
 </body>
 </html>

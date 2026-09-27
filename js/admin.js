@@ -5488,6 +5488,7 @@ const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classLis
 function irPara(aba) {
   if (!TITULOS[aba]) aba = "portfolio";
   $$(".menu__item").forEach(b => b.classList.toggle("ativo", b.dataset.aba === aba));
+  if (typeof aplicaGrupos === "function") aplicaGrupos();
   $$(".aba").forEach(s => s.classList.toggle("ativa", s.id === "aba-" + aba));
   $("#titulo").textContent = TITULOS[aba];
   document.title = TITULOS[aba] + " · Admin";
@@ -5497,6 +5498,24 @@ function irPara(aba) {
   window.scrollTo(0, 0);
 }
 $$(".menu__item").forEach(b => b.addEventListener("click", () => irPara(b.dataset.aba)));
+/* tópicos do menu que abrem e fecham (o painel lembra como ela deixou) */
+let gruposFechados = [];
+try { gruposFechados = JSON.parse(localStorage.getItem("admin-menu-fechados") || "[]") || []; } catch (e) {}
+function aplicaGrupos() {
+  $$(".menu__grupo").forEach(g => {
+    const fechado = gruposFechados.includes(g.dataset.grupo) && !$(".menu__item.ativo", g);  /* o tópico da aba aberta fica sempre aberto */
+    g.classList.toggle("fechado", fechado);
+    $("[data-alterna]", g).setAttribute("aria-expanded", String(!fechado));
+  });
+}
+$$(".menu__grupo [data-alterna]").forEach(b => b.addEventListener("click", () => {
+  const grupo = b.closest(".menu__grupo"), g = grupo.dataset.grupo;
+  const fechar = !grupo.classList.contains("fechado");
+  gruposFechados = gruposFechados.filter(x => x !== g).concat(fechar ? [g] : []);
+  try { localStorage.setItem("admin-menu-fechados", JSON.stringify(gruposFechados)); } catch (e) {}
+  grupo.classList.toggle("fechado", fechar);
+  b.setAttribute("aria-expanded", String(!fechar));
+}));
 $("#btnGaveta").addEventListener("click", () => { lateral.classList.add("aberta"); cortina.classList.add("aberta"); });
 cortina.addEventListener("click", fechaGaveta);
 $("#meuEmail").textContent = sessao.user.email || "";
