@@ -1475,12 +1475,34 @@ function mostraVideos(lista) {
     try { host = new URL(document.referrer).hostname.replace(/^(www|m|l|lm)\./, ""); } catch (e) {}
     if (host && host !== location.hostname.replace(/^www\./, "")) origem = nome(host);
   }
-  function envia() {
+  /* celular x computador: o próprio navegador informa, é exato */
+  function dispositivoAtual() {
+    const ua = navigator.userAgent || "";
+    const movel = /Mobi|Android|iPhone|iPod|Windows Phone/i.test(ua) ||
+      (/iPad|Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+    return movel ? "movel" : "computador";
+  }
+  /* país por IP (serviço gratuito). Se demorar/falhar, fica sem país. Só a sigla, nada pessoal. */
+  async function paisDoIP() {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 2500);
+      const r = await fetch("https://ipapi.co/json/", { signal: ctrl.signal });
+      clearTimeout(t);
+      const j = await r.json();
+      const cc = String((j && j.country_code) || "").toUpperCase();
+      return /^[A-Z]{2}$/.test(cc) ? cc : null;
+    } catch (e) { return null; }
+  }
+  async function envia() {
     if (!window.banco) return;
-    banco.auth.getSession().then(({ data }) => {
-      if (data && data.session) return;
-      return banco.from("visitas").insert({ pagina: location.pathname.slice(0, 200), origem });
-    }).catch(() => {});
+    try {
+      const { data } = await banco.auth.getSession();
+      if (data && data.session) return;                 /* logada = não conta */
+      const dispositivo = dispositivoAtual();
+      const pais = await paisDoIP();
+      await banco.from("visitas").insert({ pagina: location.pathname.slice(0, 200), origem, pais, dispositivo });
+    } catch (e) { /* silencioso */ }
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", envia);
   else envia();

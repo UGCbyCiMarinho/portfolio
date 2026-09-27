@@ -131,7 +131,7 @@ const ESPERADO = {
   marcados: ["chave"],
   roteiros: ["fonte", "url", "perfil", "de_quem", "titulo", "transcricao", "legenda", "postado_em", "tags", "obs", "status", "erro", "gancho", "corpo", "cta", "analise", "metricas", "capa"],
   configuracoes: ["chave", "valor"],
-  visitas: ["data", "pagina", "origem"]
+  visitas: ["data", "pagina", "origem", "pais", "dispositivo"]
 };
 function confereCampos(tabela, linhas) {
   if (!linhas.length || !ESPERADO[tabela]) return;
@@ -385,6 +385,10 @@ function montarPortfolio() {
       '<div class="bloco"><div class="bloco__cab"><h2>De onde as pessoas chegaram</h2></div><div id="pOrigens"></div></div>' +
     "</div>" +
     '<div class="duas" style="margin-top:16px">' +
+      '<div class="bloco"><div class="bloco__cab"><h2>Visitas por país</h2><span class="mudo pequeno" id="pPaisesConta"></span></div><div id="pPaises"></div></div>' +
+      '<div class="bloco"><div class="bloco__cab"><h2>Dispositivos</h2></div><div id="pDispositivos"></div></div>' +
+    "</div>" +
+    '<div class="duas" style="margin-top:16px">' +
       '<div class="bloco"><div class="bloco__cab"><h2>Vídeos mais clicados</h2></div><div id="pMaisClicados"></div></div>' +
       '<div class="bloco"><div class="bloco__cab"><h2>Do primeiro clique até a mensagem</h2></div><div id="pFunil"></div></div>' +
     "</div>" +
@@ -470,6 +474,35 @@ function desenharPortfolio() {
     : '<div class="origens">' + lista.map(([o, n]) =>
         '<div><div class="origem__linha"><span>' + esc(o) + '</span><span class="mudo">' + inteiro(n) + " · " + Math.round(n / total * 100) + "%</span></div>" +
         '<div class="origem__trilho"><span style="width:' + Math.round(n / total * 100) + '%"></span></div></div>').join("") + "</div>";
+
+  /* ----- Visitas por país e por dispositivo ----- */
+  const bandeira = (cc) => /^[A-Z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc].map(c => 127397 + c.charCodeAt(0))) : "🏳️";
+  const nomePais = (() => {
+    let dn = null; try { dn = new Intl.DisplayNames(["pt"], { type: "region" }); } catch (e) {}
+    return cc => { try { return (dn && dn.of(cc)) || cc; } catch (e) { return cc; } };
+  })();
+  const paises = {}, dispos = {};
+  D.visitas.forEach(v => {
+    if (v.pais) paises[v.pais] = (paises[v.pais] || 0) + 1;
+    if (v.dispositivo) dispos[v.dispositivo] = (dispos[v.dispositivo] || 0) + 1;
+  });
+  const listaPaises = Object.entries(paises).sort((a, b) => b[1] - a[1]);
+  const maiorPais = listaPaises.length ? listaPaises[0][1] : 0;
+  if ($("#pPaisesConta")) $("#pPaisesConta").textContent = listaPaises.length ? plural(listaPaises.length, "país", "países") : "";
+  if ($("#pPaises")) $("#pPaises").innerHTML = (semVisitas || !listaPaises.length)
+    ? '<p class="vazio">Aqui vai aparecer de quais países as pessoas abriram o seu portfólio. Começa a contar a partir de agora.</p>'
+    : '<div class="origens">' + listaPaises.map(([cc, n]) =>
+        '<div><div class="origem__linha"><span>' + bandeira(cc) + " " + esc(nomePais(cc)) + '</span><span class="mudo">' + inteiro(n) + " · " + Math.round(n / total * 100) + "%</span></div>" +
+        '<div class="origem__trilho"><span style="width:' + Math.round(n / maiorPais * 100) + '%"></span></div></div>').join("") + "</div>";
+
+  const rotuloDisp = { computador: "🖥️ Computador", movel: "📱 Dispositivo móvel" };
+  const listaDisp = Object.entries(dispos).sort((a, b) => b[1] - a[1]);
+  const maiorDisp = listaDisp.length ? listaDisp[0][1] : 0;
+  if ($("#pDispositivos")) $("#pDispositivos").innerHTML = (semVisitas || !listaDisp.length)
+    ? '<p class="vazio">Aqui vai aparecer quantas visitas vieram do computador e quantas do celular. Começa a contar a partir de agora.</p>'
+    : '<div class="origens">' + listaDisp.map(([d, n]) =>
+        '<div><div class="origem__linha"><span>' + esc(rotuloDisp[d] || d) + '</span><span class="mudo">' + inteiro(n) + " · " + Math.round(n / total * 100) + "%</span></div>" +
+        '<div class="origem__trilho"><span style="width:' + Math.round(n / maiorDisp * 100) + '%"></span></div></div>').join("") + "</div>";
 
   /* ----- Vídeos mais clicados + funil "do primeiro clique até a mensagem" (tabela eventos) ----- */
   const semEventos = falhou.eventos;
