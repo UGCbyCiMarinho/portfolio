@@ -3404,12 +3404,12 @@ const OPENROUTER = "https://openrouter.ai/api/v1";
 const MODELOS_IA = [["anthropic/claude-sonnet-5", "Claude Sonnet 5 (rápido, uns US$ 0,01 por mensagem)"], ["anthropic/claude-opus-5.5", "Claude Opus 5.5 (caprichado, uns US$ 0,02)"]];
 const TIPOS_ABORDAGEM = [
   ["email", "✉️ E-mail", "Um e-mail frio de primeiro contato no método A.C.R. ASSUNTO funcional citando o produto. Saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\". 1) Atenção: a primeira frase fala do CLIENTE da marca (uma dor, um desejo, um momento) ou de algo específico do produto ou de um post, nunca da Cintia. 2) Resultado: a ideia de vídeo com NOME entre aspas, o GANCHO literal entre aspas (o que aparece e o que ela fala nos primeiros segundos) e a sequência curta de takes com o produto como herói. 3) Conexão: um fato REAL da vida dela que prova que ela é a cliente. 4) Uma frase sobre quem ela é e 3 marcas relevantes. 5) CTA: uma pergunta de sim ou não, seguida de uma linha curta convidando para ver os trabalhos dela, com o link do portfólio (ex.: \"In the meantime, you can see my recent work here: [portfólio]\"). No máximo 160 palavras. Assinatura \"Warmly,\" + nome."],
-  ["dm", "💬 DM", "Uma DM fria de Instagram, de 70 a 110 palavras, em 4 ou 5 parágrafos curtos, sem assunto e sem links. " +
+  ["dm", "💬 DM", "Uma DM fria de Instagram, de 70 a 110 palavras, em 4 ou 5 parágrafos curtos, sem assunto. O único link é o do portfólio, no final. " +
     "1) Abertura: \"Hi [Marca] team!\", ela se apresenta em meia frase (\"I'm [nome], a UGC creator based in [cidade]\") e já emenda um elogio ESPECÍFICO a algo real da marca ou do produto. " +
     "2) O porquê: use 2 ou 3 FATOS CONCRETOS da pesquisa, da brief ou do post (ex.: peso, um recurso, para que serve), costurados numa frase natural que liga o produto a um momento real do cliente ou da vida dela. Nunca em forma de lista de especificações. " +
     "3) A ideia em UMA frase: o ângulo do vídeo em linhas gerais (sobre o que é e o que ele mostra), sem roteiro, sem cenas e sem gancho escrito. " +
-    "4) Prova: uma frase com 2 ou 3 marcas com quem ela já trabalhou (da lista do perfil, de preferência do mesmo nicho) e que ela adoraria criar para esta marca também. " +
-    "5) O fecho: perguntar se pode mandar a ideia completa, ou qual o melhor e-mail do time de marketing. " +
+    "4) Prova: uma frase com 2 ou 3 marcas que a contrataram (da lista do perfil, de preferência do mesmo nicho) e que ela adoraria criar para esta marca também. " +
+    "5) O fecho: perguntar se pode mandar a ideia completa, ou qual o melhor e-mail do time de marketing, e numa linha final: \"You can see my work here: [portfólio]\". " +
     "REGRA DE OURO: todo recurso, número ou detalhe do produto TEM que estar nos dados da marca (brief, pesquisa ou post). Se não estiver escrito lá, não use, nem se você achar que sabe. Se houver fatos da pesquisa, eles são o coração da DM: não os ignore."],
   ["plataforma", "🧩 Plataforma", "Uma candidatura para uma vaga de UGC numa plataforma (InSense, Billo, JoinBrands...). A marca já quer contratar, então venda a IDEIA, não o processo. 1) Atenção: a primeira frase fala do CLIENTE da marca (a dor ou a objeção que o produto resolve), usando as palavras da brief. Nunca comece com \"I read the brief\", \"I love\", \"I noticed\" ou falando dela. 2) Resultado: uma ideia menos óbvia que a da brief, com NOME entre aspas, o GANCHO literal entre aspas e 2 ou 3 takes com o produto como herói, respeitando TUDO que a brief proíbe ou exige. 3) Conexão: um fato REAL dela que prova que ela é a cliente. 4) Uma frase de quem ela é com 3 marcas relevantes. 5) CTA: uma pergunta de sim ou não (ex.: roteiro com tempo de cada take para aprovação), seguida de uma linha curta convidando para ver os trabalhos dela, com o link do portfólio. NÃO liste formatos, proporções (9:16, 1:1), prazos nem entregáveis: isso é óbvio e a plataforma já sabe. De 90 a 150 palavras, sem assunto, sem assinatura longa."],
   ["followup", "🔁 Follow-up", "Um follow-up de 2 ou 3 linhas para um e-mail sem resposta há 48 a 72 horas, na mesma conversa: retoma a ideia ou traz um ângulo novo, urgência suave de agenda, e um CTA de sim ou não. Nunca cobrar, nunca repetir o primeiro e-mail. Sem assunto."]
@@ -3473,7 +3473,8 @@ function montarAbordar() {
             campo("pPortfolio", "Portfólio", "Escreva aqui. Ex.: https://seusite.com", p.portfolio) +
             campo("pCidade", "Cidade", "Escreva aqui. Ex.: Toronto, Canada", p.cidade) +
             campo("pDif", "Diferenciais", "Escreva aqui o que só você é", p.diferenciais, true) +
-            campo("pMarcas", "Marcas com quem já trabalhei", "Escreva aqui as marcas", p.marcas, true) +
+            campo("pMarcas", "Marcas que me contrataram", "Escreva aqui as marcas", p.marcas, true) +
+            campo("pCriei", "Marcas para as quais eu criei (vídeos de portfólio, sem contrato)", "Escreva aqui as marcas", p.criei, true) +
             campo("pSobre", "Mais sobre mim (opcional)", "Escreva aqui, se quiser", p.sobre, true) +
           '</div><button type="button" class="btn btn--full" id="pSalvar" style="margin-top:10px">Salvar meus dados</button></div></details>' +
         '<details class="sanfona" id="abEstilo"' + (D.config.abordagem_estilo ? "" : " open") + '><summary><span class="emoji">🎨</span><div class="sanfona__txt"><div class="sanfona__tit">Meu estilo de abordagem</div><div class="sanfona__sub">' +
@@ -3511,7 +3512,7 @@ function montarAbordar() {
   zona.addEventListener("drop", (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) lerBrief(f); });
   $("#pSalvar").addEventListener("click", async () => {
     const perfil = { nome: $("#pNome").value.trim(), instagram: $("#pInsta").value.trim(), portfolio: $("#pPortfolio").value.trim(), cidade: $("#pCidade").value.trim(),
-      diferenciais: $("#pDif").value.trim(), marcas: $("#pMarcas").value.trim(), sobre: $("#pSobre").value.trim() };
+      diferenciais: $("#pDif").value.trim(), marcas: $("#pMarcas").value.trim(), criei: $("#pCriei").value.trim(), sobre: $("#pSobre").value.trim() };
     if (!perfil.nome) { torrada("Falta o seu nome no campo \"Nome e assinatura\". Digite e salve de novo.", true); $("#pNome").focus(); return; }
     if (await salvaConfig("abordagem_perfil", JSON.stringify(perfil))) { $("#abDados").open = false; $("#abDados .sanfona__sub").textContent = perfil.nome + (perfil.instagram ? " · " + perfil.instagram : ""); torrada("Meus dados salvos ✓"); }
   });
@@ -3734,7 +3735,7 @@ async function falaDoVideo(url) {
 function contextoDela() {
   const p = cfgPerfil();
   return "=== QUEM ELA É ===\n" +
-    [["Nome e assinatura", p.nome], ["Instagram", p.instagram], ["Portfólio", p.portfolio], ["Cidade", p.cidade], ["Diferenciais", p.diferenciais], ["Marcas com quem já trabalhou", p.marcas], ["Mais sobre ela", p.sobre]]
+    [["Nome e assinatura", p.nome], ["Instagram", p.instagram], ["Portfólio", p.portfolio], ["Cidade", p.cidade], ["Diferenciais", p.diferenciais], ["Marcas que a contrataram (as únicas que podem ir em \"I've worked with\")", p.marcas], ["Marcas para as quais ela criou vídeos de portfólio, SEM contrato (só como \"I've created content for\", nunca como \"worked with\"; use só quando combinar mais com o nicho que as contratadas)", p.criei], ["Mais sobre ela", p.sobre]]
       .filter(x => x[1]).map(x => x[0] + ": " + x[1]).join("\n") + "\n\n" +
     (D.config.abordagem_estilo ? "=== O GUIA DE ESTILO DELA ===\n" + D.config.abordagem_estilo + "\n\n" : "") +
     "=== REGRAS QUE VALEM SEMPRE ===\n" +
@@ -3917,7 +3918,7 @@ Warmly,
 
 function instrucaoRedatora() {
   const portfolio = cfgPerfil().portfolio || "";
-  if (F.tipo === "dm") return (TIPOS_ABORDAGEM.find(t => t[0] === "dm") || [])[2];
+  if (F.tipo === "dm") return ((TIPOS_ABORDAGEM.find(t => t[0] === "dm") || [])[2] || "").replace("[portfólio]", portfolio || "https://cimarinho.com");
   if (F.tipo === "followup") return (TIPOS_ABORDAGEM.find(t => t[0] === "followup") || [])[2];
   return (F.tipo === "plataforma" ? "Uma candidatura para a vaga, sem assunto e sem assinatura longa." : "Um e-mail frio, com ASSUNTO curto que cite a ideia ou o produto, saudação \"Hi [nome],\" se o nome for conhecido, senão \"Hello [Marca] team,\", e assinatura \"Warmly,\" + o nome dela.") + "\n\n" +
     "ESTRUTURA: a do MODELO APROVADO PELA CINTIA, em 5 partes, e cada parte puxa a próxima:\n" +
