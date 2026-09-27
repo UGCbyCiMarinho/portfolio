@@ -5124,8 +5124,29 @@ function produzirInspiracao(x) {
 }
 /* o botão da barra de favoritos: salva o post do Instagram aberto no navegador */
 function botaoDoNavegador() {
-  const codigo = "javascript:(function(){var m=function(p){var e=document.querySelector('meta[property=\"'+p+'\"]');return e?e.content:''};" +
-    "window.open('" + location.origin + "/admin/#inspiracao&add='+encodeURIComponent(location.href.split('?')[0])+'&t='+encodeURIComponent(m('og:title').slice(0,120))+'&d='+encodeURIComponent(m('og:description').slice(0,400)),'_blank')})();";
+  /* o código do botão: pega o post aberto; no feed, pega o post que está no meio da tela */
+  const fonte = function () {
+    var m = function (p) { var e = document.querySelector('meta[property="' + p + '"]'); return e ? e.content : ""; };
+    var u = location.href.split("?")[0], t = m("og:title"), d = m("og:description");
+    var id = (u.match(/\/(?:p|reels?|tv)\/([\w-]+)/) || [])[1];
+    if (id) { if (m("og:url").indexOf(id) < 0) { t = ""; d = ""; } }
+    else {
+      var meio = innerHeight / 2, melhor = null, dist = 1e9;
+      document.querySelectorAll('a[href*="/p/"],a[href*="/reel/"]').forEach(function (a) {
+        var caixa = (a.closest("article") || a).getBoundingClientRect();
+        if (caixa.bottom < 0 || caixa.top > innerHeight) return;
+        var x = Math.abs((caixa.top + caixa.bottom) / 2 - meio);
+        if (x < dist) { dist = x; melhor = a; }
+      });
+      if (!melhor) { alert("Pare em cima do vídeo (ou abra ele) e clique de novo."); return; }
+      u = new URL(melhor.getAttribute("href"), location.origin).href.split("?")[0];
+      var art = melhor.closest("article"), h = art && art.querySelector('header a[href^="/"]');
+      t = h ? "@" + h.getAttribute("href").replace(/\//g, "") : ""; d = "";
+    }
+    window.open("ORIGEM/admin/#inspiracao&add=" + encodeURIComponent(u) + "&t=" + encodeURIComponent(t.slice(0, 120)) + "&d=" + encodeURIComponent(d.slice(0, 400)), "_blank");
+  }.toString().replace("ORIGEM", location.origin);
+  /* o navegador decodifica o endereço do favorito: o # vai codificado para não cortar o código */
+  const codigo = ("javascript:(" + fonte.replace(/\s*\n\s*/g, " ") + ")();").replace(/%/g, "%25").replace(/#/g, "%23");
   abrirJanela({
     titulo: "🔖 Salvar do navegador",
     corpo: '<p style="font-size:14px;line-height:1.7">Com este botão na sua barra de favoritos, você salva uma inspiração com <b>um clique</b>, direto do Instagram no computador.</p>' +
@@ -5134,7 +5155,7 @@ function botaoDoNavegador() {
       '<ol class="lista-simples"><li>Deixe a barra de favoritos aparecendo: no Chrome, <b>Cmd + Shift + B</b>. No Safari, menu Visualizar, depois Mostrar Barra de Favoritos.</li>' +
       "<li>Clique e segure no botão marrom acima e arraste até a barra de favoritos. Solte.</li></ol>" +
       '<p class="rotulo" style="margin:14px 0 6px">Como usar</p>' +
-      '<ol class="lista-simples"><li>No Instagram, abra o vídeo (o link lá em cima tem que ter /reel/ ou /p/).</li>' +
+      '<ol class="lista-simples"><li>No Instagram, pare em cima do vídeo que gostou: pode ser no feed, na aba Reels ou com o vídeo aberto. Não precisa entrar no perfil.</li>' +
       "<li>Clique em <b>💡 Salvar na Inspiração</b> na barra de favoritos.</li>" +
       "<li>O painel abre numa aba nova com o link, o @ e a legenda já preenchidos. Escolha o pilar, o nicho e o formato e clique em Salvar.</li></ol>" +
       '<p class="mudo pequeno" style="margin-top:10px">Você precisa estar logada no painel neste navegador. Continue salvando na pastinha Notion também, se quiser: o botão não mexe no Instagram.</p>',
