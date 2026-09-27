@@ -608,6 +608,8 @@ a.btn { text-decoration: none; }
 .rolagem-topo { transform: rotateX(180deg); }
 .rolagem-topo > * { transform: rotateX(180deg); }
 .prod__quadro.rolagem-topo { align-items: end; }
+.insp__auto { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: var(--radius); background: var(--suave); }
+.insp__auto .btn { height: 32px; }
 .insp__fase { font-size: 12px; height: 28px; padding: 0 8px; }
 .insp__marcador { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding: 14px; border: 1px dashed var(--red); border-radius: var(--radius); background: var(--suave); }
 .insp__marcador .btn { cursor: grab; text-decoration: none; }

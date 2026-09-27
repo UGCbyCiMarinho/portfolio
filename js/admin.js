@@ -4896,7 +4896,7 @@ function montarInspiracao() {
       } else {
         abrirJanela({ titulo: comArroba(semArroba(x.criadora)) + (x.sobre ? " · " + x.sobre.slice(0, 60) : ""),
           corpo: '<div class="insp__player"><iframe src="' + esc(emb.src) + '" allow="autoplay; encrypted-media; picture-in-picture; clipboard-write" allowfullscreen></iframe></div>' +
-            '<p style="margin-top:10px"><a class="link" href="' + esc(x.url) + '" target="_blank" rel="noopener">abrir no Instagram ↗</a></p>' });
+            '<p style="margin-top:10px"><a class="link" href="' + esc(x.url) + '" target="_blank" rel="noopener">abrir o post ↗</a></p>' });
       }
       return;
     }
@@ -4946,11 +4946,12 @@ async function sincronizaProducao(x, antes, quieto) {
 }
 function editorInspiracao(x, padrao) {
   const temChave = !!D.config[CHAVE_SUPADATA];
-  editor({
+  const extra = {};   /* capa e números que vierem do "preencher sozinho" */
+  const j = editor({
     titulo: x ? "✏️ Editar inspiração" : "💡 Adicionar inspiração",
     valores: x || Object.assign({ capa_agora: temChave }, padrao || {}),
     campos: [
-      { nome: "url", rot: "Link do post", obrigatorio: true, inteiro: true, dica: "https://www.instagram.com/reel/..." },
+      { nome: "url", rot: "Link do post", obrigatorio: true, inteiro: true, dica: "https://www.instagram.com/reel/... ou https://www.tiktok.com/@.../video/..." },
       { nome: "criadora", rot: "Criadora", dica: "@ (se ficar em branco, sai do link)", lista: unicos("criadora") },
       { nome: "pilar", rot: "Pilar", tipo: "select", opcoes: [["", "Escolha"]].concat(PILARES.map(p => [p[0], p[1]])) },
       { nome: "nicho", rot: "Nicho", lista: unicos("nicho"), dica: "Ex.: Haircare" },
@@ -4965,13 +4966,15 @@ function editorInspiracao(x, padrao) {
       if (repetido) { erro("Esse vídeo já está na sua inspiração (#" + (repetido.numero || "") + ")."); return false; }
       const dados = { url, criadora: d.criadora ? comArroba(semArroba(d.criadora)) : (perfilDe(url) ? "@" + perfilDe(url) : null),
         pilar: d.pilar || null, nicho: d.nicho, formato: d.formato, sobre: d.sobre, usar: d.usar || null };
+      if (extra.capa) dados.capa = extra.capa;
+      if (extra.metricas) dados.metricas = extra.metricas;
       if (!x) dados.numero = D.inspiracoes.reduce((m, y) => Math.max(m, y.numero || 0), 0) + 1;
       const salvo = await salvarLinha("inspiracoes", dados, x && x.id);
       if (!salvo) return false;
       if (x) troca(D.inspiracoes, salvo); else D.inspiracoes.push(salvo);
       await sincronizaProducao(salvo, x ? x.usar : null);
       desenharInspiracao();
-      if (!x && d.capa_agora) buscarCapas([salvo]);
+      if (!x && d.capa_agora && !extra.capa) buscarCapas([salvo]);
       return true;
     },
     aoApagar: x ? async () => {
@@ -4982,6 +4985,64 @@ function editorInspiracao(x, padrao) {
       return true;
     } : null
   });
+  /* botão de preencher sozinho: lê o post e classifica */
+  const form = $("form", j);
+  form.insertAdjacentHTML("afterbegin", '<div class="inteiro insp__auto"><button type="button" class="btn btn--linha" id="iAuto">✨ Preencher sozinho</button>' +
+    '<span class="mudo pequeno" id="iAutoSt">Lê o post e preenche a criadora, o sobre, o nicho, o formato e o pilar' + (temChave ? " (1 crédito da Supadata, já traz a capa)" : "") + ".</span></div>");
+  $("#iAuto", j).addEventListener("click", () => preencherInspiracao(j, extra));
+  if (padrao && padrao.auto) preencherInspiracao(j, extra);
+}
+
+async function preencherInspiracao(j, extra) {
+  const f = $("form", j), st = $("#iAutoSt", j), b = $("#iAuto", j);
+  const url = limpaLink(f.elements.url.value);
+  if (!url) { st.textContent = "Cole o link do post primeiro."; return; }
+  const temSup = !!D.config[CHAVE_SUPADATA], temIA = !!D.config.openrouter_api_key;
+  if (!temSup && !temIA) { st.textContent = "Para preencher sozinho, falta a chave da Supadata (aba Análise de vídeo) ou do OpenRouter (aba Abordagens)."; return; }
+  b.disabled = true;
+  const vazio = (n) => !String(f.elements[n].value || "").trim();
+  let legenda = "", autor = "";
+  if (temSup) {
+    st.textContent = "🔎 Lendo o post...";
+    const res = await supadata("/metadata?url=" + encodeURIComponent(url));
+    if (res.status === 200) {
+      const m = res.corpo || {}, au = m.author || m.owner || {}, md = m.media || {}, est = m.stats || m.statistics || {}, ad = m.additionalData || {};
+      autor = String(primeiro(au.username, au.handle, au.uniqueId) || "");
+      legenda = String(primeiro(m.description, m.caption, m.text, m.title) || "");
+      const itens = Array.isArray(md.items) ? md.items : [];
+      const video = itens.find(y => y && (y.duration || y.thumbnailUrl)) || itens[0] || {};
+      const capaUrl = primeiro(md.thumbnailUrl, md.thumbnail, video.thumbnailUrl, video.url, md.type === "image" ? md.url : null, m.thumbnailUrl, m.thumbnail);
+      if (capaUrl) extra.capa = (await copiaDaCapa(capaUrl)) || capaUrl;
+      const met = { views: primeiro(est.views, est.viewCount, est.playCount, est.plays, ad.views, ad.playCount), likes: primeiro(est.likes, est.likeCount, est.diggCount, ad.likes), comments: primeiro(est.comments, est.commentCount, ad.comments) };
+      Object.keys(met).forEach(k => { if (met[k] == null) delete met[k]; });
+      if (Object.keys(met).length) extra.metricas = met;
+      if (f.elements.capa_agora) f.elements.capa_agora.checked = false;
+    } else if (res.status === 402) st.textContent = "Os créditos da Supadata acabaram. Vou tentar só com a IA...";
+  }
+  if (!autor) autor = perfilDe(url) || "";
+  if (autor && vazio("criadora")) f.elements.criadora.value = "@" + semArroba(autor);
+  if (!legenda && !vazio("sobre")) legenda = f.elements.sobre.value;
+  if (temIA && (legenda || autor)) {
+    st.textContent = "✨ Classificando...";
+    const r = await chamarIA([
+      { role: "system", content: "Você organiza a biblioteca de vídeos de inspiração de uma creator de UGC. Responda só em JSON válido, sem nada antes nem depois." },
+      { role: "user", content: "Post: " + url + "\nCriadora: @" + semArroba(autor) + "\nLegenda do post:\n" + (legenda || "(sem legenda)").slice(0, 2000) +
+        "\n\nNichos que ela já usa (prefira um destes; se nenhum servir, crie um curto no mesmo estilo): " + unicos("nicho").join(" | ") +
+        "\nFormatos que ela já usa (prefira um destes; se nenhum servir, crie um curto no mesmo estilo): " + unicos("formato").join(" | ") +
+        "\nPilares de conteúdo (responda a chave antes do =):\n" + PILARES.map(p => p[0] + " = " + p[1].replace(/^\S+\s/, "") + ": " + p[3]).join("\n") +
+        "\n\nResponda assim: {\"sobre\": \"uma frase em português do Brasil, até 140 caracteres, dizendo sobre o que é o vídeo e o que ele tem de interessante\", \"nicho\": \"...\", \"formato\": \"...\", \"pilar\": \"chave\"}. " +
+        "Se a legenda for curta ou vazia, deduza o que der e termine o sobre com \"(legenda curta, ver vídeo)\". Nunca use travessão." }
+    ], "low", 3000);
+    const jj = r.erro ? null : lerJSON(r.texto);
+    if (jj) {
+      if (jj.sobre && vazio("sobre")) f.elements.sobre.value = semTravessao(String(jj.sobre)).slice(0, 300);
+      if (jj.nicho && vazio("nicho")) f.elements.nicho.value = String(jj.nicho).slice(0, 60);
+      if (jj.formato && vazio("formato")) f.elements.formato.value = String(jj.formato).slice(0, 60);
+      if (pilarDe(jj.pilar) && vazio("pilar")) f.elements.pilar.value = jj.pilar;
+      st.textContent = "✅ Preenchido" + (extra.capa ? ", com a capa" : "") + ". Confira e clique em Salvar.";
+    } else st.textContent = r.erro ? "A IA não respondeu: " + r.erro : "A IA respondeu fora do formato. Clique em Preencher sozinho de novo.";
+  } else st.textContent = autor ? "✅ Achei a criadora" + (extra.capa ? " e a capa" : "") + ". O resto preencha à mão (falta a chave do OpenRouter)." : "Não consegui ler esse post. Preencha à mão.";
+  b.disabled = false;
 }
 
 /* capa e números pela Supadata (1 crédito por vídeo) */
@@ -5103,7 +5164,7 @@ const seletorPilar = (x) => '<select class="insp__sel" data-campo="pilar" aria-l
   PILARES.map(p => '<option value="' + p[0] + '"' + (x.pilar === p[0] ? " selected" : "") + ">" + p[1] + "</option>").join("") + "</select>";
 const seletorUsar = (x) => '<select class="insp__sel insp__usar' + (x.usar ? " " + x.usar : "") + '" data-campo="usar" aria-label="Usar?"><option value="">Ainda não sei</option>' +
   '<option value="sim"' + (x.usar === "sim" ? " selected" : "") + ">✅ Sim</option><option value=\"nao\"" + (x.usar === "nao" ? " selected" : "") + ">🗑️ Não (descartar)</option></select>";
-const linkCriadora = (x) => x.criadora ? '<a class="link" href="https://www.instagram.com/' + encodeURIComponent(semArroba(x.criadora)) + '/" target="_blank" rel="noopener">' + esc(x.criadora) + "</a>" : "";
+const linkCriadora = (x) => x.criadora ? '<a class="link" href="' + (fonteDe(x.url) === "tiktok" ? "https://www.tiktok.com/@" : "https://www.instagram.com/") + encodeURIComponent(semArroba(x.criadora)) + '" target="_blank" rel="noopener">' + esc(x.criadora) + "</a>" : "";
 const numerosInsp = (x) => {
   const m = x.metricas || {}, c = new Intl.NumberFormat("pt-BR", { notation: "compact" });
   return [m.views != null && "👁️ " + c.format(m.views), m.likes != null && "❤️ " + c.format(m.likes)].filter(Boolean).join("  ");
@@ -5128,12 +5189,12 @@ function botaoDoNavegador() {
   const fonte = function () {
     var m = function (p) { var e = document.querySelector('meta[property="' + p + '"]'); return e ? e.content : ""; };
     var u = location.href.split("?")[0], t = m("og:title"), d = m("og:description");
-    var id = (u.match(/\/(?:p|reels?|tv)\/([\w-]+)/) || [])[1];
+    var id = (u.match(/\/(?:p|reels?|tv|video)\/([\w-]+)/) || [])[1];
     if (id) { if (m("og:url").indexOf(id) < 0) { t = ""; d = ""; } }
     else {
       var meio = innerHeight / 2, melhor = null, dist = 1e9;
-      document.querySelectorAll('a[href*="/p/"],a[href*="/reel/"]').forEach(function (a) {
-        var caixa = (a.closest("article") || a).getBoundingClientRect();
+      document.querySelectorAll('a[href*="/p/"],a[href*="/reel/"],a[href*="/video/"]').forEach(function (a) {
+        var caixa = (a.closest("article,[data-e2e*=item]") || a).getBoundingClientRect();
         if (caixa.bottom < 0 || caixa.top > innerHeight) return;
         var x = Math.abs((caixa.top + caixa.bottom) / 2 - meio);
         if (x < dist) { dist = x; melhor = a; }
@@ -5143,6 +5204,8 @@ function botaoDoNavegador() {
       var art = melhor.closest("article"), h = art && art.querySelector('header a[href^="/"]');
       t = h ? "@" + h.getAttribute("href").replace(/\//g, "") : ""; d = "";
     }
+    var tt = u.match(/tiktok\.com\/@([\w.]+)/);
+    if (tt) { t = "@" + tt[1]; if (!id) d = ""; }
     window.open("ORIGEM/admin/#inspiracao&add=" + encodeURIComponent(u) + "&t=" + encodeURIComponent(t.slice(0, 120)) + "&d=" + encodeURIComponent(d.slice(0, 400)), "_blank");
   }.toString().replace("ORIGEM", location.origin);
   /* o navegador decodifica o endereço do favorito: o # vai codificado para não cortar o código */
@@ -5155,7 +5218,7 @@ function botaoDoNavegador() {
       '<ol class="lista-simples"><li>Deixe a barra de favoritos aparecendo: no Chrome, <b>Cmd + Shift + B</b>. No Safari, menu Visualizar, depois Mostrar Barra de Favoritos.</li>' +
       "<li>Clique e segure no botão marrom acima e arraste até a barra de favoritos. Solte.</li></ol>" +
       '<p class="rotulo" style="margin:14px 0 6px">Como usar</p>' +
-      '<ol class="lista-simples"><li>No Instagram, pare em cima do vídeo que gostou: pode ser no feed, na aba Reels ou com o vídeo aberto. Não precisa entrar no perfil.</li>' +
+      '<ol class="lista-simples"><li>No Instagram, pare em cima do vídeo que gostou: pode ser no feed, na aba Reels ou com o vídeo aberto. Não precisa entrar no perfil. No TikTok, clique no vídeo para ele abrir.</li>' +
       "<li>Clique em <b>💡 Salvar na Inspiração</b> na barra de favoritos.</li>" +
       "<li>O painel abre numa aba nova com o link, o @ e a legenda já preenchidos. Escolha o pilar, o nicho e o formato e clique em Salvar.</li></ol>" +
       '<p class="mudo pequeno" style="margin-top:10px">Você precisa estar logada no painel neste navegador. Continue salvando na pastinha Notion também, se quiser: o botão não mexe no Instagram.</p>',
@@ -5171,7 +5234,7 @@ function chegouDoNavegador(params) {
   const titulo = params.get("t") || "", desc = params.get("d") || "";
   const handle = (titulo.match(/@([\w.]+)/) || desc.match(/-\s*([\w.]+)\s+on\s/i) || titulo.match(/^([\w.]+)\s+on\s/i) || [])[1] || perfilDe(url);
   const legenda = (desc.match(/:\s*"([\s\S]*)"?\s*$/) || [])[1] || "";
-  editorInspiracao(null, { url, criadora: handle ? "@" + handle : "", sobre: legenda.replace(/"\.?$/, "").slice(0, 300) });
+  editorInspiracao(null, { url, criadora: handle ? "@" + handle : "", sobre: legenda.replace(/"\.?$/, "").slice(0, 300), auto: true });
 }
 
 function tabelaInspiracao(lista) {
@@ -5213,7 +5276,7 @@ function cartaoInspiracao(x) {
             '<button type="button" class="btn btn--linha" data-descartar>🗑️ Descartar</button>') +
         (!x.capa && D.config[CHAVE_SUPADATA] ? '<button type="button" class="btn btn--linha" data-umacapa title="1 crédito da Supadata">🖼️ Capa</button>' : "") +
         '<button type="button" class="btn btn--linha" data-editar>✏️</button>' +
-        '<a class="link pequeno" href="' + esc(x.url) + '" target="_blank" rel="noopener">abrir no Instagram</a>' +
+        '<a class="link pequeno" href="' + esc(x.url) + '" target="_blank" rel="noopener">abrir o post</a>' +
       "</div>" +
     "</div></article>";
 }
