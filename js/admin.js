@@ -350,7 +350,7 @@ const inicio14 = hoje(); inicio14.setDate(inicio14.getDate() - 13);
 const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens, envios, optout] = await Promise.all([
   ler("videos", q => q.order("ordem", { ascending: true }).order("criado_em", { ascending: true })),
   ler("visitas", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
-  ler("eventos", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
+  ler("eventos", q => q.order("data", { ascending: true })),
   ler("marcas", q => q.order("criado_em", { ascending: false })),
   ler("calendario", q => q.order("data", { ascending: true })),
   ler("campanhas", q => q.order("criado_em", { ascending: false })),
@@ -377,6 +377,9 @@ function idYoutube(link) {
   return m ? m[1] : null;
 }
 
+/* estado dos filtros da tabela de vídeos (aba Portfólio) */
+let fNichoVid = "", fFormatoVid = "", fOrdViews = false;
+
 function montarPortfolio() {
   $("#aba-portfolio").innerHTML =
     '<div class="numeros" id="pNumeros"></div>' +
@@ -395,11 +398,28 @@ function montarPortfolio() {
     '<div class="bloco" style="margin-top:16px">' +
       '<div class="bloco__cab"><h2>Meus vídeos</h2><span class="mudo pequeno" id="pConta"></span>' +
       '<button class="btn" id="pNovo">' + ic("mais") + " Adicionar vídeo</button></div>" +
-      '<p class="mudo pequeno" style="margin:-4px 0 10px">Arraste pela alcinha para mudar a ordem. O olhinho mostra ou esconde do site. Tudo muda no portfólio na hora.</p>' +
-      '<div class="tabela-caixa"><table class="tabela"><thead><tr><th></th><th></th><th>Título</th><th>Nicho</th><th>Formato</th><th>Destaque</th><th></th></tr></thead><tbody id="pCorpo"></tbody></table></div>' +
+      '<p class="mudo pequeno" style="margin:-4px 0 10px">Arraste pela alcinha para mudar a ordem (some quando há filtro). O olhinho mostra ou esconde do site. Clique em <b>Visualizações</b> para ordenar do mais visto ao menos visto.</p>' +
+      '<div class="filtros-vid" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px">' +
+        '<select id="fNicho" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:inherit;font:inherit"><option value="">Todos os nichos</option></select>' +
+        '<select id="fFormato" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:inherit;font:inherit"><option value="">Todos os formatos</option></select>' +
+        '<button class="btn" id="fLimpar" type="button" hidden>Limpar filtros</button>' +
+      "</div>" +
+      '<div class="tabela-caixa"><table class="tabela"><thead><tr><th></th><th></th><th>Título</th><th>Nicho</th><th>Formato</th><th id="thViews" style="cursor:pointer;user-select:none;white-space:nowrap" title="Clique para ordenar do mais visto ao menos visto">Visualizações ⇅</th><th>Destaque</th><th></th></tr></thead><tbody id="pCorpo"></tbody></table></div>' +
     "</div>";
 
   $("#pNovo").addEventListener("click", () => editorVideo());
+
+  /* filtros da tabela de vídeos (nicho, formato) + ordenar por visualizações */
+  const selN = $("#fNicho"), selF = $("#fFormato"), btnL = $("#fLimpar"), thV = $("#thViews");
+  [...new Set(D.videos.map(v => v.nicho).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt"))
+    .forEach(n => selN.insertAdjacentHTML("beforeend", '<option>' + esc(n) + "</option>"));
+  [...new Set(D.videos.map(v => v.formato).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt"))
+    .forEach(f => selF.insertAdjacentHTML("beforeend", '<option>' + esc(f) + "</option>"));
+  selN.addEventListener("change", () => { fNichoVid = selN.value; desenharPortfolio(); });
+  selF.addEventListener("change", () => { fFormatoVid = selF.value; desenharPortfolio(); });
+  thV.addEventListener("click", () => { fOrdViews = !fOrdViews; desenharPortfolio(); });
+  btnL.addEventListener("click", () => { fNichoVid = ""; fFormatoVid = ""; fOrdViews = false; desenharPortfolio(); });
+
   const corpo = $("#pCorpo");
   corpo.addEventListener("click", async (e) => {
     const tr = e.target.closest("tr[data-id]");
@@ -504,12 +524,21 @@ function desenharPortfolio() {
         '<div><div class="origem__linha"><span>' + esc(rotuloDisp[d] || d) + '</span><span class="mudo">' + inteiro(n) + " · " + Math.round(n / total * 100) + "%</span></div>" +
         '<div class="origem__trilho"><span style="width:' + Math.round(n / maiorDisp * 100) + '%"></span></div></div>').join("") + "</div>";
 
-  /* ----- Vídeos mais clicados + funil "do primeiro clique até a mensagem" (tabela eventos) ----- */
+  /* ----- Vídeos: visualizações (total) + mais clicados e funil (14 dias) ----- */
   const semEventos = falhou.eventos;
+  /* nome legível de cada vídeo pelo id do YouTube (o site registra o clique pelo id) */
+  const nomeVid = {};
+  D.videos.forEach(v => { const idv = idYoutube(v.link); if (idv) nomeVid[idv] = ([v.marca, v.formato].filter(Boolean).join(" · ")) || v.titulo || idv; });
+  /* visualizações POR VÍDEO, do total (sem limite de dias): id do YouTube -> nº de cliques */
+  const VIEWS = {};
+  D.eventos.forEach(e => { if (e.tipo === "video" && e.detalhe) VIEWS[e.detalhe] = (VIEWS[e.detalhe] || 0) + 1; });
+  /* mais clicados e funil: só nos últimos 14 dias */
+  const corte14 = hoje(); corte14.setDate(corte14.getDate() - 13); corte14.setHours(0, 0, 0, 0);
   const cliques = {};
   let nForm = 0, nMsg = 0;
   D.eventos.forEach(e => {
-    if (e.tipo === "video") { const k = e.detalhe || "Vídeo"; cliques[k] = (cliques[k] || 0) + 1; }
+    if (new Date(e.data) < corte14) return;
+    if (e.tipo === "video") { const nome = nomeVid[e.detalhe] || e.detalhe || "Vídeo"; cliques[nome] = (cliques[nome] || 0) + 1; }
     else if (e.tipo === "form") nForm++;
     else if (e.tipo === "mensagem") nMsg++;
   });
@@ -536,22 +565,33 @@ function desenharPortfolio() {
         '<div><div class="origem__linha"><span>' + esc(rot) + '</span><span class="mudo">' + inteiro(n) + (sub ? " · " + esc(sub) : "") + '</span></div>' +
         '<div class="origem__trilho"><span style="width:' + (i === 0 ? 100 : pctFunil(n)) + '%"></span></div></div>').join("") + "</div>";
 
-  /* tabela de vídeos */
-  $("#pConta").textContent = plural(D.videos.length, "vídeo", "vídeos");
+  /* tabela de vídeos (com filtros, ordenação e coluna de visualizações) */
+  if ($("#fNicho")) $("#fNicho").value = fNichoVid;
+  if ($("#fFormato")) $("#fFormato").value = fFormatoVid;
+  if ($("#thViews")) $("#thViews").textContent = "Visualizações " + (fOrdViews ? "▼" : "⇅");
+  if ($("#fLimpar")) $("#fLimpar").hidden = !(fNichoVid || fFormatoVid || fOrdViews);
+  const filtrando = !!(fNichoVid || fFormatoVid || fOrdViews);
+  const viewsDe = v => VIEWS[idYoutube(v.link)] || 0;
+  let listaVid = D.videos.slice();
+  if (fNichoVid) listaVid = listaVid.filter(v => (v.nicho || "") === fNichoVid);
+  if (fFormatoVid) listaVid = listaVid.filter(v => (v.formato || "") === fFormatoVid);
+  if (fOrdViews) listaVid.sort((a, b) => viewsDe(b) - viewsDe(a));
+  $("#pConta").textContent = filtrando ? (listaVid.length + " de " + D.videos.length) : plural(D.videos.length, "vídeo", "vídeos");
   const corpo = $("#pCorpo");
-  if (!D.videos.length) {
-    corpo.innerHTML = '<tr><td colspan="7"><p class="vazio">' + (falhou.videos ? "Os vídeos não puderam ser carregados. Veja o aviso lá em cima." : "Nenhum vídeo ainda. Clique em Adicionar vídeo.") + "</p></td></tr>";
+  if (!listaVid.length) {
+    corpo.innerHTML = '<tr><td colspan="8"><p class="vazio">' + (falhou.videos ? "Os vídeos não puderam ser carregados. Veja o aviso lá em cima." : (filtrando ? "Nenhum vídeo com esse filtro." : "Nenhum vídeo ainda. Clique em Adicionar vídeo.")) + "</p></td></tr>";
     return;
   }
-  corpo.innerHTML = D.videos.map(v => {
+  corpo.innerHTML = listaVid.map(v => {
     const id = idYoutube(v.link);
     const escondido = v.visivel === false;
     return '<tr class="clica' + (escondido ? " apagado" : "") + '" data-id="' + esc(v.id) + '">' +
-      '<td class="curta"><span class="alca" title="Arraste para mudar a ordem" aria-label="Arrastar">' + ic("alca") + "</span></td>" +
+      '<td class="curta">' + (filtrando ? '<span class="mudo">•</span>' : '<span class="alca" title="Arraste para mudar a ordem" aria-label="Arrastar">' + ic("alca") + "</span>") + "</td>" +
       '<td class="curta">' + (id ? '<img class="mini" src="https://i.ytimg.com/vi/' + id + '/default.jpg" alt="" loading="lazy">' : '<span class="mini"></span>') + "</td>" +
       '<td><div class="corta"><b>' + esc(v.titulo || "(sem título)") + "</b>" + pilExemplo(v) + '</div><div class="mudo pequeno">' + esc(v.marca || "") + "</div></td>" +
       "<td>" + esc(v.nicho || "") + "</td>" +
       "<td>" + esc(v.formato || "") + "</td>" +
+      '<td class="curta"><b>' + inteiro(viewsDe(v)) + "</b></td>" +
       "<td>" + (v.destaque ? '<span class="pil c-destaque">' + esc(v.destaque) + "</span>" : "") + "</td>" +
       '<td class="curta"><span class="acoes">' +
         '<button class="btn--icone" data-olho title="' + (escondido ? "Mostrar no site" : "Esconder do site") + '" aria-label="' + (escondido ? "Mostrar no site" : "Esconder do site") + '">' + ic(escondido ? "olhoFechado" : "olho") + "</button>" +

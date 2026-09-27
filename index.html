@@ -1457,8 +1457,12 @@ function mostraVideos(lista) {
 (function registraVisita() {
   if (!/^(www\.)?cimarinho\.com$/.test(location.hostname)) return; /* só no site de verdade */
   try {
-    if (sessionStorage.getItem("visita-contada")) return;
-    sessionStorage.setItem("visita-contada", "1");
+    /* Conta no máximo uma visita por navegador a cada 30 min. Isso evita contar
+       de novo quando a pessoa atualiza a página ou reabre numa aba nova logo depois. */
+    const agora = Date.now();
+    const ult = parseInt(localStorage.getItem("visita-ts") || "0", 10);
+    if (agora - ult < 30 * 60 * 1000) return;
+    localStorage.setItem("visita-ts", String(agora));
   } catch (e) {}
   const NOMES = [
     [/instagram|^ig$/i, "Instagram"], [/tiktok/i, "TikTok"], [/google/i, "Google"], [/bing/i, "Bing"],
@@ -1535,10 +1539,9 @@ document.addEventListener("click", (e) => {
   const botao = e.target.closest(".poster--video .poster__botao");
   if (!botao) return;
   const quadro = botao.closest(".poster__quadro");
-  const nome = quadro
-    ? [quadro.dataset.marca, quadro.dataset.formato].filter(Boolean).join(" · ")
-    : "";
-  registraEvento("video", nome || "Vídeo");
+  const idv = quadro ? (quadro.dataset.id || "") : "";          /* id do YouTube = único por vídeo */
+  const nome = quadro ? [quadro.dataset.marca, quadro.dataset.formato].filter(Boolean).join(" · ") : "";
+  registraEvento("video", idv || nome || "Vídeo");
 }, true);
 
 /* chegou no formulário (rolou até ele) — conta uma vez por visita */
