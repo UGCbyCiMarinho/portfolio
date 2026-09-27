@@ -321,7 +321,9 @@ img, svg { display: block; max-width: 100%; }
 }
 .marquee { overflow: hidden; padding: 4px 0; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
 .marquee__track { display: flex; gap: .7rem; width: max-content; animation: marquee 44s linear infinite; }
-.marquee:hover .marquee__track { animation-play-state: paused; }
+/* pausar SÓ em mouse de verdade. No celular, o toque virava um "hover" grudado
+   e o carrossel congelava sem voltar. Com (hover: hover) o touch nunca pausa. */
+@media (hover: hover) { .marquee:hover .marquee__track { animation-play-state: paused; } }
 .brand-chip {
   flex: none;
   display: flex; align-items: center; justify-content: center;
@@ -474,7 +476,7 @@ img, svg { display: block; max-width: 100%; }
   mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
 }
 .testimonials__track { display: flex; gap: 1rem; width: max-content; padding: .4rem 0; animation: marquee 90s linear infinite; }
-.testimonials__wrap:hover .testimonials__track { animation-play-state: paused; }
+@media (hover: hover) { .testimonials__wrap:hover .testimonials__track { animation-play-state: paused; } }
 .testimonial {
   flex: none; width: 330px;
   background: var(--faixa); border: 1px solid rgba(255,255,255,.14); color: #f6efe9;
@@ -925,7 +927,7 @@ a.contact__item:hover .contact__ic { border-color: var(--red); color: var(--red)
         </div>
         <div class="field">
           <label for="cf-orcamento">Estimated budget</label>
-          <input type="text" id="cf-orcamento" name="budget" placeholder="Ex: $500 to $1,500 CAD">
+          <input type="text" id="cf-orcamento" name="budget" placeholder="Ex: $500 to $1,500 USD">
         </div>
         <div class="field">
           <label for="cf-msg">Tell me about the project</label>
