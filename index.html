@@ -1487,6 +1487,54 @@ function mostraVideos(lista) {
 })();
 
 /* ============================================================
+   EVENTOS DO PORTFÓLIO (para o painel): clique em vídeo, quando a
+   pessoa chega no formulário e quando manda mensagem. Não conta
+   quando a Cintia está logada (mesma regra da visita).
+   Precisa da tabela "eventos" (sql-eventos.sql). Se não existir,
+   falha em silêncio e o site continua normal.
+   ============================================================ */
+async function registraEvento(tipo, detalhe) {
+  try {
+    if (!window.banco) return;
+    const { data } = await banco.auth.getSession();
+    if (data && data.session) return;                 /* logada = não conta */
+    await banco.from("eventos").insert({
+      tipo: String(tipo).slice(0, 40),
+      detalhe: detalhe ? String(detalhe).slice(0, 200) : null,
+      pagina: location.pathname.slice(0, 200)
+    });
+  } catch (e) { /* silencioso */ }
+}
+
+/* clique num vídeo (só vídeo, não foto) */
+document.addEventListener("click", (e) => {
+  const botao = e.target.closest(".poster--video .poster__botao");
+  if (!botao) return;
+  const quadro = botao.closest(".poster__quadro");
+  const nome = quadro
+    ? [quadro.dataset.marca, quadro.dataset.formato].filter(Boolean).join(" · ")
+    : "";
+  registraEvento("video", nome || "Vídeo");
+}, true);
+
+/* chegou no formulário (rolou até ele) — conta uma vez por visita */
+(function () {
+  const alvo = document.getElementById("contato");
+  if (!alvo || !("IntersectionObserver" in window)) return;
+  let contou = false;
+  const obs = new IntersectionObserver((entradas) => {
+    for (const ent of entradas) {
+      if (ent.isIntersecting && !contou) {
+        contou = true;
+        registraEvento("form");
+        obs.disconnect();
+      }
+    }
+  }, { threshold: 0.4 });
+  obs.observe(alvo);
+})();
+
+/* ============================================================
    CONTEÚDOS DE DESTAQUE
    ============================================================ */
 (function buildCitacao() {
@@ -1854,6 +1902,7 @@ function handleForm(form, btn, feedback, msg) {
         lead
       ]);
       if (porEmail.status === "rejected" && naBase.status === "rejected") throw new Error("nada chegou");
+      if (typeof registraEvento === "function") registraEvento("mensagem");
       feedback.textContent = msg;
       form.reset();
     } catch (erro) {

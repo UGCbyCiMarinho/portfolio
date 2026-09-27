@@ -98,7 +98,7 @@ function torrada(texto, erro) {
 }
 
 /* ----- traduz os erros do banco para português ----- */
-const ARQUIVO_SQL = { base_marcas: "sql-marcas.sql", roteiros: "sql-roteiros.sql", configuracoes: "sql-roteiros.sql", abordagens: "sql-resultados.sql", email_envios: "disparo.sql", email_optout: "disparo.sql" };
+const ARQUIVO_SQL = { base_marcas: "sql-marcas.sql", roteiros: "sql-roteiros.sql", configuracoes: "sql-roteiros.sql", abordagens: "sql-resultados.sql", email_envios: "disparo.sql", email_optout: "disparo.sql", eventos: "sql-eventos.sql" };
 function traduzErro(e, tabela) {
   const cod = (e && e.code) || "";
   const msg = (e && e.message) || String(e || "");
@@ -344,12 +344,13 @@ const numero = (rot, val, sub) =>
 /* ============================================================
    4. CARREGAR OS DADOS
    ============================================================ */
-const D = { videos: [], visitas: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], envios: [], optout: [], config: {}, marcados: new Set() };
+const D = { videos: [], visitas: [], eventos: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], envios: [], optout: [], config: {}, marcados: new Set() };
 const inicio14 = hoje(); inicio14.setDate(inicio14.getDate() - 13);
 
-const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens, envios, optout] = await Promise.all([
+const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens, envios, optout] = await Promise.all([
   ler("videos", q => q.order("ordem", { ascending: true }).order("criado_em", { ascending: true })),
   ler("visitas", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
+  ler("eventos", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
   ler("marcas", q => q.order("criado_em", { ascending: false })),
   ler("calendario", q => q.order("data", { ascending: true })),
   ler("campanhas", q => q.order("criado_em", { ascending: false })),
@@ -361,7 +362,7 @@ const [videos, visitas, marcas, calendario, campanhas, marcados, roteiros, confi
   ler("email_envios", q => q.order("data", { ascending: false })),
   ler("email_optout", q => q.order("data", { ascending: false }))
 ]);
-Object.assign(D, { videos, visitas, marcas, calendario, campanhas, roteiros, base, abordagens, envios, optout, marcados: new Set(marcados.map(m => m.chave)) });
+Object.assign(D, { videos, visitas, eventos, marcas, calendario, campanhas, roteiros, base, abordagens, envios, optout, marcados: new Set(marcados.map(m => m.chave)) });
 configuracoes.forEach(c => { D.config[c.chave] = c.valor; });
 
 const nomesDeMarcas = () => Array.from(new Set(D.marcas.map(m => m.nome).concat(D.base.map(m => m.nome), D.campanhas.map(c => c.cliente), D.videos.map(v => v.marca)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -382,6 +383,10 @@ function montarPortfolio() {
     '<div class="duas">' +
       '<div class="bloco"><div class="bloco__cab"><h2>Visitas nos últimos 14 dias</h2></div><div id="pGrafico"></div></div>' +
       '<div class="bloco"><div class="bloco__cab"><h2>De onde as pessoas chegaram</h2></div><div id="pOrigens"></div></div>' +
+    "</div>" +
+    '<div class="duas" style="margin-top:16px">' +
+      '<div class="bloco"><div class="bloco__cab"><h2>Vídeos mais clicados</h2></div><div id="pMaisClicados"></div></div>' +
+      '<div class="bloco"><div class="bloco__cab"><h2>Do primeiro clique até a mensagem</h2></div><div id="pFunil"></div></div>' +
     "</div>" +
     '<div class="bloco" style="margin-top:16px">' +
       '<div class="bloco__cab"><h2>Meus vídeos</h2><span class="mudo pequeno" id="pConta"></span>' +
@@ -465,6 +470,38 @@ function desenharPortfolio() {
     : '<div class="origens">' + lista.map(([o, n]) =>
         '<div><div class="origem__linha"><span>' + esc(o) + '</span><span class="mudo">' + inteiro(n) + " · " + Math.round(n / total * 100) + "%</span></div>" +
         '<div class="origem__trilho"><span style="width:' + Math.round(n / total * 100) + '%"></span></div></div>').join("") + "</div>";
+
+  /* ----- Vídeos mais clicados + funil "do primeiro clique até a mensagem" (tabela eventos) ----- */
+  const semEventos = falhou.eventos;
+  const cliques = {};
+  let nForm = 0, nMsg = 0;
+  D.eventos.forEach(e => {
+    if (e.tipo === "video") { const k = e.detalhe || "Vídeo"; cliques[k] = (cliques[k] || 0) + 1; }
+    else if (e.tipo === "form") nForm++;
+    else if (e.tipo === "mensagem") nMsg++;
+  });
+  const listaCliques = Object.entries(cliques).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maiorClique = listaCliques.length ? listaCliques[0][1] : 0;
+  if ($("#pMaisClicados")) $("#pMaisClicados").innerHTML = semEventos
+    ? '<p class="vazio">Para ver os vídeos mais clicados, rode uma vez o arquivo <b>sql-eventos.sql</b> no Supabase. Depois disso, cada clique num vídeo do site aparece aqui.</p>'
+    : (!listaCliques.length
+      ? '<p class="vazio">Ainda ninguém clicou para assistir um vídeo.<br>Quando as marcas começarem a abrir seus vídeos no site, os mais assistidos aparecem aqui.</p>'
+      : '<div class="origens">' + listaCliques.map(([nome, n]) =>
+          '<div><div class="origem__linha"><span>' + esc(nome) + '</span><span class="mudo">' + plural(n, "clique", "cliques") + '</span></div>' +
+          '<div class="origem__trilho"><span style="width:' + Math.round(n / maiorClique * 100) + '%"></span></div></div>').join("") + "</div>");
+
+  const abriram = total; /* visitas dos últimos 14 dias */
+  const pctFunil = n => abriram > 0 ? Math.round(n / abriram * 100) : 0;
+  const etapas = [
+    ["Abriram o portfólio", abriram, "todas as visitas registradas"],
+    ["Rolaram até o formulário", nForm, abriram > 0 ? pctFunil(nForm) + "% de quem visitou" : ""],
+    ["Mandaram mensagem", nMsg, abriram > 0 ? pctFunil(nMsg) + "% de quem visitou" : ""]
+  ];
+  if ($("#pFunil")) $("#pFunil").innerHTML = semEventos
+    ? '<p class="vazio">Para ver este caminho, rode uma vez o arquivo <b>sql-eventos.sql</b> no Supabase. Depois ele mostra quantas pessoas abriram o portfólio, chegaram no formulário e te mandaram mensagem.</p>'
+    : '<div class="origens">' + etapas.map(([rot, n, sub], i) =>
+        '<div><div class="origem__linha"><span>' + esc(rot) + '</span><span class="mudo">' + inteiro(n) + (sub ? " · " + esc(sub) : "") + '</span></div>' +
+        '<div class="origem__trilho"><span style="width:' + (i === 0 ? 100 : pctFunil(n)) + '%"></span></div></div>').join("") + "</div>";
 
   /* tabela de vídeos */
   $("#pConta").textContent = plural(D.videos.length, "vídeo", "vídeos");
