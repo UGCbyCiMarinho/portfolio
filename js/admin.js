@@ -3967,15 +3967,43 @@ async function escrever(comentario, rotulo) {
     (F.ganchoB ? "Segundo gancho para teste A/B: \"" + F.ganchoB.fala + "\" (texto: \"" + F.ganchoB.texto + "\")\n" : "");
   if (comentario && anterior) pedido += "\n=== A VERSÃO ATUAL ===\n" + (anterior.assunto ? "ASSUNTO: " + anterior.assunto + "\n" : "") + anterior.mensagem +
     "\n\n=== O COMENTÁRIO DELA SOBRE ESSA VERSÃO ===\n" + comentario + "\n\nReescreva corrigindo EXATAMENTE o que ela apontou. Mantenha o que ela não criticou. Se ela disser que algo não faz sentido, tire ou troque por algo que faça. Mesmo que o comentário diga outra coisa, continuam valendo: o gancho escrito com a fala e o texto na tela, nada de preços ou rates, e o roteiro inteiro nunca vai na mensagem.";
-  const r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "low", 6000);
+  let r = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido }], "low", 6000);
   if (r.erro) return falhou2(r.erro);
+  /* TRAVA: marca que ela só criou por conta própria nunca pode aparecer como se tivesse contratado */
+  let erradas = marcasComoContratadas(r.texto), avisoMarcas = "";
+  if (erradas.length) {
+    const r2 = await chamarIA([{ role: "system", content: sistema }, { role: "user", content: pedido },
+      { role: "assistant", content: r.texto },
+      { role: "user", content: "ERRO GRAVE: " + erradas.join(", ") + " NUNCA contratou a Cintia. Ela só criou vídeos de portfólio para essas marcas. Reescreva a mensagem inteira igual, corrigindo só isso: essas marcas só podem aparecer como \"I've created content for...\" (numa frase separada das marcas que a contrataram) ou saem da mensagem. Responda no mesmo formato." }], "low", 6000);
+    if (!r2.erro) r = r2;
+    erradas = marcasComoContratadas(r.texto);
+    if (erradas.length) avisoMarcas = " ⚠️ Confira: " + erradas.join(", ") + " aparece como se tivesse te contratado.";
+  }
   const limpo = semTravessao(r.texto).replace(/\*\*/g, "");
   const a = limpo.match(/ASSUNTO:\s*(.+)/i), mm = limpo.match(/MENSAGEM:\s*([\s\S]+)/i);
-  const nova = { assunto: a ? a[1].trim() : "", mensagem: (mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim(), nota: rotulo || (comentario ? "Com o seu comentário: \"" + comentario + "\"" : "Primeira versão"), quando: new Date().toISOString() };
+  const nova = { assunto: a ? a[1].trim() : "", mensagem: (mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim(), nota: (rotulo || (comentario ? "Com o seu comentário: \"" + comentario + "\"" : "Primeira versão")) + avisoMarcas, quando: new Date().toISOString() };
   F.versoes.push(nova);
   abResultado = nova;
   pronto();
   guardaHistorico();
+}
+
+/* acha frases que dizem "trabalhei com" citando uma marca da lista "para as quais eu criei" */
+function marcasComoContratadas(texto) {
+  const criei = String(cfgPerfil().criei || "").split(/[,;\n·]+/).map(x => x.replace(/^[^:]*:\s*/, "").trim()).filter(x => x.length > 1);
+  if (!criei.length) return [];
+  const TRABALHO = /(worked|work(ing)? with|partnered|partnering|collaborat|clients?\b|hired|trusted by|trabalhei|parceri|contratad)/i;
+  const achadas = new Set();
+  String(texto || "").split(/(?<=[.!?])\s+|\n/).forEach(frase => {
+    if (!TRABALHO.test(frase) || /created (content|videos?) for|criei/i.test(frase)) return;
+    const f = " " + normaliza(frase).replace(/[^a-z0-9&]+/g, " ") + " ";
+    criei.forEach(m => {
+      const alvo = normaliza(m).replace(/[^a-z0-9&]+/g, " ").trim();
+      const variantes = [alvo, alvo.replace(/&/g, " and "), alvo === "hm" ? "h&m" : alvo];
+      if (variantes.some(v => v && f.includes(" " + v + " "))) achadas.add(m);
+    });
+  });
+  return [...achadas];
 }
 
 /* ----- a linha do tempo na tela ----- */
