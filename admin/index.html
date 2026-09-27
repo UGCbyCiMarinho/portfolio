@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../css/painel.css?v=49">
+<link rel="stylesheet" href="../css/painel.css?v=50">
 <script>
   /* usa o mesmo tom escolhido no portfólio */
   try { var t = localStorage.getItem("tema"); if (t === "bege" || t === "espresso") document.documentElement.dataset.tema = t; } catch (e) {}
@@ -54,6 +54,9 @@
   <button class="menu__item" data-aba="roteiros">
     <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>Análise de vídeo
   </button>
+  <button class="menu__item" data-aba="inspiracao">
+    <svg class="ic" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>Inspiração
+  </button>
 
   <div class="lateral__pe">
     <div class="lateral__email" id="meuEmail"></div>
@@ -85,12 +88,13 @@
   <section class="aba" id="aba-prospeccao"></section>
   <section class="aba" id="aba-checklist"></section>
   <section class="aba" id="aba-roteiros"></section>
+  <section class="aba" id="aba-inspiracao"></section>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="../js/banco.js?v=49"></script>
-<script src="../js/biblioteca.js?v=49"></script>
+<script src="../js/banco.js?v=50"></script>
+<script src="../js/biblioteca.js?v=50"></script>
 <!-- quando mudar algum arquivo do painel, aumente o número v= para o navegador buscar a versão nova -->
-<script src="../js/admin.js?v=49"></script>
+<script src="../js/admin.js?v=50"></script>
 </body>
 </html>

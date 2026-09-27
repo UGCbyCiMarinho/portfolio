@@ -574,6 +574,31 @@ a.btn { text-decoration: none; }
 @media (max-width: 1100px) { .pros { grid-template-columns: 1fr; } .pros__palco { position: static; } .pros__cartoes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .pros__cartoes { grid-template-columns: 1fr 1fr; } .pros__rotas { grid-template-columns: 1fr; } .pros__iframe { height: 60vh; } .pros__capa { padding: 16px; } }
 
+/* inspiração */
+.insp__pilares { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.insp__pilar { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 9px 11px; border-radius: var(--radius); font-size: 11.5px; color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); background: color-mix(in srgb, var(--c) 9%, var(--card)); }
+.insp__pilar b { font-size: 13px; color: var(--text); }
+.insp__pilar.ativo { border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, var(--card)); }
+.insp__pilar-info { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.55; }
+.insp__pilar-info .pil { align-self: flex-start; }
+.insp__tabela td { vertical-align: middle; }
+.insp__sobre { min-width: 240px; max-width: 360px; line-height: 1.45; }
+.insp__ideia { min-width: 160px; max-width: 260px; }
+.insp__texto { text-align: left; font-size: 12.5px; line-height: 1.45; padding: 2px 0; }
+.insp__texto:hover { color: var(--red); }
+.insp__sel { height: 28px; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--campo); padding: 0 6px; max-width: 150px; }
+.insp__usar.sim { border-color: var(--c-verde); } .insp__usar.nao { border-color: var(--c-cinza); color: var(--muted); }
+.insp__mini { position: relative; display: grid; place-items: center; width: 40px; height: 56px; border-radius: 5px; overflow: hidden; background: linear-gradient(160deg, var(--suave), var(--card-2)); color: var(--text); font-size: 13px; }
+.insp__mini img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.insp__mini span { position: relative; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,.55); color: #fff; font-size: 10px; }
+.tabela tr.insp__postado td { background: color-mix(in srgb, var(--c-verde) 8%, transparent); }
+.rot__cartao.insp__postado { border-color: color-mix(in srgb, var(--c-verde) 55%, transparent); }
+.btn.insp__on { background: var(--suave); border-color: var(--red); color: var(--text); font-weight: 600; }
+.insp__player { display: grid; place-items: center; }
+.insp__player iframe { width: min(400px, 100%); height: 70vh; border: 0; border-radius: var(--radius); background: #000; }
+@media (max-width: 900px) { .insp__pilares { grid-template-columns: 1fr 1fr; } }
+
 /* ============================================================
    CELULAR: o menu vira gaveta
    ============================================================ */
