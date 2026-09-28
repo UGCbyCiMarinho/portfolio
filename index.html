@@ -1461,10 +1461,8 @@ function mostraVideos(lista) {
   try {
     /* Conta no máximo uma visita por navegador a cada 30 min. Isso evita contar
        de novo quando a pessoa atualiza a página ou reabre numa aba nova logo depois. */
-    const agora = Date.now();
     const ult = parseInt(localStorage.getItem("visita-ts") || "0", 10);
-    if (agora - ult < 30 * 60 * 1000) return;
-    localStorage.setItem("visita-ts", String(agora));
+    if (Date.now() - ult < 30 * 60 * 1000) return;
   } catch (e) {}
   const NOMES = [
     [/instagram|^ig$/i, "Instagram"], [/tiktok/i, "TikTok"], [/google/i, "Google"], [/bing/i, "Bing"],
@@ -1504,6 +1502,7 @@ function mostraVideos(lista) {
   }
   async function envia() {
     if (!window.banco) return;
+    try { localStorage.setItem("visita-ts", String(Date.now())); } catch (e) {}
     try {
       const { data } = await banco.auth.getSession();
       if (data && data.session) return;                 /* logada = não conta */
@@ -1512,8 +1511,9 @@ function mostraVideos(lista) {
       await banco.from("visitas").insert({ pagina: location.pathname.slice(0, 200), origem, pais, dispositivo });
     } catch (e) { /* silencioso */ }
   }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", envia);
-  else envia();
+  /* só conta quando aparece sinal de gente de verdade (mexer o mouse, rolar, tocar, teclar).
+     Robôs que abrem o site sozinhos não fazem nada disso, então não entram na conta. */
+  quandoHumano(envia);
 })();
 
 /* ============================================================
@@ -1523,9 +1523,26 @@ function mostraVideos(lista) {
    Precisa da tabela "eventos" (sql-eventos.sql). Se não existir,
    falha em silêncio e o site continua normal.
    ============================================================ */
+/* avisa quando a pessoa interagiu de verdade com a página (e não é um robô) */
+function quandoHumano(fn) {
+  if (window.__humano) { fn(); return; }
+  (window.__depoisDoHumano = window.__depoisDoHumano || []).push(fn);
+  if (window.__esperandoHumano) return;
+  window.__esperandoHumano = true;
+  const EVENTOS = ["mousemove", "scroll", "touchstart", "keydown", "pointerdown", "wheel"];
+  const ok = (e) => {
+    if (e && e.isTrusted === false) return;                 /* evento de mentira, disparado por programa */
+    if (document.visibilityState !== "visible") return;
+    window.__humano = true;
+    EVENTOS.forEach(ev => removeEventListener(ev, ok, true));
+    (window.__depoisDoHumano || []).splice(0).forEach(f => { try { f(); } catch (x) {} });
+  };
+  EVENTOS.forEach(ev => addEventListener(ev, ok, { capture: true, passive: true }));
+}
+quandoHumano(function () {});   /* liga o detector sempre, mesmo quando a visita já foi contada */
 async function registraEvento(tipo, detalhe) {
   try {
-    if (!window.banco) return;
+    if (!window.banco || !window.__humano) return;
     const { data } = await banco.auth.getSession();
     if (data && data.session) return;                 /* logada = não conta */
     await banco.from("eventos").insert({
@@ -1554,7 +1571,8 @@ document.addEventListener("click", (e) => {
   let contou = false;
   const obs = new IntersectionObserver((entradas) => {
     for (const ent of entradas) {
-      if (ent.isIntersecting && !contou) {
+      /* só vale se a pessoa rolou até lá de verdade (robô abre a página inteira de uma vez, sem rolar) */
+      if (ent.isIntersecting && !contou && window.__humano && window.scrollY > 300) {
         contou = true;
         registraEvento("form");
         obs.disconnect();
