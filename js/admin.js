@@ -4804,13 +4804,13 @@ function listaOptout() {
 const PILARES = [
   ["portfolio", "🎬 Portfólio", "c-coral", "O seu trabalho com produtos: demo, estética, GRWM, rotina com produto, try-on. Mostra às marcas o que você entrega."],
   ["bastidores", "🎥 Bastidores", "c-roxo", "Como você grava: cenário, luz, equipamento, o antes do vídeo pronto. Dá confiança às marcas e curiosidade em quem segue."],
-  ["educativo", "📚 Educativo", "c-azul", "Dicas de UGC, gravação, edição e estratégia. Mostra que você sabe o que faz e atrai outras creators."],
-  ["lifestyle", "☕ Lifestyle", "c-verde", "A sua vida real: rotina, home office, looks, café. Cria conexão com quem está por trás dos vídeos."],
-  ["fe", "🙏 Fé e mindset", "c-mostarda", "Reflexões e valores. Aproxima quem pensa como você."],
-  ["trends", "😂 Trends e humor", "c-cinza", "Trends e humor: alcance rápido para gente nova chegar ao perfil."]
+  ["educativo", "📚 Educativo", "c-azul", "Dicas de UGC para marcas e creators: shots, hooks, formatos que vendem, gravação e edição. Mostra que você entende de anúncio, não só de gravar."],
+  ["lifestyle", "💻 Rotina de creator", "c-verde", "O seu dia a dia como UGC creator: quem você é, home office, dia de gravação, marcas que te contrataram, a Maya de co-estrela. Cria conexão sem sair do UGC."],
+  ["fe", "🙏 Fé e mindset", "c-mostarda", "Fora do foco do perfil (a mentora recomendou deixar o Instagram só de UGC). Fica só para organizar o que já foi salvo."],
+  ["trends", "😂 Trends e humor", "c-cinza", "Só vale se for trend com produto ou sobre a vida de creator. Fora disso, fica fora do foco do perfil."]
 ];
 const pilarDe = (v) => PILARES.find(p => p[0] === v);
-const I = { vista: "planilha", ordem: "planilha", verDesc: false, f: { busca: "", criadora: "", nicho: "", formato: "", pilar: "", usar: "", postei: "" }, capas: false, parar: false };
+const I = { vista: "planilha", ordem: "planilha", verDesc: false, f: { busca: "", criadora: "", nicho: "", formato: "", pilar: "", usar: "", postei: "", colecao: "" }, capas: false, parar: false };
 try { I.vista = localStorage.getItem("admin-insp-vista") || "planilha"; } catch (e) {}
 const semArroba = (t) => String(t || "").replace(/^@/, "");
 const unicos = (campo) => Array.from(new Set(D.inspiracoes.map(x => x[campo]).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -4833,6 +4833,7 @@ function montarInspiracao() {
       '<select class="entrada entrada--sel" id="iFNicho"></select>' +
       '<select class="entrada entrada--sel" id="iFFormato"></select>' +
       '<select class="entrada entrada--sel" id="iFPilar"></select>' +
+      '<select class="entrada entrada--sel" id="iFColecao"></select>' +
       '<select class="entrada entrada--sel" id="iFUsar"><option value="">Usar: todos</option><option value="-">🆕 Para analisar</option><option value="talvez">🤔 Talvez depois</option><option value="sim">✅ Vou usar</option><option value="nao">🗑️ Descartados</option></select>' +
       '<select class="entrada entrada--sel" id="iFPostei"><option value="">Produção: todos</option><option value="nao">Ainda não produzi</option><option value="prod">🎬 Em produção</option><option value="post">✅ Já postados</option></select>' +
       '<button type="button" class="btn btn--linha escondido" id="iLimpar">Limpar filtros</button>' +
@@ -4851,7 +4852,7 @@ function montarInspiracao() {
     '<div id="iCorpo"></div>';
 
   const filtro = (id, campo) => $(id).addEventListener("change", () => { I.f[campo] = $(id).value; desenharInspiracao(); });
-  filtro("#iFCriadora", "criadora"); filtro("#iFNicho", "nicho"); filtro("#iFFormato", "formato"); filtro("#iFPilar", "pilar"); filtro("#iFUsar", "usar"); filtro("#iFPostei", "postei");
+  filtro("#iFCriadora", "criadora"); filtro("#iFNicho", "nicho"); filtro("#iFFormato", "formato"); filtro("#iFPilar", "pilar"); filtro("#iFColecao", "colecao"); filtro("#iFUsar", "usar"); filtro("#iFPostei", "postei");
   $("#iBusca").addEventListener("input", () => { I.f.busca = $("#iBusca").value; desenharInspiracao(); });
   $("#iLimpar").addEventListener("click", () => { Object.keys(I.f).forEach(k => { I.f[k] = ""; }); $("#iBusca").value = ""; desenharInspiracao(); });
   $("#iOrdem").addEventListener("change", () => { I.ordem = $("#iOrdem").value; desenharInspiracao(); });
@@ -5117,6 +5118,7 @@ function listaInspiracao() {
   let lista = D.inspiracoes.filter(x => (verNao ? (I.verDesc ? x.usar === "nao" : true) : x.usar !== "nao") &&
     (!f.criadora || x.criadora === f.criadora) && (!f.nicho || x.nicho === f.nicho) && (!f.formato || x.formato === f.formato) &&
     (!f.pilar || x.pilar === f.pilar) &&
+    (!f.colecao || (x.colecao || "Minhas salvas") === f.colecao) &&
     (!f.usar || (f.usar === "-" ? !x.usar : x.usar === f.usar)) &&
     (!f.postei || statusProducao(x) === f.postei) &&
     (!busca || normaliza([x.criadora, x.sobre, x.nicho, x.formato].join(" ")).includes(busca)));
@@ -5158,6 +5160,8 @@ function desenharInspiracao() {
   opcoes("#iFCriadora", "Todas as criadoras", unicos("criadora"), I.f.criadora);
   opcoes("#iFNicho", "Todos os nichos", unicos("nicho"), I.f.nicho);
   opcoes("#iFFormato", "Todos os formatos", unicos("formato"), I.f.formato);
+  opcoes("#iFColecao", "Todas as coleções", Array.from(new Set(D.inspiracoes.map(x => x.colecao || "Minhas salvas"))).sort((a, b) => a.localeCompare(b, "pt")), I.f.colecao);
+  $("#iFColecao").classList.toggle("escondido", !D.inspiracoes.some(x => x.colecao));
   opcoes("#iFPilar", "Todos os pilares", PILARES.map(p => p[0]), I.f.pilar, v => pilarDe(v)[1]);
   $("#iFUsar").value = I.f.usar; $("#iFPostei").value = I.f.postei; $("#iOrdem").value = I.ordem;
   $$("#iVista button").forEach(b => b.classList.toggle("ativo", b.dataset.v === I.vista));
@@ -5288,7 +5292,7 @@ function cartaoInspiracao(x) {
         (x.nicho ? '<span class="pil c-cinza">' + esc(x.nicho) + "</span>" : "") +
         (x.formato ? '<span class="rot__tag">' + esc(x.formato) + "</span>" : "") +
         (numerosInsp(x) ? '<span class="mudo pequeno">' + numerosInsp(x) + "</span>" : "") +
-        '<span class="mudo pequeno">#' + (x.numero || "") + "</span>" + (!x.usar ? '<span class="pil c-azul">🆕 para analisar</span>' : "") + "</div>" +
+        '<span class="mudo pequeno">#' + (x.numero || "") + "</span>" + (!x.usar ? '<span class="pil c-azul">🆕 para analisar</span>' : "") + (x.colecao ? '<span class="pil c-roxo">📁 ' + esc(x.colecao) + "</span>" : "") + "</div>" +
       '<div class="rot__acoes">' +
         botaoProducao(x) +
         (x.usar === "nao" ? '<button type="button" class="btn btn--linha" data-descartar>↩️ Voltar para a lista</button>'
