@@ -595,6 +595,9 @@ a.btn { text-decoration: none; }
 .insp__texto:hover { color: var(--red); }
 .insp__sel { height: 28px; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--campo); padding: 0 6px; max-width: 150px; }
 .insp__usar.sim { border-color: var(--c-verde); } .insp__usar.nao { border-color: var(--c-cinza); color: var(--muted); }
+.insp__usar.talvez { border-color: var(--c-mostarda); } .insp__usar.novo { border-color: var(--c-azul); }
+.insp__fila { margin-bottom: 12px; flex-wrap: wrap; }
+.insp__fila b { margin-left: 4px; }
 .insp__mini { position: relative; display: grid; place-items: center; width: 40px; height: 56px; border-radius: 5px; overflow: hidden; background: linear-gradient(160deg, var(--suave), var(--card-2)); color: var(--text); font-size: 13px; }
 .insp__mini img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .insp__mini span { position: relative; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,.55); color: #fff; font-size: 10px; }
