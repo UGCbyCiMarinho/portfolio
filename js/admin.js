@@ -5189,7 +5189,7 @@ function desenharInspiracao() {
       : I.verDesc ? "Nenhum vídeo descartado." : todos.length ? "Nenhum vídeo com esses filtros." : "Nenhuma inspiração ainda. Clique em Adicionar inspiração.") + "</p>";
     return;
   }
-  corpo.innerHTML = I.vista === "cartoes" ? '<div class="rot__cartoes">' + lista.map(cartaoInspiracao).join("") + "</div>" : tabelaInspiracao(lista);
+  corpo.innerHTML = I.vista === "cartoes" ? '<div class="rot__cartoes">' + lista.map((x, i) => cartaoInspiracao(x, i + 1, lista.length)).join("") + "</div>" : tabelaInspiracao(lista);
 }
 
 const seletorPilar = (x) => '<select class="insp__sel" data-campo="pilar" aria-label="Pilar"><option value="">Escolha</option>' +
@@ -5271,14 +5271,14 @@ function chegouDoNavegador(params) {
 
 function tabelaInspiracao(lista) {
   return '<div class="tabela-caixa rolagem-topo"><table class="tabela insp__tabela"><thead><tr>' +
-    "<th>#</th><th></th><th>Criadora</th><th>Nicho</th><th>Formato</th><th>Pilar</th><th>Sobre o que é o vídeo</th><th>Usar?</th><th>Produção</th><th></th>" +
-    "</tr></thead><tbody>" + lista.map(x =>
+    '<th class="insp__total" title="Quantos vídeos aparecem com os filtros de agora">' + lista.length + "</th><th></th><th>Criadora</th><th>Nicho</th><th>Formato</th><th>Pilar</th><th>Sobre o que é o vídeo</th><th>Usar?</th><th>Produção</th><th></th>" +
+    "</tr></thead><tbody>" + lista.map((x, i) =>
       '<tr data-id="' + esc(x.id) + '"' + (statusProducao(x) === "post" ? ' class="insp__postado"' : "") + ">" +
-        '<td class="curta mudo">' + (x.numero || "") + "</td>" +
+        '<td class="curta mudo" title="Nº ' + (x.numero || "") + ' na sua planilha">' + (i + 1) + "</td>" +
         '<td class="curta"><button type="button" class="insp__mini" data-video title="Ver o vídeo">' + (x.capa ? '<img src="' + esc(x.capa) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : "") + "<span>▶</span></button></td>" +
         '<td style="white-space:nowrap">' + linkCriadora(x) + (numerosInsp(x) ? '<div class="mudo pequeno">' + numerosInsp(x) + "</div>" : "") + "</td>" +
-        '<td style="white-space:nowrap">' + esc(x.nicho || "") + "</td>" +
-        '<td style="white-space:nowrap">' + esc(x.formato || "") + "</td>" +
+        '<td class="insp__curto">' + esc(x.nicho || "") + "</td>" +
+        '<td class="insp__curto">' + esc(x.formato || "") + "</td>" +
         "<td>" + seletorPilar(x) + "</td>" +
         '<td class="insp__sobre">' + esc(x.sobre || "") + "</td>" +
         "<td>" + seletorUsar(x) + "</td>" +
@@ -5287,7 +5287,7 @@ function tabelaInspiracao(lista) {
       "</tr>").join("") + "</tbody></table></div>";
 }
 
-function cartaoInspiracao(x) {
+function cartaoInspiracao(x, pos, total) {
   const p = pilarDe(x.pilar);
   const capa = '<div class="rot__capa"><span class="rot__capa-emoji">💡</span>' +
     (x.capa ? '<img class="rot__capa-img" src="' + esc(x.capa) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : "") +
@@ -5300,7 +5300,7 @@ function cartaoInspiracao(x) {
         (x.nicho ? '<span class="pil c-cinza">' + esc(x.nicho) + "</span>" : "") +
         (x.formato ? '<span class="rot__tag">' + esc(x.formato) + "</span>" : "") +
         (numerosInsp(x) ? '<span class="mudo pequeno">' + numerosInsp(x) + "</span>" : "") +
-        '<span class="mudo pequeno">#' + (x.numero || "") + "</span>" + (!x.usar ? '<span class="pil c-azul">🆕 para analisar</span>' : "") + (x.colecao ? '<span class="pil c-roxo">📁 ' + esc(x.colecao) + "</span>" : "") + "</div>" +
+        '<span class="mudo pequeno" title="Nº ' + (x.numero || "") + ' na sua planilha">' + (pos ? pos + " de " + total : "#" + (x.numero || "")) + "</span>" + (!x.usar ? '<span class="pil c-azul">🆕 para analisar</span>' : "") + (x.colecao ? '<span class="pil c-roxo">📁 ' + esc(x.colecao) + "</span>" : "") + "</div>" +
       '<div class="rot__acoes">' +
         botaoProducao(x) +
         (x.usar === "nao" ? '<button type="button" class="btn btn--linha" data-descartar>↩️ Voltar para a lista</button>'

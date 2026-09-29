@@ -589,11 +589,15 @@ a.btn { text-decoration: none; }
 .insp__pilar-info { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.55; }
 .insp__pilar-info .pil { align-self: flex-start; }
 .insp__tabela td { vertical-align: middle; }
-.insp__sobre { min-width: 240px; max-width: 360px; line-height: 1.45; }
+.insp__sobre { min-width: 170px; max-width: 280px; line-height: 1.4; }
+.insp__curto { max-width: 110px; line-height: 1.35; }
+.insp__tabela { font-size: 12px; }
+.insp__tabela th, .insp__tabela td { padding-left: 7px; padding-right: 7px; }
+.insp__total { font-weight: 700; color: var(--text) !important; }
 .insp__ideia { min-width: 160px; max-width: 260px; }
 .insp__texto { text-align: left; font-size: 12.5px; line-height: 1.45; padding: 2px 0; }
 .insp__texto:hover { color: var(--red); }
-.insp__sel { height: 28px; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--campo); padding: 0 6px; max-width: 150px; }
+.insp__sel { height: 28px; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--campo); padding: 0 4px; max-width: 128px; }
 .insp__usar.sim { border-color: var(--c-verde); } .insp__usar.nao { border-color: var(--c-cinza); color: var(--muted); }
 .insp__usar.talvez { border-color: var(--c-mostarda); } .insp__usar.novo { border-color: var(--c-azul); }
 .insp__fila { margin-bottom: 12px; flex-wrap: wrap; }
