@@ -51,6 +51,10 @@ const maisComum = (lista) => {
   const top = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
   return top ? { nome: top[0], n: top[1] } : null;
 };
+/* coloca a etiqueta de origem no link do portfólio (só na página inicial, nunca em imagem ou outro caminho),
+   para o painel saber de onde veio cada visita: prospeccao, email, dm, plataforma... */
+const etiqueta = (texto, origem) => String(texto == null ? "" : texto)
+  .replace(/https?:\/\/(?:www\.)?cimarinho\.com\/?(?=$|[\s"'<)\],.!;:]|\?(?![\w=]))/g, "https://cimarinho.com/?utm_source=" + origem);
 const pilExemplo = (x) => x && x.exemplo ? '<span class="pil pil--exemplo">exemplo</span>' : "";
 
 const ICONES = {
@@ -3993,7 +3997,8 @@ async function escrever(comentario, rotulo) {
   }
   const limpo = semTravessao(r.texto).replace(/\*\*/g, "");
   const a = limpo.match(/ASSUNTO:\s*(.+)/i), mm = limpo.match(/MENSAGEM:\s*([\s\S]+)/i);
-  const nova = { assunto: a ? a[1].trim() : "", mensagem: (mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim(), nota: (rotulo || (comentario ? "Com o seu comentário: \"" + comentario + "\"" : "Primeira versão")) + avisoMarcas, quando: new Date().toISOString() };
+  const origemDoLink = { email: "prospeccao", dm: "dm", plataforma: "plataforma", followup: "prospeccao" }[F.tipo] || "prospeccao";
+  const nova = { assunto: a ? a[1].trim() : "", mensagem: etiqueta((mm ? mm[1] : limpo.replace(/ASSUNTO:.*\n?/i, "")).trim(), origemDoLink), nota: (rotulo || (comentario ? "Com o seu comentário: \"" + comentario + "\"" : "Primeira versão")) + avisoMarcas, quando: new Date().toISOString() };
   F.versoes.push(nova);
   abResultado = nova;
   pronto();
@@ -4554,7 +4559,7 @@ function desenhaPrevia(todos, d) {
       '<div class="mudo pequeno corta">para ' + esc(m.nome) + " &lt;" + esc(para) + "&gt;</div></div></div>" +
     '<iframe class="pros__iframe" id="pIframe" title="Prévia do e-mail" sandbox></iframe>' +
     '<p class="mudo pequeno" style="padding:8px 12px">' + (viaGmail ? "✍️ Esta marca vai pela fila do Gmail: chega como texto simples, com a sua assinatura." : "📱 Confira também no celular: mande um teste pra você e abra lá.") + "</p></div>";
-  $("#pIframe").srcdoc = viaGmail ? htmlDeTexto(preenche(textoSimples(false), m)) : preenche(htmlDoEmail(), m, true);
+  $("#pIframe").srcdoc = viaGmail ? htmlDeTexto(textoGmail(m)) : etiqueta(preenche(htmlDoEmail(), m, true), "email");
 }
 const htmlDeTexto = (t) => '<!DOCTYPE html><html><body style="margin:0;padding:20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222;white-space:pre-wrap">' + esc(t) + "</body></html>";
 function telaCheia() {
@@ -4562,13 +4567,13 @@ function telaCheia() {
   const viaGmail = d.gmail.some(x => x.id === m.id);
   abrirJanela({ titulo: preenche(R.assunto, m) || "Prévia", larga: true, corpo: '<iframe class="pros__iframe" id="pCheia" sandbox style="height:72vh"></iframe>' });
   $("#janela .janela__caixa").classList.add("janela__caixa--planilha");
-  $("#pCheia").srcdoc = viaGmail ? htmlDeTexto(preenche(textoSimples(false), m)) : preenche(htmlDoEmail(), m, true);
+  $("#pCheia").srcdoc = viaGmail ? htmlDeTexto(textoGmail(m)) : etiqueta(preenche(htmlDoEmail(), m, true), "email");
 }
 
 /* ----- a fila do Gmail: uma por uma ----- */
 function linkGmail(m) {
   return "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(emailDe(m)) +
-    "&su=" + encodeURIComponent(preenche(R.assunto, m)) + "&body=" + encodeURIComponent(preenche(textoSimples(false), m));
+    "&su=" + encodeURIComponent(preenche(R.assunto, m)) + "&body=" + encodeURIComponent(textoGmail(m));
 }
 function desenhaFila(gmail) {
   const fila = gmail.filter(m => !P.pulei.has(m.id));
@@ -4594,8 +4599,8 @@ function desenhaFila(gmail) {
     if (e.target.closest("[data-ver]")) { P.previa = m.id; desenhaPrevia(); $("#pPalco").scrollIntoView({ behavior: "smooth", block: "start" }); }
     if (e.target.closest("[data-pular]")) { P.pulei.add(m.id); desenharProspeccao(); }
     if (e.target.closest("[data-copiar]")) {
-      try { await navigator.clipboard.writeText(preenche(textoSimples(false), m)); torrada("📋 Texto copiado. O assunto é: " + preenche(R.assunto, m)); }
-      catch (x) { abrirJanela({ titulo: preenche(R.assunto, m), corpo: '<textarea class="entrada" style="height:300px;padding:10px" readonly>' + esc(preenche(textoSimples(false), m)) + "</textarea>" }); }
+      try { await navigator.clipboard.writeText(textoGmail(m)); torrada("📋 Texto copiado. O assunto é: " + preenche(R.assunto, m)); }
+      catch (x) { abrirJanela({ titulo: preenche(R.assunto, m), corpo: '<textarea class="entrada" style="height:300px;padding:10px" readonly>' + esc(textoGmail(m)) + "</textarea>" }); }
     }
     if (e.target.closest("[data-abrir]")) item.classList.add("pros__item--aberto");
     const b = e.target.closest("[data-enviei]");
@@ -4647,9 +4652,11 @@ const explicaErro = (t) => /domain.*not verified|verify a domain|not verified/i.
   : t;
 
 function pedidoBase() {
-  const html = htmlDoEmail();
-  return { assunto: R.assunto.trim(), html, texto: textoSimples(true) };
+  const html = etiqueta(htmlDoEmail(), "email");
+  return { assunto: R.assunto.trim(), html, texto: etiqueta(textoSimples(true), "email") };
 }
+/* o texto que vai pela fila do Gmail (marcas frias): o link sai como prospecção ativa */
+const textoGmail = (m) => etiqueta(preenche(textoSimples(false), m), "prospeccao");
 function confereTexto() {
   if (!R.assunto.trim()) { torrada("Escreva o assunto do e-mail.", true); $("#pAssunto").focus(); return false; }
   if (R.modo === "facil" && !R.texto.trim()) { torrada("Escreva o texto do e-mail.", true); $("#pTexto").focus(); return false; }
