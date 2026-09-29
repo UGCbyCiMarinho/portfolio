@@ -4871,7 +4871,12 @@ function montarInspiracao() {
     rodape: '<span class="espaco"></span><button type="button" class="btn" data-fechar>Entendi</button>'
   }));
   $("#iNovo").addEventListener("click", () => editorInspiracao(null));
-  $("#iFila").addEventListener("click", (e) => { const b = e.target.closest("[data-f]"); if (!b) return; I.f.usar = b.dataset.f; I.verDesc = false; desenharInspiracao(); });
+  $("#iFila").addEventListener("click", (e) => {
+    const col = e.target.closest("[data-col]");
+    if (col) { I.f.colecao = I.f.colecao === col.dataset.col ? "" : col.dataset.col; I.verDesc = false; desenharInspiracao(); return; }
+    const b = e.target.closest("[data-f]"); if (!b) return;
+    I.f.usar = b.dataset.f; I.f.colecao = ""; I.verDesc = false; desenharInspiracao();
+  });
   $("#iDesc").addEventListener("click", () => { I.verDesc = !I.verDesc; desenharInspiracao(); });
   $("#iNavegador").addEventListener("click", botaoDoNavegador);
   $("#iCapas").addEventListener("click", () => { if (I.capas) { I.parar = true; return; } buscarCapas(); });
@@ -5142,7 +5147,10 @@ function desenharInspiracao() {
   /* a fila de decisão: clicou, filtra */
   const conta = (f) => todos.filter(x => f === "-" ? !x.usar : f === "" ? x.usar !== "nao" : x.usar === f).length;
   $("#iFila").innerHTML = [["", "Todos"], ["-", "🆕 Para analisar"], ["talvez", "🤔 Talvez depois"], ["sim", "✅ Vou usar"]].map(([f, nome]) =>
-    '<button type="button" data-f="' + f + '"' + (I.f.usar === f && !I.verDesc ? ' class="ativo"' : "") + ">" + nome + " <b>" + conta(f) + "</b></button>").join("");
+    '<button type="button" data-f="' + f + '"' + (I.f.usar === f && !I.verDesc && !I.f.colecao ? ' class="ativo"' : "") + ">" + nome + " <b>" + conta(f) + "</b></button>").join("") +
+    /* as coleções (ex.: Desafio de outubro) também viram atalho aqui */
+    Array.from(new Set(todos.filter(x => x.colecao).map(x => x.colecao))).map(c =>
+      '<button type="button" data-col="' + esc(c) + '"' + (I.f.colecao === c ? ' class="ativo"' : "") + ">📁 " + esc(c) + " <b>" + todos.filter(x => x.colecao === c && x.usar !== "nao").length + "</b></button>").join("");
 
   $("#iPilares").innerHTML = PILARES.map(p => {
     const n = todos.filter(x => x.pilar === p[0] && x.usar !== "nao").length, postados = todos.filter(x => x.pilar === p[0] && statusProducao(x) === "post").length;
