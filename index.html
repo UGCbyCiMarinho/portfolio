@@ -1469,7 +1469,8 @@ function mostraVideos(lista) {
     [/duckduckgo/i, "DuckDuckGo"], [/facebook|^fb(\.com)?$/i, "Facebook"], [/linkedin|lnkd/i, "LinkedIn"],
     [/^t\.co$|twitter|^x(\.com)?$/i, "X"], [/youtube|youtu\.be/i, "YouTube"], [/pinterest/i, "Pinterest"],
     [/whatsapp|wa\.me/i, "WhatsApp"], [/mail|outlook/i, "E-mail"], [/linktr|beacons|bio\.link/i, "Link na bio"],
-    [/canva/i, "Canva"]
+    [/canva/i, "Canva"], [/^plataforma/i, "Plataformas"], [/insense/i, "InSense"], [/billo/i, "Billo"],
+    [/joinbrands/i, "JoinBrands"], [/onbento/i, "onBento"], [/^dm$/i, "DM"]
   ];
   const nome = (s) => { const n = NOMES.find(([re]) => re.test(s)); return n ? n[1] : String(s).slice(0, 60); };
   let origem = "Direto";
