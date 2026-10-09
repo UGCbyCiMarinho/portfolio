@@ -1656,6 +1656,8 @@ document.addEventListener("click", (e) => {
     if (lista.length < 2) return;
     indice = (indice + passo + lista.length) % lista.length;   /* passou do fim, volta ao começo */
     mostrar(lista[indice]);
+    /* passou para o próximo vídeo pela seta ou arrastando: também conta como clique nesse vídeo */
+    if (lista[indice].dataset.id && typeof registraEvento === "function") registraEvento("video", lista[indice].dataset.id);
   }
   function fechar() {
     caixa.classList.remove("is-open");

@@ -551,7 +551,7 @@ function desenharPortfolio() {
     else if (e.tipo === "form") nForm++;
     else if (e.tipo === "mensagem") nMsg++;
   });
-  const listaCliques = Object.entries(cliques).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const listaCliques = Object.entries(cliques).sort((a, b) => b[1] - a[1]);   /* todos os vídeos clicados, não só os 6 primeiros */
   const maiorClique = listaCliques.length ? listaCliques[0][1] : 0;
   if ($("#pMaisClicados")) $("#pMaisClicados").innerHTML = semEventos
     ? '<p class="vazio">Para ver os vídeos mais clicados, rode uma vez o arquivo <b>sql-eventos.sql</b> no Supabase. Depois disso, cada clique num vídeo do site aparece aqui.</p>'
