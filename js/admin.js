@@ -5390,7 +5390,10 @@ function montarProducao() {
 
 async function moverParaFase(p, fase, ordem) {
   if (ordem == null) { const naColuna = D.producao.filter(x => x.fase === fase); ordem = naColuna.length ? Math.max(...naColuna.map(x => x.ordem)) + 1 : 0; }
-  const salvo = await salvarLinha("producao", { fase, ordem }, p.id);
+  const dados = { fase, ordem };
+  /* foi postado agora e não tinha data: grava hoje, para ficar na ordem certa e aparecer no calendário */
+  if (fase === "postado" && p.fase !== "postado" && !p.programado_para) dados.programado_para = new Date().toISOString();
+  const salvo = await salvarLinha("producao", dados, p.id);
   if (!salvo) return;
   troca(D.producao, salvo);
   desenharProducao(); desenharInspiracao();
@@ -5408,7 +5411,8 @@ function desenharProducao() {
   if (falhou.producao) { $("#prQuadro").innerHTML = '<p class="vazio">A tabela da produção ainda não existe no banco. Rode o sql-producao.sql no Supabase.</p>'; return; }
   $("#prQuadro").innerHTML = FASES.map(([fase, nome]) => {
     let col = lista.filter(p => p.fase === fase);
-    if (fase === "postado") col.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+    /* postados: do mais recente para o mais antigo, pela data do post (sem data, vale a última edição) */
+    if (fase === "postado") { const quando = x => { const t = new Date(x.programado_para || x.updated_at || 0).getTime(); return isNaN(t) ? 0 : t; }; col.sort((a, b) => quando(b) - quando(a)); }
     else if (fase === "programado") col.sort((a, b) => String(a.programado_para || "9").localeCompare(String(b.programado_para || "9")));
     else col.sort((a, b) => a.ordem - b.ordem);
     const total = col.length, corta = fase === "postado" && !PR.postadosTodos && total > 12;
@@ -5519,6 +5523,7 @@ function abrirFicha(p, padrao) {
     };
     /* postou em alguma rede: vai para Postado */
     if (Object.values(redes).some(x => x.ok)) dados.fase = "postado";
+    if (dados.fase === "postado" && !dados.programado_para && (!p || p.fase !== "postado")) dados.programado_para = new Date().toISOString();
     if (!p) {
       if (padrao && padrao.inspiracao_id) dados.inspiracao_id = padrao.inspiracao_id;
       const naColuna = D.producao.filter(x => x.fase === dados.fase);
