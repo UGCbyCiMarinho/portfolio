@@ -3286,14 +3286,23 @@ function desenharFunil() {
   const dias = diasDoMes(mesFunil);
   const porDia = {};
   dias.forEach(d => { porDia[d] = {}; });
-  const totalCanal = {};
+  /* separa o que já saiu (até hoje) do que ainda está agendado,
+     e o que já teve 14 dias para a marca responder */
+  const hojeISOf = isoLocal(hoje());
+  const corte = hoje(); corte.setDate(corte.getDate() - 14);
+  const corteISO = isoLocal(corte);
+  const totalCanal = {}, enviadoCanal = {}, maduroCanal = {};
   D.abordagens.forEach(a => porDiaDoRegistro(a).forEach(([d, q]) => {
     if (!(d in porDia)) return;
     const k = CANAIS_ABORDAGEM.some(c => c[0] === a.canal) ? a.canal : "outro";
     porDia[d][k] = (porDia[d][k] || 0) + q;
     totalCanal[k] = (totalCanal[k] || 0) + q;
+    if (d <= hojeISOf) enviadoCanal[k] = (enviadoCanal[k] || 0) + q;
+    if (d <= corteISO) maduroCanal[k] = (maduroCanal[k] || 0) + q;
   }));
-  const abordadas = Math.round(soma(Object.values(totalCanal), x => x));
+  const abordadas = Math.round(soma(Object.values(enviadoCanal), x => x));
+  const agendadas = Math.round(soma(Object.values(totalCanal), x => x)) - abordadas;
+  const ultimoAgendado = Object.keys(porDia).filter(d => d > hojeISOf && Object.keys(porDia[d]).length).pop();
 
   /* contratos do mês, por canal */
   const contratos = D.campanhas.filter(c => noMes(dataDoContrato(c), mesFunil));
@@ -3306,7 +3315,7 @@ function desenharFunil() {
     D.base.filter(m => m.origem === "portfolio" && noMes(String(m.created_at || "").slice(0, 10), mesFunil)).length;
 
   $("#fNumeros").innerHTML =
-    numero("Marcas abordadas", inteiro(abordadas)) +
+    numero("Marcas abordadas", inteiro(abordadas), agendadas > 0 ? "até hoje · + " + inteiro(agendadas) + " agendadas" + (ultimoAgendado ? " até " + dataBR(ultimoAgendado).slice(0, 5) : "") : "") +
     numero("Contratos fechados", inteiro(contratos.length), contratos.filter(c => c.gift).length ? plural(contratos.filter(c => c.gift).length, "gift", "gifts") : "") +
     numero("Conversão da prospecção", deProspeccao && abordadas ? "1 a cada " + inteiro(Math.round(abordadas / deProspeccao)) : "ainda não", deProspeccao && abordadas ? (Math.round(deProspeccao / abordadas * 1000) / 10).toString().replace(".", ",") + "% viraram contrato" : "") +
     numero("Valor fechado", valorMes.completo && !valorMes.soCAD ? dinheiroEm(valorMes.total, "CAD") : (valorMes.partes.join(" · ") || dinheiroEm(0, "CAD")), !valorMes.soCAD && valorMes.completo ? valorMes.partes.join(" · ") : "") +
@@ -3326,24 +3335,25 @@ function desenharFunil() {
     barras = semanas.map(s => ({ rot: "sem. " + s.rot, v: s.v, hoje: false }));
   } else {
     const hojeISO = isoLocal(hoje());
-    barras = dias.map(d => ({ rot: String(deISO(d).getDate()), v: porDia[d], hoje: d === hojeISO }));
+    barras = dias.map(d => ({ rot: String(deISO(d).getDate()), v: porDia[d], hoje: d === hojeISO, futuro: d > hojeISO }));
   }
   const maior = Math.max(0, ...barras.map(b => soma(Object.values(b.v), x => x)));
-  $("#fGrafico").innerHTML = !abordadas
+  $("#fGrafico").innerHTML = !(abordadas + agendadas)
     ? '<p class="vazio">Nenhuma abordagem registrada neste mês ainda.<br>Os cliques em 📨 Prospectei, na aba Marcas, e o Instagram automático entram aqui sozinhos. onBento e plataformas você registra no botão ➕ Registrar abordagens.</p>'
     : '<div class="grafico funil__grafico' + (escalaFunil === "dia" ? " funil__grafico--dia" : "") + '">' + barras.map(b => {
         const tot = soma(Object.values(b.v), x => x);
-        const titulo = b.rot + ": " + inteiro(Math.round(tot)) + " · " + CANAIS_ABORDAGEM.filter(c => b.v[c[0]]).map(c => c[1].replace(/^\S+\s/, "") + " " + Math.round(b.v[c[0]])).join(", ");
-        return '<div class="grafico__col' + (b.hoje ? " hoje" : "") + '" title="' + esc(titulo) + '">' +
+        const titulo = b.rot + ": " + inteiro(Math.round(tot)) + (b.futuro ? " agendadas" : "") + " · " + CANAIS_ABORDAGEM.filter(c => b.v[c[0]]).map(c => c[1].replace(/^\S+\s/, "") + " " + Math.round(b.v[c[0]])).join(", ");
+        return '<div class="grafico__col' + (b.hoje ? " hoje" : "") + (b.futuro ? " futuro" : "") + '" title="' + esc(titulo) + '">' +
           '<div class="funil__pilha" style="height:' + (maior ? Math.max(tot ? 2 : 0, tot / maior * 100) : 0) + '%"' + (tot >= 1 ? ' data-v="' + Math.round(tot) + '"' : "") + ">" +
             CANAIS_ABORDAGEM.filter(c => b.v[c[0]]).map(c => '<span style="flex:' + b.v[c[0]] + ";background:" + c[2] + '"></span>').join("") +
           "</div>" + '<span class="grafico__dia">' + esc(b.rot) + "</span></div>";
       }).join("") + "</div>";
-  $("#fLegenda").innerHTML = abordadas ? CANAIS_ABORDAGEM.filter(c => totalCanal[c[0]]).map(c => '<span><i style="background:' + c[2] + '"></i>' + esc(c[1]) + " · " + inteiro(Math.round(totalCanal[c[0]])) + "</span>").join("") : "";
+  $("#fLegenda").innerHTML = (abordadas + agendadas) ? CANAIS_ABORDAGEM.filter(c => totalCanal[c[0]]).map(c => '<span><i style="background:' + c[2] + '"></i>' + esc(c[1]) + " · " + inteiro(Math.round(totalCanal[c[0]])) + "</span>").join("") +
+    (agendadas > 0 ? '<span><i class="funil__agendado"></i>Mais claro = agendado, ainda não saiu</span>' : "") : "";
 
-  /* tabela por canal */
+  /* tabela por canal: só o que já saiu */
   const linhasCanal = CANAIS.map(([k, rot]) => {
-    const ab = Math.round(totalCanal[k] || 0), ct = (porCanal[k] || []).length;
+    const ab = Math.round(enviadoCanal[k] || 0), ct = (porCanal[k] || []).length;
     return { k, rot, ab, ct, valor: valorCAD(porCanal[k] || []) };
   }).concat(porCanal.sem ? [{ k: "sem", rot: "Sem canal informado", ab: 0, ct: porCanal.sem.length, valor: valorCAD(porCanal.sem) }] : [])
     .filter(l => l.ab || l.ct);
@@ -3356,11 +3366,16 @@ function desenharFunil() {
   }).join("") : '<tr><td colspan="5"><p class="vazio">Nada neste mês ainda.</p></td></tr>';
 
   /* onde está o gap: leitura simples */
+  /* só cobra resultado do que já teve 14 dias para responder */
   const dicas = [];
   CANAIS_ABORDAGEM.forEach(([k, rot]) => {
-    const ab = Math.round(totalCanal[k] || 0), ct = (porCanal[k] || []).length;
-    if (ab >= 50 && !ct) dicas.push("🔍 <b>" + esc(rot) + "</b>: " + inteiro(ab) + " abordagens e nenhum contrato no mês. Vale revisar a mensagem ou a lista de marcas desse canal.");
+    const ab = Math.round(maduroCanal[k] || 0), ct = (porCanal[k] || []).length;
+    if (ab >= 50 && !ct) dicas.push("🔍 <b>" + esc(rot) + "</b>: " + inteiro(ab) + " abordagens enviadas há mais de 14 dias e nenhum contrato. Vale revisar a mensagem ou a lista de marcas desse canal.");
   });
+  const recentes = abordadas - Math.round(soma(Object.values(maduroCanal), x => x));
+  if (recentes > 0 || agendadas > 0) dicas.push("⏳ " + (recentes > 0 ? inteiro(recentes) + " abordagens saíram nos últimos 14 dias e ainda estão no prazo de resposta" : "") +
+    (recentes > 0 && agendadas > 0 ? " e " : "") + (agendadas > 0 ? inteiro(agendadas) + " ainda estão agendadas" : "") +
+    ". Marcas costumam levar de 1 a 3 semanas para responder, então elas só entram na conta de conversão depois desse prazo.");
   const melhores = linhasCanal.filter(l => CANAIS_ABORDAGEM.some(c => c[0] === l.k) && l.ct && l.ab).sort((a, b) => a.ab / a.ct - b.ab / b.ct);
   if (melhores.length > 1) dicas.push("⭐ O canal que mais converte este mês é <b>" + esc(melhores[0].rot) + "</b> (1 contrato a cada " + inteiro(Math.round(melhores[0].ab / melhores[0].ct)) + ").");
   if (porCanal.sem) dicas.push("✏️ " + plural(porCanal.sem.length, "contrato está", "contratos estão") + " sem \"Por onde fechei\". Preencha na aba Campanhas para a conta ficar certa.");
