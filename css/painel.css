@@ -147,9 +147,10 @@ svg.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor
 }
 .lateral__marca { font-weight: 700; font-size: 14px; padding: 0 10px 18px; letter-spacing: .02em; }
 .lateral__marca span { color: var(--red); }
-.lateral__secao { font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); padding: 14px 10px 6px; }
-button.lateral__secao { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; border-radius: 6px; }
-button.lateral__secao:hover { color: var(--text); }
+.lateral__secao { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text); padding: 9px 10px; }
+button.lateral__secao { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; border-radius: 8px; background: var(--suave); border-left: 3px solid var(--red); margin-top: 14px; margin-bottom: 4px; }
+button.lateral__secao:hover { background: var(--card-2); }
+.lateral__marca + .menu__grupo button.lateral__secao { margin-top: 6px; }
 .menu__seta { width: 14px; height: 14px; margin-left: auto; transition: transform .2s; }
 .menu__grupo.fechado .menu__seta { transform: rotate(-90deg); }
 .menu__grupo.fechado .menu__itens { display: none; }
@@ -601,7 +602,7 @@ a.btn { text-decoration: none; }
 .insp__texto:hover { color: var(--red); }
 .insp__sel { height: 28px; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--campo); padding: 0 4px; max-width: 128px; }
 .insp__usar.sim { border-color: var(--c-verde); } .insp__usar.nao { border-color: var(--c-cinza); color: var(--muted); }
-.insp__usar.talvez { border-color: var(--c-mostarda); } .insp__usar.referencia { border-color: var(--c-roxo); } .insp__usar.novo { border-color: var(--c-azul); }
+.insp__usar.talvez { border-color: var(--c-mostarda); } .insp__usar.referencia { border-color: var(--c-roxo); } .insp__usar.ideia { border-color: var(--c-coral); } .insp__usar.novo { border-color: var(--c-azul); }
 .insp__fila { margin-bottom: 12px; flex-wrap: wrap; }
 .insp__fila b { margin-left: 4px; }
 .insp__mini { position: relative; display: grid; place-items: center; width: 40px; height: 56px; border-radius: 5px; overflow: hidden; background: linear-gradient(160deg, var(--suave), var(--card-2)); color: var(--text); font-size: 13px; }

@@ -4849,7 +4849,7 @@ function montarInspiracao() {
       '<select class="entrada entrada--sel" id="iFFormato"></select>' +
       '<select class="entrada entrada--sel" id="iFPilar"></select>' +
       '<select class="entrada entrada--sel" id="iFColecao"></select>' +
-      '<select class="entrada entrada--sel" id="iFUsar"><option value="">Usar: todos</option><option value="-">🆕 Para analisar</option><option value="referencia">📌 Referências</option><option value="talvez">🤔 Talvez depois</option><option value="sim">✅ Vou usar</option><option value="nao">🗑️ Descartados</option></select>' +
+      '<select class="entrada entrada--sel" id="iFUsar"><option value="">Usar: todos</option><option value="-">🆕 Para analisar</option><option value="referencia">🎬 Referências de take</option><option value="ideia">💡 Ideias de conteúdo</option><option value="talvez">🤔 Talvez depois</option><option value="sim">✅ Vou usar</option><option value="nao">🗑️ Descartados</option></select>' +
       '<select class="entrada entrada--sel" id="iFPostei"><option value="">Produção: todos</option><option value="nao">Ainda não produzi</option><option value="prod">🎬 Em produção</option><option value="post">✅ Já postados</option></select>' +
       '<button type="button" class="btn btn--linha escondido" id="iLimpar">Limpar filtros</button>' +
       '<button type="button" class="btn btn--linha" id="iDesc"></button>' +
@@ -4911,7 +4911,8 @@ function montarInspiracao() {
     await salvaInspiracao(x, { [campo]: valor });
     if (campo === "usar" && valor === "nao" && !I.verDesc && I.f.usar !== "nao") torrada("🗑️ Descartado. Ele fica guardado em Descartados, se mudar de ideia.");
     if (campo === "usar" && valor === "talvez") avisaFila("🤔 Guardado em Talvez depois.");
-    if (campo === "usar" && valor === "referencia") avisaFila("📌 Guardado nas Referências, para consultar sempre.");
+    if (campo === "usar" && valor === "referencia") avisaFila("🎬 Guardado nas Referências de take, para consultar sempre.");
+    if (campo === "usar" && valor === "ideia") avisaFila("💡 Guardado nas Ideias de conteúdo.");
   });
   corpo.addEventListener("click", async (e) => {
     const linha = e.target.closest("[data-id]"); if (!linha) return;
@@ -4936,7 +4937,8 @@ function montarInspiracao() {
       const v = e.target.closest("[data-usar]").dataset.usar;
       await salvaInspiracao(x, { usar: x.usar === v ? null : v });
       if (v === "talvez" && x.usar !== "talvez") avisaFila("🤔 Guardado em Talvez depois.");
-      if (v === "referencia" && x.usar !== "referencia") avisaFila("📌 Guardado nas Referências, para consultar sempre.");
+      if (v === "referencia" && x.usar !== "referencia") avisaFila("🎬 Guardado nas Referências de take, para consultar sempre.");
+      if (v === "ideia" && x.usar !== "ideia") avisaFila("💡 Guardado nas Ideias de conteúdo.");
       return;
     }
     if (e.target.closest("[data-editar]")) { editorInspiracao(x); return; }
@@ -4996,7 +4998,7 @@ function editorInspiracao(x, padrao) {
       { nome: "nicho", rot: "Nicho", lista: unicos("nicho"), dica: "Ex.: Haircare" },
       { nome: "formato", rot: "Formato", lista: unicos("formato"), dica: "Ex.: Bastidores (BTS)" },
       { nome: "sobre", rot: "Sobre o que é o vídeo", tipo: "textarea", inteiro: true },
-      { nome: "usar", rot: "Usar?", tipo: "select", opcoes: [["", "🆕 Para analisar"], ["referencia", "📌 Referência (transições, técnicas: só para consultar)"], ["talvez", "🤔 Talvez depois"], ["sim", "✅ Sim (vai para a Produção)"], ["nao", "🗑️ Não (descartar)"]] }
+      { nome: "usar", rot: "Usar?", tipo: "select", opcoes: [["", "🆕 Para analisar"], ["referencia", "🎬 Referência de take (transições, técnicas: só para consultar)"], ["ideia", "💡 Ideia de conteúdo (um assunto para gravar depois)"], ["talvez", "🤔 Talvez depois"], ["sim", "✅ Sim (vai para a Produção)"], ["nao", "🗑️ Não (descartar)"]] }
     ].concat(!x && temChave ? [{ nome: "capa_agora", rot: "🖼️ Buscar a capa e os números agora (1 crédito da Supadata)", tipo: "check" }] : []),
     aoSalvar: async (d, erro) => {
       const url = limpaLink(d.url);
@@ -5159,11 +5161,11 @@ function desenharInspiracao() {
   $("#iNumeros").innerHTML =
     numero("Vídeos salvos", inteiro(todos.length)) +
     numero("🆕 Para analisar", inteiro(todos.filter(x => !x.usar).length), "ainda não olhei") +
-    numero("🤔 Talvez depois", inteiro(todos.filter(x => x.usar === "talvez").length), plural(todos.filter(x => x.usar === "referencia").length, "📌 referência fixa", "📌 referências fixas")) +
+    numero("🤔 Talvez depois", inteiro(todos.filter(x => x.usar === "talvez").length), plural(todos.filter(x => x.usar === "referencia").length, "🎬 referência de take", "🎬 referências de take") + " · " + plural(todos.filter(x => x.usar === "ideia").length, "💡 ideia de conteúdo", "💡 ideias de conteúdo")) +
     numero("🎬 Em produção", inteiro(todos.filter(x => statusProducao(x) === "prod").length), plural(todos.filter(x => statusProducao(x) === "post").length, "já postado", "já postados"));
   /* a fila de decisão: clicou, filtra */
   const conta = (f) => todos.filter(x => f === "-" ? !x.usar : f === "" ? x.usar !== "nao" : x.usar === f).length;
-  $("#iFila").innerHTML = [["", "Todos"], ["-", "🆕 Para analisar"], ["talvez", "🤔 Talvez depois"], ["sim", "✅ Vou usar"], ["referencia", "📌 Referências"]].map(([f, nome]) =>
+  $("#iFila").innerHTML = [["", "Todos"], ["-", "🆕 Para analisar"], ["talvez", "🤔 Talvez depois"], ["sim", "✅ Vou usar"], ["referencia", "🎬 Referências de take"], ["ideia", "💡 Ideias de conteúdo"]].map(([f, nome]) =>
     '<button type="button" data-f="' + f + '"' + (I.f.usar === f && !I.verDesc && !I.f.colecao ? ' class="ativo"' : "") + ">" + nome + " <b>" + conta(f) + "</b></button>").join("") +
     /* as coleções (ex.: Desafio de outubro) também viram atalho aqui */
     Array.from(new Set(todos.filter(x => x.colecao).map(x => x.colecao))).map(c =>
@@ -5212,7 +5214,7 @@ function desenharInspiracao() {
 const seletorPilar = (x) => '<select class="insp__sel" data-campo="pilar" aria-label="Pilar"><option value="">Escolha</option>' +
   PILARES.map(p => '<option value="' + p[0] + '"' + (x.pilar === p[0] ? " selected" : "") + ">" + p[1] + "</option>").join("") + "</select>";
 const seletorUsar = (x) => '<select class="insp__sel insp__usar ' + (x.usar || "novo") + '" data-campo="usar" aria-label="Usar?"><option value="">🆕 Para analisar</option>' +
-  [["referencia", "📌 Referência"], ["talvez", "🤔 Talvez depois"], ["sim", "✅ Sim"], ["nao", "🗑️ Não (descartar)"]].map(([v, t]) => '<option value="' + v + '"' + (x.usar === v ? " selected" : "") + ">" + t + "</option>").join("") + "</select>";
+  [["referencia", "🎬 Referência de take"], ["ideia", "💡 Ideia de conteúdo"], ["talvez", "🤔 Talvez depois"], ["sim", "✅ Sim"], ["nao", "🗑️ Não (descartar)"]].map(([v, t]) => '<option value="' + v + '"' + (x.usar === v ? " selected" : "") + ">" + t + "</option>").join("") + "</select>";
 const linkCriadora = (x) => x.criadora ? '<a class="link" href="' + (fonteDe(x.url) === "tiktok" ? "https://www.tiktok.com/@" : "https://www.instagram.com/") + encodeURIComponent(semArroba(x.criadora)) + '" target="_blank" rel="noopener">' + esc(x.criadora) + "</a>" : "";
 const numerosInsp = (x) => {
   const m = x.metricas || {}, c = new Intl.NumberFormat("pt-BR", { notation: "compact" });
@@ -5322,7 +5324,8 @@ function cartaoInspiracao(x, pos, total) {
         botaoProducao(x) +
         (x.usar === "nao" ? '<button type="button" class="btn btn--linha" data-descartar>↩️ Voltar para a lista</button>'
           : '<button type="button" class="btn btn--linha' + (x.usar === "sim" ? " insp__on" : "") + '" data-usar="sim" title="Vai para a Produção, na coluna Ideia">✅ Vou usar</button>' +
-            '<button type="button" class="btn btn--linha' + (x.usar === "referencia" ? " insp__on" : "") + '" data-usar="referencia" title="Para consultar sempre: transições, efeitos, técnicas">📌 Referência</button>' +
+            '<button type="button" class="btn btn--linha' + (x.usar === "referencia" ? " insp__on" : "") + '" data-usar="referencia" title="Para consultar sempre: transições, efeitos, técnicas">🎬 Referência de take</button>' +
+            '<button type="button" class="btn btn--linha' + (x.usar === "ideia" ? " insp__on" : "") + '" data-usar="ideia" title="Um assunto ou formato para gravar depois">💡 Ideia de conteúdo</button>' +
             '<button type="button" class="btn btn--linha' + (x.usar === "talvez" ? " insp__on" : "") + '" data-usar="talvez" title="Olhei, mas não é para agora">🤔 Talvez depois</button>' +
             '<button type="button" class="btn btn--linha" data-descartar>🗑️ Descartar</button>') +
         (!x.capa && D.config[CHAVE_SUPADATA] ? '<button type="button" class="btn btn--linha" data-umacapa title="1 crédito da Supadata">🖼️ Capa</button>' : "") +
