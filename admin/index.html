@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../css/painel.css?v=65">
+<link rel="stylesheet" href="../css/painel.css?v=66">
 <script>
   /* usa o mesmo tom escolhido no portfólio */
   try { var t = localStorage.getItem("tema"); if (t === "bege" || t === "espresso") document.documentElement.dataset.tema = t; } catch (e) {}
@@ -81,6 +81,27 @@
     </div>
   </div>
 
+  <div class="menu__grupo" data-grupo="financeiro">
+    <button type="button" class="lateral__secao" data-alterna aria-expanded="true">💰 Financeiro<svg class="ic menu__seta" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="menu__itens">
+    <button class="menu__item" data-aba="fin_resumo">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>Resumo
+    </button>
+    <button class="menu__item" data-aba="fin_contas">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Contas a receber e a pagar
+    </button>
+    <button class="menu__item" data-aba="fin_receitas">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Receitas
+    </button>
+    <button class="menu__item" data-aba="fin_despesas">
+      <svg class="ic" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>Despesas
+    </button>
+    <button class="menu__item" data-aba="fin_investir">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg>Quero investir
+    </button>
+    </div>
+  </div>
+
   <div class="lateral__pe">
     <div class="lateral__email" id="meuEmail"></div>
     <button class="btn btn--linha" id="btnSair">
@@ -113,12 +134,17 @@
   <section class="aba" id="aba-roteiros"></section>
   <section class="aba" id="aba-inspiracao"></section>
   <section class="aba" id="aba-producao"></section>
+  <section class="aba" id="aba-fin_resumo"></section>
+  <section class="aba" id="aba-fin_contas"></section>
+  <section class="aba" id="aba-fin_receitas"></section>
+  <section class="aba" id="aba-fin_despesas"></section>
+  <section class="aba" id="aba-fin_investir"></section>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/banco.js?v=63"></script>
 <script src="../js/biblioteca.js?v=63"></script>
 <!-- quando mudar algum arquivo do painel, aumente o número v= para o navegador buscar a versão nova -->
-<script src="../js/admin.js?v=67"></script>
+<script src="../js/admin.js?v=68"></script>
 </body>
 </html>

@@ -480,6 +480,15 @@ a.btn { text-decoration: none; }
 .contrato__pag input, .contrato__pag select { height: 34px; padding: 0 8px; border-radius: var(--radius); background: var(--campo); border: 1px solid var(--line); font-size: 13px; width: 100%; }
 .contrato__saldo { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; padding: 9px 12px; border-radius: var(--radius); background: var(--card-2); font-size: 13px; }
 @media (max-width: 900px) { .contrato__pag { grid-template-columns: 1fr 1fr; } }
+.contrato__video { display: grid; grid-template-columns: 22px minmax(0, 1fr) 110px 150px 32px; gap: 6px; margin-top: 6px; align-items: center; }
+.contrato__parcela { display: grid; grid-template-columns: minmax(0, 1fr) 140px 140px 130px 32px; gap: 6px; margin-top: 6px; align-items: center; }
+.contrato__parcela [hidden] { display: none; }
+.contrato__parcela:not(:has([data-pd]:not([hidden]))) { grid-template-columns: minmax(0, 1fr) 140px 130px 32px; }
+.contrato__video input, .contrato__video select, .contrato__parcela input, .contrato__parcela select { height: 34px; padding: 0 8px; border-radius: var(--radius); background: var(--campo); border: 1px solid var(--line); font-size: 13px; width: 100%; min-width: 0; }
+.contrato__parcela--ok { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border-radius: var(--radius); background: color-mix(in srgb, var(--c-verde) 12%, transparent); font-size: 13px; }
+.contrato__num { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--suave); color: var(--red); }
+.contrato__botoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+@media (max-width: 900px) { .contrato__video { grid-template-columns: 1fr 1fr 32px; } .contrato__video .contrato__num { display: none; } .contrato__video [data-vn] { grid-column: 1 / -1; } .contrato__parcela, .contrato__parcela:not(:has([data-pd]:not([hidden]))) { grid-template-columns: 1fr 1fr; } }
 /* prospectado × fechado */
 .funil__grafico { height: 190px; }
 .funil__grafico--dia { gap: 2px; }
@@ -670,4 +679,59 @@ a.btn { text-decoration: none; }
   .numero { border-top: 1px solid var(--line); }
   .numero:nth-child(-n+2) { border-top: 0; }
   .blocos__linha { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* ============ 💰 FINANCEIRO ============ */
+.fin__periodo { display: inline-flex; align-items: center; gap: 4px; }
+.fin__ano { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+.fin__grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.fin__grade > .bloco { margin-bottom: 0; }
+.fin__largo { grid-column: 1 / -1; }
+.fin__contas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.fin__contas > .bloco { margin-bottom: 0; }
+.fin__barras { display: flex; flex-direction: column; gap: 9px; }
+.fin__barra { display: grid; grid-template-columns: minmax(0, 150px) 1fr auto; gap: 10px; align-items: center; font-size: 12.5px; }
+.fin__barra-rot { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.fin__barra-rot i, .fin__cat i { width: 9px; height: 9px; border-radius: 3px; flex: none; display: inline-block; }
+.fin__barra-trilho { height: 9px; border-radius: 6px; background: var(--card-2); overflow: hidden; }
+.fin__barra-trilho span { display: block; height: 100%; border-radius: 6px; }
+.fin__barra-val { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.fin__barra-val small { display: block; font-weight: 400; color: var(--muted); }
+.fin__colunas { display: flex; align-items: stretch; gap: 6px; height: 190px; }
+.fin__col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.fin__col.ativo .fin__col-rot { color: var(--text); font-weight: 700; }
+.fin__col-barras { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.fin__col-barras span { width: 40%; max-width: 16px; min-height: 0; border-radius: 4px 4px 0 0; }
+.fin__r { background: var(--c-verde); } .fin__d { background: var(--c-coral); }
+.fin__col-lucro { font-size: 10px; color: var(--c-verde); font-variant-numeric: tabular-nums; min-height: 13px; }
+.fin__col-lucro.neg { color: var(--c-vermelho); }
+.fin__col-rot { font-size: 11px; color: var(--muted); }
+.fin__legenda { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.fin__legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.fin__legenda b { color: var(--text); }
+.fin__linha { width: 100%; height: 160px; display: block; }
+.fin__linha polyline { fill: none; stroke: var(--red); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.fin__linha circle { fill: var(--red); }
+.fin__zero { stroke: var(--line); stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.fin__lista { display: flex; flex-direction: column; gap: 6px; }
+.fin__item { display: grid; grid-template-columns: 70px 1fr auto; gap: 10px; align-items: center; font-size: 12.5px; padding: 7px 10px; border-radius: var(--radius); background: var(--card-2); }
+.fin__conta { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; font-size: 13px; }
+.fin__conta:hover { background: var(--card-2); }
+.fin__conta-dir { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fin__conta .btn { height: 32px; }
+.fin__apagado { opacity: .55; }
+.fin__cat { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.fin__invest { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.fin__invcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+.fin__invcard:hover { background: var(--card-2); }
+.fin__invtopo { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.fin__invpe { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.fin__invpe .btn { margin-left: auto; height: 30px; }
+@media (max-width: 900px) {
+  .fin__grade, .fin__contas { grid-template-columns: 1fr; }
+  .fin__barra { grid-template-columns: minmax(0, 110px) 1fr auto; }
+  .fin__conta { grid-template-columns: 1fr auto; }
+  .fin__conta .btn { grid-column: 1 / -1; }
+  .fin__colunas { gap: 3px; }
+  .fin__col-lucro { font-size: 8.5px; }
 }

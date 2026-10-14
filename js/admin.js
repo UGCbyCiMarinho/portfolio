@@ -102,7 +102,7 @@ function torrada(texto, erro) {
 }
 
 /* ----- traduz os erros do banco para português ----- */
-const ARQUIVO_SQL = { base_marcas: "sql-marcas.sql", roteiros: "sql-roteiros.sql", configuracoes: "sql-roteiros.sql", abordagens: "sql-resultados.sql", email_envios: "disparo.sql", email_optout: "disparo.sql", eventos: "sql-eventos.sql", inspiracoes: "sql-inspiracao.sql", producao: "sql-producao.sql" };
+const ARQUIVO_SQL = { base_marcas: "sql-marcas.sql", roteiros: "sql-roteiros.sql", configuracoes: "sql-roteiros.sql", abordagens: "sql-resultados.sql", email_envios: "disparo.sql", email_optout: "disparo.sql", eventos: "sql-eventos.sql", inspiracoes: "sql-inspiracao.sql", producao: "sql-producao.sql", fin_receber: "sql-financeiro.sql", fin_despesas: "sql-financeiro.sql", fin_recorrencias: "sql-financeiro.sql", fin_investir: "sql-financeiro.sql" };
 function traduzErro(e, tabela) {
   const cod = (e && e.code) || "";
   const msg = (e && e.message) || String(e || "");
@@ -130,7 +130,7 @@ const ESPERADO = {
   marcas: ["nome", "instagram", "email", "telefone", "situacao", "obs", "ultimo_contato"],
   base_marcas: ["nome", "instagram", "email", "telefone", "site", "nicho", "origem", "situacao", "obs", "ultimo_contato", "nao_enviar", "favorita", "produto", "link_produto", "outros_contatos", "fonte"],
   calendario: ["titulo", "marca", "tipo", "data", "status"],
-  campanhas: ["campanha", "cliente", "tipo", "status", "qtd", "valor", "prazo", "pagamento", "ativa", "favorita", "moeda", "pagamentos", "gift", "nicho", "data_contrato", "vencimento", "canal", "canal_detalhe"],
+  campanhas: ["campanha", "cliente", "tipo", "status", "qtd", "valor", "prazo", "pagamento", "ativa", "favorita", "moeda", "pagamentos", "gift", "nicho", "data_contrato", "vencimento", "canal", "canal_detalhe", "videos"],
   abordagens: ["data", "canal", "quantidade"],
   marcados: ["chave"],
   roteiros: ["fonte", "url", "perfil", "de_quem", "titulo", "transcricao", "legenda", "postado_em", "tags", "obs", "status", "erro", "gancho", "corpo", "cta", "analise", "metricas", "capa"],
@@ -348,10 +348,10 @@ const numero = (rot, val, sub) =>
 /* ============================================================
    4. CARREGAR OS DADOS
    ============================================================ */
-const D = { videos: [], visitas: [], eventos: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], envios: [], optout: [], inspiracoes: [], producao: [], config: {}, marcados: new Set() };
+const D = { videos: [], visitas: [], eventos: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], envios: [], optout: [], inspiracoes: [], producao: [], fin_receber: [], fin_despesas: [], fin_recorrencias: [], fin_investir: [], config: {}, marcados: new Set() };
 const inicio14 = hoje(); inicio14.setDate(inicio14.getDate() - 13);
 
-const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens, envios, optout, inspiracoes, producao] = await Promise.all([
+const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens, envios, optout, inspiracoes, producao, fin_receber, fin_despesas, fin_recorrencias, fin_investir] = await Promise.all([
   ler("videos", q => q.order("ordem", { ascending: true }).order("criado_em", { ascending: true })),
   ler("visitas", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
   ler("eventos", q => q.order("data", { ascending: true })),
@@ -366,9 +366,13 @@ const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteir
   ler("email_envios", q => q.order("data", { ascending: false })),
   ler("email_optout", q => q.order("data", { ascending: false })),
   ler("inspiracoes", q => q.order("numero", { ascending: true })),
-  ler("producao", q => q.order("ordem", { ascending: true }))
+  ler("producao", q => q.order("ordem", { ascending: true })),
+  ler("fin_receber", q => q.order("criado_em", { ascending: true })),
+  ler("fin_despesas", q => q.order("data", { ascending: false })),
+  ler("fin_recorrencias", q => q.order("criado_em", { ascending: true })),
+  ler("fin_investir", q => q.order("criado_em", { ascending: false }))
 ]);
-Object.assign(D, { videos, visitas, eventos, marcas, calendario, campanhas, roteiros, base, abordagens, envios, optout, inspiracoes, producao, marcados: new Set(marcados.map(m => m.chave)) });
+Object.assign(D, { videos, visitas, eventos, marcas, calendario, campanhas, roteiros, base, abordagens, envios, optout, inspiracoes, producao, fin_receber, fin_despesas, fin_recorrencias, fin_investir, marcados: new Set(marcados.map(m => m.chave)) });
 configuracoes.forEach(c => { D.config[c.chave] = c.valor; });
 
 const nomesDeMarcas = () => Array.from(new Set(D.marcas.map(m => m.nome).concat(D.base.map(m => m.nome), D.campanhas.map(c => c.cliente), D.videos.map(v => v.marca)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -1700,12 +1704,20 @@ function editorCal(c, dataPadrao) {
 
 /* ============================================================
    8. ABA CAMPANHAS (os contratos fechados)
+   Aqui fica o trabalho: vídeos, status, prazo e por onde fechou.
+   O dinheiro (o que falta receber, o que caiu) é gerido no 💰 Financeiro:
+   as parcelas do contrato viram linhas de "Contas a receber" (tabela fin_receber).
    ============================================================ */
 const FUNIL = ["Briefing", "Roteiro", "Aprovação Roteiro", "Gravação", "Edição", "Aprovado", "Entregue"];
 const COR_STATUS = { "Briefing": "c-cinza", "Roteiro": "c-azul", "Aprovação Roteiro": "c-roxo", "Gravação": "c-coral", "Edição": "c-mostarda", "Aprovado": "c-verde", "Entregue": "c-destaque" };
-const COR_TIPO = { "Conteúdo": "c-azul", "Publicidade": "c-coral" };
-const MOEDAS = { CAD: "CA$", USD: "US$", EUR: "€" };
+const TIPOS_VIDEO = [["organico", "Orgânico", "c-verde"], ["ads", "Ads", "c-coral"], ["ambos", "Ambos", "c-roxo"]];
+const tipoVideo = (v) => TIPOS_VIDEO.find(t => t[0] === v) || TIPOS_VIDEO[0];
+const MOEDAS = { CAD: "CA$", USD: "US$", EUR: "€", BRL: "R$" };
+const MOEDAS_CONTRATO = ["CAD", "USD", "EUR"];
 const VIAS = ["PayPal", "Wise", "Transferência", "Outro"];
+/* em qual moeda o dinheiro fica em cada conta (o PayPal dela converte para CAD) */
+const MOEDA_DA_VIA = { PayPal: "CAD", Wise: "USD" };
+const QUANDO = [["assinatura", "Na assinatura"], ["entrega", "Na entrega"], ["data", "Numa data"]];
 const CANAIS = [
   ["inbound", "📥 Inbound (portfólio)", "c-verde"],
   ["plataforma", "🧩 Plataforma", "c-roxo"],
@@ -1719,61 +1731,93 @@ const CANAIS = [
 ];
 const canalDe = (v) => CANAIS.find(c => c[0] === v) || null;
 const COLUNAS = [
-  { k: "favorita", rot: "", titulo: "Favorita", tipo: "fav" },
+  { k: "favorita", rot: "", titulo: "Prioridade", tipo: "fav" },
   { k: "campanha", rot: "Trabalho", tipo: "texto" },
   { k: "cliente", rot: "Cliente", tipo: "texto" },
-  { k: "tipo", rot: "Tipo", tipo: "texto" },
+  { k: "videos", rot: "Vídeos", tipo: "videos" },
   { k: "status", rot: "Status", tipo: "funil" },
-  { k: "qtd", rot: "Qtd", tipo: "num", num: true },
-  { k: "valor", rot: "Valor", tipo: "cad", num: true },
+  { k: "valor", rot: "Valor fechado", tipo: "cad", num: true },
   { k: "prazo", rot: "Prazo", tipo: "data" },
-  { k: "pagamento", rot: "Pagamento", tipo: "pag" },
   { k: "canal", rot: "Por onde fechei", tipo: "texto" }
 ];
 let ordemCamp = { k: "prazo", dir: 1 };
-let filtroCamp = "todas";
+let filtroCamp = "andamento";
 
-/* ----- câmbio: tudo vira CA$ pela cotação do dia (Banco Central Europeu) ----- */
-let cambio = { CAD: 1 };      /* quantos CA$ vale 1 unidade de cada moeda */
+/* ----- câmbio: tudo vira CA$ pela cotação do Banco do Canadá ----- */
+let cambio = { CAD: 1 };      /* quantos CA$ vale 1 unidade de cada moeda, hoje */
 let cambioData = null;
+const SERIES_BOC = { USD: "FXUSDCAD", EUR: "FXEURCAD", BRL: "FXBRLCAD" };
+async function cotacoesBoC(inicio, fim) {
+  const url = "https://www.bankofcanada.ca/valet/observations/" + Object.values(SERIES_BOC).join(",") + "/json?" +
+    (inicio ? "start_date=" + inicio + "&end_date=" + fim : "recent=5");
+  const r = await fetch(url);
+  const j = await r.json();
+  return (j.observations || []).map(o => {
+    const t = { CAD: 1 };
+    Object.entries(SERIES_BOC).forEach(([m, s]) => { if (o[s] && o[s].v) t[m] = Number(o[s].v); });
+    return { dia: o.d, taxas: t };
+  }).filter(o => o.taxas.USD).sort((a, b) => a.dia.localeCompare(b.dia));
+}
 async function carregaCambio() {
   try {
-    const guardado = JSON.parse(localStorage.getItem("admin-cambio") || "null");
+    const guardado = JSON.parse(localStorage.getItem("admin-cambio-boc") || "null");
     if (guardado && guardado.dia === isoLocal(new Date())) { cambio = guardado.taxas; cambioData = guardado.data; return; }
   } catch (e) {}
   try {
-    const r = await fetch("https://api.frankfurter.dev/v1/latest?base=CAD&symbols=USD,EUR");
-    const j = await r.json();
-    if (!j.rates || !j.rates.USD) throw new Error("sem cotação");
-    cambio = { CAD: 1, USD: 1 / j.rates.USD, EUR: 1 / j.rates.EUR };
-    cambioData = j.date;
-    try { localStorage.setItem("admin-cambio", JSON.stringify({ dia: isoLocal(new Date()), taxas: cambio, data: cambioData })); } catch (e) {}
+    const obs = await cotacoesBoC();
+    const ult = obs[obs.length - 1];
+    if (!ult) throw new Error("sem cotação");
+    cambio = ult.taxas; cambioData = ult.dia;
+    try { localStorage.setItem("admin-cambio-boc", JSON.stringify({ dia: isoLocal(new Date()), taxas: cambio, data: cambioData })); } catch (e) {}
   } catch (e) {
     cambio = { CAD: 1 };      /* sem internet: mostra só por moeda */
   }
 }
+/* a cotação de um dia específico (a do último dia útil até aquela data) */
+const cacheCotacao = {};
+async function cotacaoNoDia(moeda, dia) {
+  if (!moeda || moeda === "CAD") return 1;
+  dia = dia || isoLocal(new Date());
+  const chave = moeda + dia;
+  if (cacheCotacao[chave]) return cacheCotacao[chave];
+  try {
+    const ini = new Date(deISO(dia)); ini.setDate(ini.getDate() - 10);
+    const obs = (await cotacoesBoC(isoLocal(ini), dia)).filter(o => o.taxas[moeda]);
+    const ult = obs[obs.length - 1];
+    if (ult) return (cacheCotacao[chave] = ult.taxas[moeda]);
+  } catch (e) {}
+  if (!cambioData) await carregaCambio();
+  return cambio[moeda] || null;
+}
 const moedaDe = (c) => MOEDAS[c.moeda] ? c.moeda : "CAD";
-const emCAD = (valor, moeda) => cambio[moeda] ? (Number(valor) || 0) * cambio[moeda] : null;
+const emCAD = (valor, moeda) => cambio[moeda || "CAD"] ? (Number(valor) || 0) * cambio[moeda || "CAD"] : null;
 const dinheiroEm = (v, moeda) => (MOEDAS[moeda] || "$") + " " + numBR.format(Number(v) || 0);
-function recebidoDe(c) {
-  const r = soma(Array.isArray(c.pagamentos) ? c.pagamentos : [], p => p.valor);
-  return r === 0 && c.pagamento === "pago" && !c.gift ? Number(c.valor) || 0 : r;   /* campanhas antigas marcadas como pagas */
-}
-function situacaoPagamento(c) {
-  if (c.gift) return ["🎁 Gift", "c-roxo"];
-  const total = Number(c.valor) || 0, rec = recebidoDe(c);
-  if (total > 0 && rec >= total - 0.005) return ["Pago", "c-verde"];
-  if (rec > 0) return ["Parcial", "c-azul"];
-  return ["Pendente", "c-amarelo"];
-}
 /* soma por moeda + total em CA$ */
-function somaMoedas(lista, valorDe) {
+function somaMoedas(lista, valorDe, moedaFn) {
   const por = {};
-  lista.forEach(c => { const m = moedaDe(c); por[m] = (por[m] || 0) + (Number(valorDe(c)) || 0); });
+  lista.forEach(c => { const m = moedaFn ? moedaFn(c) : moedaDe(c); por[m] = (por[m] || 0) + (Number(valorDe(c)) || 0); });
   let total = 0, completo = true;
   Object.entries(por).forEach(([m, v]) => { const cad = emCAD(v, m); if (cad == null) completo = false; else total += cad; });
   const partes = Object.entries(por).filter(([, v]) => v).map(([m, v]) => dinheiroEm(v, m));
   return { total, completo, partes, soCAD: Object.entries(por).filter(([, v]) => v).every(([m]) => m === "CAD") };
+}
+
+/* os vídeos do contrato (contratos antigos sem lista contam pelo qtd) */
+const videosDe = (c) => Array.isArray(c.videos) ? c.videos : [];
+const nVideos = (c) => videosDe(c).length || Number(c.qtd) || 0;
+/* o status do contrato é o do vídeo mais atrasado */
+function statusDoContrato(videos, atual) {
+  if (!videos.length) return atual || "Briefing";
+  return FUNIL[Math.min(...videos.map(v => Math.max(0, FUNIL.indexOf(v.status))))];
+}
+function resumoVideos(c) {
+  const vs = videosDe(c);
+  if (!vs.length) return nVideos(c) ? plural(nVideos(c), "vídeo", "vídeos") : "";
+  const por = {};
+  vs.forEach(v => { por[tipoVideo(v.tipo)[1]] = (por[tipoVideo(v.tipo)[1]] || 0) + 1; });
+  const prontos = vs.filter(v => v.status === "Entregue").length;
+  return plural(vs.length, "vídeo", "vídeos") + '<div class="mudo pequeno">' + Object.entries(por).map(([t, n]) => n + " " + t.toLowerCase()).join(" · ") +
+    (prontos && prontos < vs.length ? " · " + prontos + " entregue" + (prontos > 1 ? "s" : "") : "") + "</div>";
 }
 
 function valorOrdem(c, col) {
@@ -1781,14 +1825,14 @@ function valorOrdem(c, col) {
   if (col.tipo === "fav") return v ? 0 : 1;
   if (col.tipo === "funil") { const i = FUNIL.indexOf(v); return i < 0 ? null : i; }
   if (col.tipo === "cad") return emCAD(c.valor, moedaDe(c));
-  if (col.tipo === "pag") return situacaoPagamento(c)[0];
-  if (col.tipo === "num") return v == null || v === "" ? null : Number(v);
+  if (col.tipo === "videos") return nVideos(c);
   if (col.k === "canal") return canalDe(v) ? canalDe(v)[1].replace(/^\S+\s/, "") : null;
   if (v == null || v === "") return null;
   return String(v);
 }
 function comparaCamp(a, b) {
-  const col = COLUNAS.find(c => c.k === ordemCamp.k) || COLUNAS[7];
+  if (!!a.favorita !== !!b.favorita && ordemCamp.k !== "favorita") return a.favorita ? -1 : 1;   /* prioridade sempre no topo */
+  const col = COLUNAS.find(c => c.k === ordemCamp.k) || COLUNAS[6];
   const va = valorOrdem(a, col), vb = valorOrdem(b, col);
   let r;
   if (va === null && vb === null) r = 0;
@@ -1814,7 +1858,7 @@ function montarCampanhas() {
   $("#aba-campanhas").innerHTML =
     '<div class="numeros" id="kNumeros"></div>' +
     '<div class="ferramentas">' +
-      '<div class="pilulas" id="kFiltro">' + [["todas", "Todas"], ["ativas", "Ativas"], ["finalizadas", "Finalizadas"]]
+      '<div class="pilulas" id="kFiltro">' + [["andamento", "Em andamento"], ["entregues", "Entregues"], ["todas", "Todas"]]
         .map(f => '<button type="button" data-f="' + f[0] + '"' + (f[0] === filtroCamp ? ' class="ativo"' : "") + ">" + f[1] + "</button>").join("") + "</div>" +
       '<input class="entrada" id="kBusca" type="search" placeholder="Buscar trabalho ou cliente">' +
       '<span class="mudo pequeno" id="kConta"></span><span class="espaco"></span>' +
@@ -1853,38 +1897,39 @@ function montarCampanhas() {
   });
   $("#kCsv").addEventListener("click", () => {
     if (!D.campanhas.length) { torrada("Ainda não tem nenhum contrato para baixar."); return; }
-    baixarCSV("contratos", ["Favorita", "Trabalho", "Cliente", "Tipo", "Gift", "Nicho", "Status", "Qtd", "Moeda", "Valor", "Recebido", "A receber", "Valor em CA$",
-        "Data do contrato", "Prazo de entrega", "Vencimento", "Pagamento", "Recebido por", "Por onde fechei", "Detalhe", "Situação"],
+    baixarCSV("contratos", ["Prioridade", "Trabalho", "Cliente", "Gift", "Nicho", "Status", "Vídeos", "Orgânico", "Ads", "Ambos", "Moeda", "Valor fechado", "Valor em CA$",
+        "Data do contrato", "Prazo de entrega", "Por onde fechei", "Detalhe"],
       D.campanhas.slice().sort(comparaCamp).map(c => {
-        const m = moedaDe(c), rec = recebidoDe(c), cad = emCAD(c.valor, m);
-        return [c.favorita ? "sim" : "", c.campanha, c.cliente, c.tipo, c.gift ? "sim" : "", c.nicho, c.status, Number(c.qtd) || 0, m, Number(c.valor) || 0, rec,
-          Math.max(0, (Number(c.valor) || 0) - rec), cad == null ? "" : Math.round(cad * 100) / 100,
-          dataBR(c.data_contrato), dataBR(c.prazo), dataBR(c.vencimento), situacaoPagamento(c)[0],
-          Array.from(new Set((c.pagamentos || []).map(p => p.via).filter(Boolean))).join(", "),
-          canalDe(c.canal) ? canalDe(c.canal)[1].replace(/^\S+\s/, "") : "", c.canal_detalhe, c.ativa === false ? "Finalizada" : "Ativa"];
+        const m = moedaDe(c), cad = emCAD(c.valor, m), vs = videosDe(c);
+        const conta = (t) => vs.filter(v => (v.tipo || "organico") === t).length;
+        return [c.favorita ? "sim" : "", c.campanha, c.cliente, c.gift ? "sim" : "", c.nicho, c.status, nVideos(c), conta("organico"), conta("ads"), conta("ambos"),
+          m, Number(c.valor) || 0, cad == null ? "" : Math.round(cad * 100) / 100,
+          dataBR(c.data_contrato), dataBR(c.prazo), canalDe(c.canal) ? canalDe(c.canal)[1].replace(/^\S+\s/, "") : "", c.canal_detalhe];
       }));
   });
-  carregaCambio().then(() => { desenharCampanhas(); if (typeof desenharFunil === "function") desenharFunil(); });
+  carregaCambio().then(() => {
+    desenharCampanhas();
+    if (typeof desenharFunil === "function") desenharFunil();
+    if (typeof desenharFinanceiro === "function") desenharFinanceiro();
+  });
 }
 
 function desenharCampanhas() {
   const todas = D.campanhas;
-  const ativas = todas.filter(c => c.ativa !== false);
+  const andamento = todas.filter(c => c.status !== "Entregue");
   const pagas = todas.filter(c => !c.gift);
   const total = somaMoedas(pagas, c => c.valor);
-  const receber = somaMoedas(pagas, c => Math.max(0, (Number(c.valor) || 0) - recebidoDe(c)));
-  const recebido = somaMoedas(pagas, c => recebidoDe(c));
-  const videos = soma(pagas, c => c.qtd);
+  const videos = soma(pagas, c => nVideos(c));
   const fmt = (s) => s.soCAD || !s.completo ? (s.partes.join(" · ") || dinheiroEm(0, "CAD")) : dinheiroEm(s.total, "CAD");
-  const sub = (s, extra) => [(!s.soCAD && s.completo && s.partes.length) ? s.partes.join(" · ") : "", extra].filter(Boolean).join(" · ");
   const gifts = todas.length - pagas.length;
+  const urgentes = andamento.filter(c => c.favorita).length;
   $("#kNumeros").innerHTML =
     numero("Contratos", inteiro(todas.length), gifts ? plural(gifts, "gift", "gifts") : "") +
-    numero("Ativos", inteiro(ativas.length)) +
-    numero("Valor total", fmt(total), sub(total, videos > 0 && total.completo ? "ticket por vídeo: " + dinheiroEm(total.total / videos, "CAD") : "")) +
-    numero("A receber", fmt(receber), sub(receber, "já recebido: " + fmt(recebido)));
+    numero("Em andamento", inteiro(andamento.length), urgentes ? "⭐ " + plural(urgentes, "prioridade", "prioridades") : "") +
+    numero("Valor fechado", fmt(total), videos > 0 && total.completo ? "ticket por vídeo: " + dinheiroEm(total.total / videos, "CAD") : "") +
+    numero("Vídeos contratados", inteiro(soma(todas, c => nVideos(c))), plural(soma(todas, c => videosDe(c).filter(v => v.status === "Entregue").length), "entregue", "entregues"));
   $("#kCambio").textContent = cambioData && Object.keys(cambio).length > 1
-    ? "Totais convertidos para CA$ pela cotação de " + dataBR(cambioData) + ": US$ 1 = CA$ " + numBR.format(cambio.USD) + " · € 1 = CA$ " + numBR.format(cambio.EUR) + "."
+    ? "Totais convertidos para CA$ pela cotação do Banco do Canadá de " + dataBR(cambioData) + ": US$ 1 = CA$ " + numBR.format(cambio.USD) + (cambio.EUR ? " · € 1 = CA$ " + numBR.format(cambio.EUR) : "") + ". O que falta receber fica no 💰 Financeiro."
     : (todas.some(c => moedaDe(c) !== "CAD") ? "Sem cotação agora: os totais aparecem separados por moeda." : "");
 
   $("#kCab").innerHTML = COLUNAS.map(col => {
@@ -1896,69 +1941,81 @@ function desenharCampanhas() {
 
   const busca = normaliza($("#kBusca").value.trim());
   const lista = todas.filter(c =>
-    (filtroCamp === "todas" || (filtroCamp === "ativas" ? c.ativa !== false : c.ativa === false)) &&
+    (filtroCamp === "todas" || (filtroCamp === "andamento" ? c.status !== "Entregue" : c.status === "Entregue")) &&
     (!busca || normaliza((c.campanha || "") + " " + (c.cliente || "")).includes(busca))).sort(comparaCamp);
   $("#kConta").textContent = lista.length === todas.length ? plural(todas.length, "contrato", "contratos") : lista.length + " de " + todas.length;
 
   const corpo = $("#kCorpo");
   if (!lista.length) {
-    corpo.innerHTML = '<tr><td colspan="10"><p class="vazio">' +
+    corpo.innerHTML = '<tr><td colspan="8"><p class="vazio">' +
       (falhou.campanhas ? "Os contratos não puderam ser carregados. Veja o aviso lá em cima." : todas.length ? "Nenhum contrato com esse filtro." : "Nenhum contrato ainda. Clique em Novo contrato.") + "</p></td></tr>";
     return;
   }
   corpo.innerHTML = lista.map(c => {
-    const m = moedaDe(c), pag = situacaoPagamento(c), canal = canalDe(c.canal), rec = recebidoDe(c);
+    const m = moedaDe(c), canal = canalDe(c.canal);
     return '<tr class="clica' + (c.favorita ? " favorita" : "") + '" data-id="' + esc(c.id) + '">' +
-      '<td class="curta"><button type="button" class="btn--icone estrela' + (c.favorita ? " ligada" : "") + '" data-estrela aria-label="' + (c.favorita ? "Tirar destaque" : "Destacar") + '">' + ic("estrela") + "</button></td>" +
+      '<td class="curta"><button type="button" class="btn--icone estrela' + (c.favorita ? " ligada" : "") + '" data-estrela aria-label="' + (c.favorita ? "Tirar a prioridade" : "Marcar como prioridade") + '" title="Prioridade / entrega urgente">' + ic("estrela") + "</button></td>" +
       "<td><b>" + esc(c.campanha || "") + "</b>" + pilExemplo(c) + (c.nicho ? '<div class="mudo pequeno">' + esc(c.nicho) + "</div>" : "") + "</td>" +
       "<td>" + esc(c.cliente || "") + "</td>" +
-      "<td>" + (c.tipo ? '<span class="pil ' + (COR_TIPO[c.tipo] || "c-cinza") + '">' + esc(c.tipo) + "</span>" : "") + "</td>" +
+      "<td>" + resumoVideos(c) + "</td>" +
       "<td>" + (c.status ? '<span class="pil ' + (COR_STATUS[c.status] || "c-cinza") + '">' + esc(c.status) + "</span>" : "") + "</td>" +
-      '<td class="num">' + inteiro(c.qtd) + "</td>" +
-      '<td class="num">' + (c.gift ? '<span class="mudo">gift</span>' : dinheiroEm(c.valor, m) +
-        (rec > 0 && rec < (Number(c.valor) || 0) ? '<div class="mudo pequeno">recebido ' + dinheiroEm(rec, m) + "</div>" : "")) + "</td>" +
+      '<td class="num">' + (c.gift ? '<span class="pil c-roxo">🎁 gift</span>' : dinheiroEm(c.valor, m)) + "</td>" +
       '<td style="white-space:nowrap">' + dataBR(c.prazo) + avisoPrazo(c) + "</td>" +
-      '<td><span class="pil ' + pag[1] + '">' + pag[0] + "</span>" +
-        (pag[0] !== "Pago" && !c.gift && c.vencimento ? '<div class="mudo pequeno">previsto ' + dataBR(c.vencimento) + "</div>" : "") + "</td>" +
       "<td>" + (canal ? '<span class="pil ' + canal[2] + '">' + esc(canal[1]) + "</span>" + (c.canal_detalhe ? '<div class="mudo pequeno">' + esc(c.canal_detalhe) + "</div>" : "") : "") + "</td></tr>";
   }).join("");
 }
 
-/* ----- o contrato: janela própria, por causa dos pagamentos em partes ----- */
+/* ----- o contrato: janela própria, com os vídeos e o plano de pagamento ----- */
+const opcoes = (lista, atual) => lista.map(o => { const [val, rot] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(val) + '"' + (String(val) === String(atual) ? " selected" : "") + ">" + esc(rot) + "</option>"; }).join("");
+const parcelasDe = (c) => c ? D.fin_receber.filter(r => r.campanha_id === c.id).sort((a, b) => (a.ordem || 0) - (b.ordem || 0)) : [];
+function vencimentoDaParcela(p, dataContrato, prazo) {
+  if (p.quando === "assinatura") return dataContrato || null;
+  if (p.quando === "entrega") return prazo || null;
+  return p.vencimento || null;
+}
+
 function editorCampanha(c) {
-  const v = c ? Object.assign({}, c) : { tipo: "Conteúdo", status: "Briefing", qtd: 1, valor: 0, moeda: "CAD", pagamentos: [], ativa: true, favorita: false, gift: false, data_contrato: isoLocal(new Date()) };
-  let pagamentos = (Array.isArray(v.pagamentos) ? v.pagamentos : []).map(p => Object.assign({}, p));
-  const opc = (lista, atual) => lista.map(o => { const [val, rot] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(val) + '"' + (String(val) === String(atual) ? " selected" : "") + ">" + esc(rot) + "</option>"; }).join("");
+  const v = c ? Object.assign({}, c) : { status: "Briefing", valor: 0, moeda: "CAD", favorita: false, gift: false, data_contrato: isoLocal(new Date()), videos: [{ nome: "", tipo: "organico", status: "Briefing" }] };
+  let videos = videosDe(v).map(x => Object.assign({}, x));
+  if (c && !videos.length && Number(c.qtd) > 0) for (let i = 0; i < Number(c.qtd); i++) videos.push({ nome: "Vídeo " + (i + 1), tipo: c.tipo === "Publicidade" ? "ads" : "organico", status: c.status || "Briefing" });
+  let parcelas = parcelasDe(c).map(p => Object.assign({}, p));
+  const tirarIds = [];
   const j = abrirJanela({
     titulo: c ? "✏️ Editar contrato" : "📝 Novo contrato", larga: true,
     corpo: '<form class="grade-form contrato" novalidate>' +
-      '<div class="campo inteiro"><label for="cCliente">Marca / cliente *</label><input id="cCliente" name="cliente" list="cClientes" value="' + esc(v.cliente || "") + '" placeholder="Ex.: Roborock" autocomplete="off">' +
+      '<div class="campo"><label for="cCliente">Marca / cliente *</label><input id="cCliente" name="cliente" list="cClientes" value="' + esc(v.cliente || "") + '" placeholder="Ex.: Royal Distribution" autocomplete="off">' +
         '<datalist id="cClientes">' + nomesDeMarcas().map(n => '<option value="' + esc(n) + '">').join("") + "</datalist></div>" +
-      '<div class="campo inteiro"><label for="cTrabalho">Descrição do trabalho *</label><input id="cTrabalho" name="campanha" value="' + esc(v.campanha || "") + '" placeholder="Ex.: 3 Reels + 5 stories" autocomplete="off"></div>' +
+      '<div class="campo"><label>Nicho do cliente</label><input name="nicho" list="cNichos" value="' + esc(v.nicho || "") + '" placeholder="Skincare, Haircare..." autocomplete="off"><datalist id="cNichos">' + B_NICHOS.map(n => '<option value="' + esc(n) + '">').join("") + "</datalist></div>" +
+      '<div class="campo inteiro"><label for="cTrabalho">Descrição do trabalho *</label><input id="cTrabalho" name="campanha" value="' + esc(v.campanha || "") + '" placeholder="Ex.: Pacote Black Friday + Natal" autocomplete="off"></div>' +
       '<label class="campo campo--check inteiro"><input type="checkbox" name="gift"' + (v.gift ? " checked" : "") + "> 🎁 Colaboração gift (produto, sem pagamento): só conta como trabalho feito</label>" +
-      '<div class="campo"><label>Tipo</label><select name="tipo">' + opc(["Conteúdo", "Publicidade"], v.tipo) + "</select></div>" +
-      '<div class="campo"><label>Status</label><select name="status">' + opc(FUNIL, v.status) + "</select></div>" +
-      '<div class="campo"><label>Quantidade de vídeos</label><input type="number" name="qtd" min="0" step="1" value="' + esc(v.qtd == null ? 1 : v.qtd) + '"></div>' +
-      '<div class="campo"><label>Nicho</label><input name="nicho" list="cNichos" value="' + esc(v.nicho || "") + '" placeholder="Skincare, Haircare..." autocomplete="off"><datalist id="cNichos">' + B_NICHOS.map(n => '<option value="' + esc(n) + '">').join("") + "</datalist></div>" +
+
       '<div class="contrato__dinheiro inteiro">' +
+        '<div class="rotulo">🎬 Vídeos do contrato</div>' +
+        '<p class="mudo pequeno">Um por linha. O status do contrato segue o vídeo mais atrasado.</p>' +
+        '<div id="cVideos"></div>' +
+        '<div class="contrato__botoes"><button type="button" class="btn btn--linha" id="cMaisVideo">' + ic("mais") + ' Adicionar vídeo</button>' +
+        '<button type="button" class="btn btn--linha" id="cTodosEntregues">✓ Todos entregues</button></div>' +
+      "</div>" +
+
+      '<div class="contrato__dinheiro inteiro" id="cDinheiro">' +
         '<div class="grade-form">' +
-          '<div class="campo"><label>Moeda</label><select name="moeda">' + opc(Object.entries(MOEDAS).map(([k, s]) => [k, k + " · " + s]), moedaDe(v)) + "</select></div>" +
-          '<div class="campo"><label>Valor total do contrato *</label><input type="number" name="valor" min="0" step="0.01" value="' + esc(v.valor == null ? 0 : v.valor) + '"></div>' +
+          '<div class="campo"><label>Moeda do contrato</label><select name="moeda">' + opcoes(MOEDAS_CONTRATO.map(k => [k, k + " · " + MOEDAS[k]]), moedaDe(v)) + "</select></div>" +
+          '<div class="campo"><label>Valor fechado *</label><input type="number" name="valor" min="0" step="0.01" value="' + esc(v.valor == null ? 0 : v.valor) + '"></div>' +
         "</div>" +
-        '<div class="rotulo" style="margin-top:12px">Pagamentos recebidos</div>' +
-        '<p class="mudo pequeno">Ex.: 50% na assinatura + 50% na entrega. Cada linha guarda a data em que você recebeu e por onde.</p>' +
-        '<div id="cPags"></div>' +
-        '<button type="button" class="btn btn--linha btn--full" id="cMaisPag" style="margin-top:8px">' + ic("mais") + " Adicionar pagamento</button>" +
+        '<div class="rotulo" style="margin-top:12px">💰 Como vou receber</div>' +
+        '<p class="mudo pequeno">Cada parcela vai para Contas a receber, no Financeiro. É lá que você marca quando o dinheiro cair.</p>' +
+        '<div id="cParcelas"></div>' +
+        '<div class="contrato__botoes"><button type="button" class="btn btn--linha" id="cMaisParcela">' + ic("mais") + " Adicionar parcela</button>" +
+        '<button type="button" class="btn btn--linha" data-modelo="5050">50% + 50%</button><button type="button" class="btn btn--linha" data-modelo="100">100% na entrega</button></div>' +
         '<div class="contrato__saldo" id="cSaldo"></div>' +
       "</div>" +
+
       '<div class="campo"><label>Data do contrato</label><input type="date" name="data_contrato" value="' + esc(v.data_contrato || "") + '"></div>' +
       '<div class="campo"><label>Prazo de entrega</label><input type="date" name="prazo" value="' + esc(v.prazo || "") + '"></div>' +
-      '<div class="campo"><label>Vencimento (previsão do restante)</label><input type="date" name="vencimento" value="' + esc(v.vencimento || "") + '"></div>' +
-      '<div class="campo"><label>Por onde fechei</label><select name="canal"><option value="">escolha</option>' + opc(CANAIS.map(x => [x[0], x[1]]), v.canal) + "</select></div>" +
-      '<div class="campo inteiro" id="cDetalheCampo"><label id="cDetalheRot">Detalhe</label><input name="canal_detalhe" value="' + esc(v.canal_detalhe || "") + '" placeholder="Ex.: InSense, Billo, agência..." list="cPlataformas" autocomplete="off">' +
-        '<datalist id="cPlataformas">' + ["InSense", "Billo", "JoinBrands", "Collabstr", "Trend.io", "Upfluence"].map(n => '<option value="' + n + '">').join("") + "</datalist></div>" +
-      '<label class="campo campo--check inteiro"><input type="checkbox" name="ativa"' + (v.ativa !== false ? " checked" : "") + "> Contrato ativo (desmarque quando finalizar)</label>" +
-      '<label class="campo campo--check inteiro"><input type="checkbox" name="favorita"' + (v.favorita ? " checked" : "") + "> ⭐ Destacar com estrela</label>" +
+      '<div class="campo"><label>Por onde fechei</label><select name="canal"><option value="">escolha</option>' + opcoes(CANAIS.map(x => [x[0], x[1]]), v.canal) + "</select></div>" +
+      '<div class="campo" id="cDetalheCampo"><label id="cDetalheRot">Detalhe</label><input name="canal_detalhe" value="' + esc(v.canal_detalhe || "") + '" placeholder="Ex.: InSense, Billo, agência..." list="cPlataformas" autocomplete="off">' +
+        '<datalist id="cPlataformas">' + ["InSense", "Billo", "Join Brands", "Collabstr", "Trend.io", "Upfluence", "BluePrint"].map(n => '<option value="' + n + '">').join("") + "</datalist></div>" +
+      '<label class="campo campo--check inteiro"><input type="checkbox" name="favorita"' + (v.favorita ? " checked" : "") + "> ⭐ Prioridade / entrega urgente (fica no topo da lista)</label>" +
       '<div class="faixa inteiro escondido" data-erro></div>' +
     "</form>",
     rodape: (c ? '<button class="btn btn--perigo" type="button" data-apagar>' + ic("lixo") + " Apagar</button>" : "") +
@@ -1968,82 +2025,167 @@ function editorCampanha(c) {
   const form = $("form", j);
   const erro = (t) => { const e = $("[data-erro]", j); e.textContent = t; e.classList.remove("escondido"); };
 
-  function lerPags() {
-    $$("[data-pag]", j).forEach((l, i) => {
-      pagamentos[i] = { valor: Number($("[data-pv]", l).value) || 0, data: $("[data-pd]", l).value || null, via: $("[data-pvia]", l).value };
+  /* --- vídeos --- */
+  function lerVideos() {
+    $$("[data-video]", j).forEach((l, i) => {
+      videos[i] = { nome: $("[data-vn]", l).value.trim(), tipo: $("[data-vt]", l).value, status: $("[data-vs]", l).value };
     });
   }
-  function desenhaPags() {
+  function desenhaVideos() {
+    $("#cVideos", j).innerHTML = videos.length
+      ? videos.map((x, i) => '<div class="contrato__video" data-video>' +
+          '<span class="contrato__num">' + (i + 1) + "</span>" +
+          '<input data-vn value="' + esc(x.nome || "") + '" placeholder="Ex.: Unboxing, Review..." aria-label="Nome do vídeo">' +
+          '<select data-vt aria-label="Tipo">' + opcoes(TIPOS_VIDEO.map(t => [t[0], t[1]]), x.tipo || "organico") + "</select>" +
+          '<select data-vs aria-label="Status do vídeo">' + opcoes(FUNIL, x.status || "Briefing") + "</select>" +
+          '<button type="button" class="btn--icone" data-tirarv="' + i + '" aria-label="Tirar este vídeo">' + ic("fechar") + "</button></div>").join("")
+      : '<p class="mudo pequeno" style="padding:6px 0">Nenhum vídeo ainda.</p>';
+  }
+
+  /* --- parcelas (viram Contas a receber) --- */
+  function lerParcelas() {
+    $$("[data-parcela]", j).forEach(l => {
+      const p = parcelas[Number(l.dataset.parcela)];
+      if (!p || p.recebido) return;
+      p.valor = Number($("[data-pv]", l).value) || 0;
+      p.quando = $("[data-pq]", l).value;
+      p.vencimento = $("[data-pd]", l).value || null;
+      p.via = $("[data-pvia]", l).value;
+    });
+  }
+  function desenhaParcelas() {
     const m = form.elements.moeda.value;
-    $("#cPags", j).innerHTML = pagamentos.length
-      ? pagamentos.map((p, i) => '<div class="contrato__pag" data-pag>' +
-          '<input type="number" min="0" step="0.01" data-pv value="' + esc(p.valor || "") + '" placeholder="Valor (' + MOEDAS[m] + ')" aria-label="Valor recebido">' +
-          '<input type="date" data-pd value="' + esc(p.data || "") + '" aria-label="Data em que recebeu">' +
-          '<select data-pvia aria-label="Recebido por">' + opc(VIAS, p.via || "PayPal") + "</select>" +
-          '<button type="button" class="btn--icone" data-tirar="' + i + '" aria-label="Tirar este pagamento">' + ic("fechar") + "</button></div>").join("")
-      : '<p class="mudo pequeno" style="padding:6px 0">Nenhum pagamento ainda. Clique em "Adicionar pagamento" quando receber.</p>';
+    $("#cParcelas", j).innerHTML = parcelas.length
+      ? parcelas.map((p, i) => p.recebido
+        ? '<div class="contrato__parcela contrato__parcela--ok" data-parcela="' + i + '"><span>✓ <b>' + dinheiroEm(p.valor, p.moeda || m) + "</b> recebido em " + dataBR(p.data_recebido) +
+            (p.valor_recebido != null ? " · caiu " + dinheiroEm(p.valor_recebido, p.conta_moeda || "CAD") : "") + (p.via ? " · " + esc(p.via) : "") + '</span><span class="mudo pequeno">para mudar, vá no Financeiro</span></div>'
+        : '<div class="contrato__parcela" data-parcela="' + i + '">' +
+            '<input type="number" min="0" step="0.01" data-pv value="' + esc(p.valor || "") + '" placeholder="Valor (' + MOEDAS[m] + ')" aria-label="Valor da parcela">' +
+            '<select data-pq aria-label="Quando">' + opcoes(QUANDO, p.quando || "data") + "</select>" +
+            '<input type="date" data-pd value="' + esc(p.quando === "data" || !p.quando ? (p.vencimento || "") : "") + '" aria-label="Data prevista"' + (p.quando && p.quando !== "data" ? " hidden" : "") + ">" +
+            '<select data-pvia aria-label="Por onde vou receber">' + opcoes(VIAS, p.via || "PayPal") + "</select>" +
+            '<button type="button" class="btn--icone" data-tirarp="' + i + '" aria-label="Tirar esta parcela">' + ic("fechar") + "</button></div>").join("")
+      : '<p class="mudo pequeno" style="padding:6px 0">Nenhuma parcela ainda. Use os botões abaixo.</p>';
     saldo();
   }
   function saldo() {
-    lerPags();
-    const m = form.elements.moeda.value, total = Number(form.elements.valor.value) || 0, rec = soma(pagamentos, p => p.valor);
-    $("#cSaldo", j).innerHTML = form.elements.gift.checked
-      ? "🎁 Gift: sem valores a receber."
-      : '<span class="c-verde" style="color:var(--c)">recebido <b>' + dinheiroEm(rec, m) + '</b></span><span class="c-mostarda" style="color:var(--c)">a receber <b>' + dinheiroEm(Math.max(0, total - rec), m) + "</b></span>";
+    lerParcelas();
+    const m = form.elements.moeda.value, total = Number(form.elements.valor.value) || 0, plano = soma(parcelas, p => p.valor);
+    const dif = Math.round((total - plano) * 100) / 100;
+    $("#cDinheiro", j).classList.toggle("escondido", form.elements.gift.checked);
+    $("#cSaldo", j).innerHTML = !total ? '<span class="mudo">Preencha o valor fechado.</span>'
+      : Math.abs(dif) < 0.01 ? '<span style="color:var(--c-verde)">✓ As parcelas fecham o valor do contrato.</span>'
+      : dif > 0 ? '<span style="color:var(--c-mostarda)">Faltam <b>' + dinheiroEm(dif, m) + "</b> para as parcelas fecharem o valor.</span>"
+      : '<span style="color:var(--c-vermelho)">As parcelas passam <b>' + dinheiroEm(-dif, m) + "</b> do valor do contrato.</span>";
+  }
+  function novaParcela(valor, quando) {
+    const via = (parcelas[parcelas.length - 1] || {}).via || "PayPal";
+    return { valor: Math.round(valor * 100) / 100, quando, vencimento: null, via, recebido: false };
   }
   function detalhe() {
     const canal = form.elements.canal.value;
     $("#cDetalheRot", j).textContent = canal === "plataforma" ? "Qual plataforma?" : canal === "indicacao" ? "Quem indicou?" : "Detalhe (opcional)";
   }
-  desenhaPags(); detalhe();
-  $("#cMaisPag", j).addEventListener("click", () => {
-    lerPags();
-    const total = Number(form.elements.valor.value) || 0, rec = soma(pagamentos, p => p.valor);
-    pagamentos.push({ valor: total > rec ? Math.round((total - rec) * 100) / 100 : "", data: isoLocal(new Date()), via: (pagamentos[pagamentos.length - 1] || {}).via || "PayPal" });
-    desenhaPags();
+  desenhaVideos(); desenhaParcelas(); detalhe();
+
+  $("#cMaisVideo", j).addEventListener("click", () => { lerVideos(); videos.push({ nome: "", tipo: (videos[videos.length - 1] || {}).tipo || "organico", status: "Briefing" }); desenhaVideos(); });
+  $("#cTodosEntregues", j).addEventListener("click", () => { lerVideos(); videos.forEach(x => { x.status = "Entregue"; }); desenhaVideos(); });
+  $("#cVideos", j).addEventListener("click", (e) => { const b = e.target.closest("[data-tirarv]"); if (b) { lerVideos(); videos.splice(Number(b.dataset.tirarv), 1); desenhaVideos(); } });
+  $("#cMaisParcela", j).addEventListener("click", () => {
+    lerParcelas();
+    const total = Number(form.elements.valor.value) || 0, plano = soma(parcelas, p => p.valor);
+    parcelas.push(novaParcela(Math.max(0, total - plano), parcelas.length ? "entrega" : "assinatura"));
+    desenhaParcelas();
   });
-  $("#cPags", j).addEventListener("click", (e) => { const b = e.target.closest("[data-tirar]"); if (b) { lerPags(); pagamentos.splice(Number(b.dataset.tirar), 1); desenhaPags(); } });
-  $("#cPags", j).addEventListener("input", saldo);
+  $$("[data-modelo]", j).forEach(b => b.addEventListener("click", () => {
+    lerParcelas();
+    const total = Number(form.elements.valor.value) || 0;
+    if (!total) { erro("Preencha primeiro o valor fechado."); return; }
+    const recebidas = parcelas.filter(p => p.recebido);
+    parcelas.filter(p => !p.recebido && p.id).forEach(p => tirarIds.push(p.id));
+    const resta = total - soma(recebidas, p => p.valor);
+    parcelas = recebidas.concat(b.dataset.modelo === "5050" && !recebidas.length
+      ? [novaParcela(total / 2, "assinatura"), novaParcela(total - Math.round(total / 2 * 100) / 100, "entrega")]
+      : [novaParcela(resta, "entrega")]);
+    desenhaParcelas();
+  }));
+  $("#cParcelas", j).addEventListener("click", (e) => {
+    const b = e.target.closest("[data-tirarp]");
+    if (!b) return;
+    lerParcelas();
+    const p = parcelas.splice(Number(b.dataset.tirarp), 1)[0];
+    if (p && p.id) tirarIds.push(p.id);
+    desenhaParcelas();
+  });
+  $("#cParcelas", j).addEventListener("input", saldo);
+  $("#cParcelas", j).addEventListener("change", (e) => { if (e.target.matches("[data-pq]")) { lerParcelas(); desenhaParcelas(); } });
   form.addEventListener("input", (e) => { if (e.target.name === "valor" || e.target.name === "gift") saldo(); });
-  form.elements.moeda.addEventListener("change", desenhaPags);
+  form.elements.gift.addEventListener("change", saldo);
+  form.elements.moeda.addEventListener("change", desenhaParcelas);
   form.elements.canal.addEventListener("change", detalhe);
 
   $("[data-salvar]", j).addEventListener("click", async () => {
-    lerPags();
+    lerVideos(); lerParcelas();
     const f = form.elements;
+    const vids = videos.map((x, i) => ({ nome: x.nome || "Vídeo " + (i + 1), tipo: x.tipo || "organico", status: x.status || "Briefing" }));
+    const gift = f.gift.checked;
     const dados = {
       cliente: f.cliente.value.trim() || null,
       campanha: f.campanha.value.trim(),
-      gift: f.gift.checked,
-      tipo: f.tipo.value, status: f.status.value,
-      qtd: Math.max(0, Math.round(Number(f.qtd.value) || 0)),
       nicho: f.nicho.value.trim() || null,
+      gift,
+      videos: vids,
+      qtd: vids.length,
+      status: statusDoContrato(vids, v.status),
+      tipo: vids.some(x => x.tipo !== "organico") ? "Publicidade" : "Conteúdo",
       moeda: f.moeda.value,
-      valor: f.gift.checked ? 0 : Math.max(0, Number(f.valor.value) || 0),
-      pagamentos: f.gift.checked ? [] : pagamentos.filter(p => Number(p.valor) > 0).map(p => ({ valor: Math.round(Number(p.valor) * 100) / 100, data: p.data, via: p.via })),
-      data_contrato: f.data_contrato.value || null, prazo: f.prazo.value || null, vencimento: f.vencimento.value || null,
+      valor: gift ? 0 : Math.max(0, Number(f.valor.value) || 0),
+      data_contrato: f.data_contrato.value || null, prazo: f.prazo.value || null,
       canal: f.canal.value || null, canal_detalhe: f.canal_detalhe.value.trim() || null,
-      ativa: f.ativa.checked, favorita: f.favorita.checked
+      favorita: f.favorita.checked
     };
     if (!dados.cliente) { erro('Preencha "Marca / cliente".'); return; }
     if (!dados.campanha) { erro('Preencha "Descrição do trabalho".'); return; }
-    if (!dados.gift && !(dados.valor > 0)) { erro("Preencha o valor total do contrato, ou marque 🎁 gift."); return; }
-    const rec = soma(dados.pagamentos, p => p.valor);
-    if (rec > dados.valor + 0.005 && !dados.gift) { erro("Os pagamentos somam mais que o valor total. Confira os valores."); return; }
-    dados.pagamento = dados.gift || (dados.valor > 0 && rec >= dados.valor - 0.005) ? "pago" : "pendente";
+    if (!gift && !(dados.valor > 0)) { erro("Preencha o valor fechado, ou marque 🎁 gift."); return; }
+    const plano = gift ? [] : parcelas.filter(p => p.recebido || Number(p.valor) > 0);
+    if (soma(plano, p => p.valor) > dados.valor + 0.005) { erro("As parcelas somam mais que o valor fechado. Confira os valores."); return; }
+    const pendentes = plano.filter(p => !p.recebido).map(p => Object.assign(p, { vencimento: vencimentoDaParcela(p, dados.data_contrato, dados.prazo) }));
+    dados.vencimento = pendentes.map(p => p.vencimento).filter(Boolean).sort()[0] || null;
+    dados.pagamento = gift || (dados.valor > 0 && soma(plano.filter(p => p.recebido), p => p.valor) >= dados.valor - 0.005) ? "pago" : "pendente";
+    if (dados.status === "Entregue") dados.ativa = false;
+
     const b = $("[data-salvar]", j); b.disabled = true; b.textContent = "Salvando...";
     const salvo = await salvarLinha("campanhas", dados, c && c.id);
     if (!salvo) { b.disabled = false; b.textContent = c ? "Salvar" : "Adicionar"; return; }
     if (c) troca(D.campanhas, salvo); else D.campanhas.unshift(salvo);
+
+    /* as parcelas vão para Contas a receber */
+    if (!falhou.fin_receber) {
+      const comum = { campanha_id: salvo.id, cliente: salvo.cliente, descricao: salvo.campanha, nicho: salvo.nicho, canal: salvo.canal, canal_detalhe: salvo.canal_detalhe };
+      for (const id of (gift ? parcelas.filter(p => p.id && !p.recebido).map(p => p.id) : []).concat(tirarIds)) {
+        if (await apagarLinha("fin_receber", id)) D.fin_receber = D.fin_receber.filter(r => r.id !== id);
+      }
+      let ordem = 0;
+      for (const p of plano) {
+        ordem++;
+        const linha = p.recebido ? Object.assign({}, comum, { ordem })
+          : Object.assign({}, comum, { ordem, moeda: salvo.moeda, valor: Math.round(Number(p.valor) * 100) / 100, quando: p.quando, vencimento: p.vencimento, via: p.via });
+        const r = await salvarLinha("fin_receber", linha, p.id);
+        if (r) troca(D.fin_receber, r);
+      }
+    }
     fecharJanela();
-    desenharCampanhas(); desenharCalendario(); if (typeof desenharFunil === "function") desenharFunil();
-    torrada(c ? "Contrato salvo ✓" : "🎉 Contrato adicionado!");
+    desenharCampanhas(); desenharCalendario(); if (typeof desenharFunil === "function") desenharFunil(); if (typeof desenharFinanceiro === "function") desenharFinanceiro();
+    torrada(c ? "Contrato salvo ✓" : "🎉 Contrato adicionado! As parcelas já estão em Contas a receber.");
   });
   if (c) duploClique($("[data-apagar]", j), async () => {
     if (!(await apagarLinha("campanhas", c.id))) return;
+    /* parcelas que ainda não caíram somem; as recebidas ficam como receita */
+    for (const p of parcelasDe(c).filter(p => !p.recebido)) if (await apagarLinha("fin_receber", p.id)) D.fin_receber = D.fin_receber.filter(r => r.id !== p.id);
+    D.fin_receber.forEach(r => { if (r.campanha_id === c.id) r.campanha_id = null; });
     D.campanhas = D.campanhas.filter(x => x.id !== c.id);
     fecharJanela();
-    desenharCampanhas(); desenharCalendario(); if (typeof desenharFunil === "function") desenharFunil();
+    desenharCampanhas(); desenharCalendario(); if (typeof desenharFunil === "function") desenharFunil(); if (typeof desenharFinanceiro === "function") desenharFinanceiro();
     torrada("Contrato apagado.");
   });
 }
@@ -5623,9 +5765,640 @@ async function iaLegenda(insp) {
 }
 
 /* ============================================================
+   9z. 💰 FINANCEIRO
+   Resumo · Contas a receber e a pagar · Receitas · Despesas · Quero investir
+   - Receita = parcela de contrato que caiu na conta (valor líquido, já sem a taxa do banco).
+   - Dízimo = 10% do que caiu: nasce em Contas a pagar quando ela marca "Recebi".
+   - Tudo vira CA$ pela cotação do Banco do Canadá do dia de cada lançamento (guardada na linha).
+   ============================================================ */
+const CATEGORIAS = [
+  ["assinaturas", "Assinaturas & Software", "#8fb3d4"],
+  ["equipamentos", "Equipamentos", "#c77ca6"],
+  ["producao", "Produção & Beleza", "#e0907a"],
+  ["cursos", "Cursos & Mentoria", "#d9ae5c"],
+  ["bankfee", "Taxa bancária", "#a89c93"],
+  ["dizimo", "Dízimo", "#9fb185"],
+  ["outros", "Outros", "#b7a0d6"]
+];
+const categoriaDe = (k) => CATEGORIAS.find(c => c[0] === k) || CATEGORIAS[CATEGORIAS.length - 1];
+const DEDUTIVEL = [["sim", "Sim"], ["talvez", "Talvez"], ["nao", "Não"]];
+const MOEDAS_DESPESA = ["CAD", "BRL", "USD", "EUR"];
+const INVEST_CATS = [["curso", "Curso", "cursos"], ["mentoria", "Mentoria", "cursos"], ["software", "Software", "assinaturas"], ["equipamento", "Equipamento", "equipamentos"], ["outro", "Outro", "outros"]];
+const PRIORIDADES = [["alta", "Alta", "c-vermelho"], ["media", "Média", "c-mostarda"], ["baixa", "Baixa", "c-verde"]];
+const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const FIN = { ano: new Date().getFullYear(), mes: "", cat: "", buscaD: "" };
+
+/* --- valores em CA$ (usa a cotação guardada; se não tiver, a de hoje) --- */
+const cadDespesa = (d) => d.valor_cad != null ? Number(d.valor_cad) : (emCAD(d.valor, d.moeda) || 0);
+const cadReceita = (r) => r.valor_cad != null ? Number(r.valor_cad) : (emCAD(r.valor_recebido != null ? r.valor_recebido : r.valor, r.conta_moeda || r.moeda) || 0);
+const cadAReceber = (r) => emCAD(r.valor, r.moeda) || 0;
+const CA = (v) => dinheiroEm(v, "CAD");
+const recebidas = () => D.fin_receber.filter(r => r.recebido);
+const aReceber = () => D.fin_receber.filter(r => !r.recebido && Number(r.valor) > 0);
+const pagas = () => D.fin_despesas.filter(d => d.paga !== false);
+const aPagar = () => D.fin_despesas.filter(d => d.paga === false);
+const noPeriodo = (iso) => { const d = deISO(iso); return !!d && d.getFullYear() === FIN.ano && (FIN.mes === "" || d.getMonth() === Number(FIN.mes)); };
+const doAno = (iso, ano) => { const d = deISO(iso); return !!d && d.getFullYear() === ano; };
+const canalRotulo = (r) => {
+  const c = canalDe(r.canal);
+  if (!c) return r.canal_detalhe || "Sem canal";
+  return c[0] === "plataforma" && r.canal_detalhe ? "🧩 " + r.canal_detalhe : c[1];
+};
+async function comCotacao(linha, moeda, valor, dia) {
+  const t = await cotacaoNoDia(moeda, dia);
+  linha.cotacao = t;
+  linha.valor_cad = t == null ? null : Math.round((Number(valor) || 0) * t * 100) / 100;
+  return linha;
+}
+
+/* --- assinaturas: lança sozinha a cobrança do mês quando a data chega --- */
+function maisMeses(iso, k) {
+  const d = deISO(iso), dia = d.getDate();
+  const alvo = new Date(d.getFullYear(), d.getMonth() + k, 1);
+  const ultimo = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
+  alvo.setDate(Math.min(dia, ultimo));
+  return isoLocal(alvo);
+}
+function cobrancasDa(regra, ateDia) {
+  const lista = [];
+  if (!regra.inicio) return lista;
+  const pulos = new Set(Array.isArray(regra.pulos) ? regra.pulos : []);
+  for (let k = 0; k < 240; k++) {
+    const dia = maisMeses(regra.inicio, k);
+    if (dia > ateDia || (regra.ate && dia > regra.ate)) break;
+    if (!pulos.has(dia)) lista.push(dia);
+  }
+  return lista;
+}
+let lancando = false;
+async function lancaAssinaturas() {
+  if (lancando || falhou.fin_recorrencias || falhou.fin_despesas) return;
+  lancando = true;
+  const hojeISO = isoLocal(new Date());
+  let novas = 0;
+  for (const r of D.fin_recorrencias.filter(r => r.ativa !== false)) {
+    const ja = new Set(D.fin_despesas.filter(d => d.recorrencia_id === r.id).map(d => String(d.data).slice(0, 10)));
+    for (const dia of cobrancasDa(r, hojeISO)) {
+      if (ja.has(dia)) continue;
+      const linha = await comCotacao({ data: dia, descricao: r.descricao, categoria: r.categoria, moeda: r.moeda, valor: r.valor, dedutivel: r.dedutivel, paga: true, origem: "assinatura", recorrencia_id: r.id }, r.moeda, r.valor, dia);
+      const s = await salvarLinha("fin_despesas", linha);
+      if (s) { D.fin_despesas.push(s); novas++; }
+    }
+  }
+  lancando = false;
+  if (novas) { desenharFinanceiro(); torrada("🔁 " + plural(novas, "cobrança de assinatura lançada", "cobranças de assinatura lançadas") + " nas despesas."); }
+}
+/* o que vai cobrar no cartão nos próximos dias (não entra no custo ainda) */
+function proximasCobrancas(dias) {
+  const ini = isoLocal(new Date()), fim = new Date(); fim.setDate(fim.getDate() + dias);
+  const fimISO = isoLocal(fim), lista = [];
+  D.fin_recorrencias.filter(r => r.ativa !== false).forEach(r => cobrancasDa(r, fimISO).filter(d => d > ini).forEach(d => lista.push({ regra: r, dia: d })));
+  return lista.sort((a, b) => a.dia.localeCompare(b.dia));
+}
+
+/* --- gráfico de barras horizontais simples --- */
+function barras(itens, fmt) {
+  if (!itens.length) return '<p class="vazio">Nada neste período.</p>';
+  const maior = Math.max(...itens.map(i => i.v), 0) || 1;
+  return '<div class="fin__barras">' + itens.map(i =>
+    '<div class="fin__barra"><span class="fin__barra-rot" title="' + esc(i.rot) + '">' + (i.cor ? '<i style="background:' + i.cor + '"></i>' : "") + esc(i.rot) + "</span>" +
+    '<span class="fin__barra-trilho"><span style="width:' + Math.max(1.5, i.v / maior * 100) + "%;background:" + (i.cor || "var(--red)") + '"></span></span>' +
+    '<span class="fin__barra-val">' + (fmt || CA)(i.v) + (i.sub ? '<small>' + esc(i.sub) + "</small>" : "") + "</span></div>").join("") + "</div>";
+}
+function agrupa(lista, chave, valor) {
+  const por = {};
+  lista.forEach(x => { const k = chave(x) || "—"; por[k] = (por[k] || 0) + valor(x); });
+  return Object.entries(por).map(([rot, v]) => ({ rot, v })).filter(i => i.v > 0.004).sort((a, b) => b.v - a.v);
+}
+
+/* ============================================================
+   MONTAR AS ABAS
+   ============================================================ */
+function filtroPeriodo(id) {
+  return '<div class="fin__periodo" data-periodo="' + id + '"><button type="button" class="btn--icone" data-ano="-1" aria-label="Ano anterior">' + ic("esq") + '</button><b class="fin__ano"></b>' +
+    '<button type="button" class="btn--icone" data-ano="1" aria-label="Próximo ano">' + ic("dir") + "</button>" +
+    '<select class="entrada entrada--sel" data-mes><option value="">Ano todo</option>' + MESES.map((m, i) => '<option value="' + i + '">' + m + "</option>").join("") + "</select></div>";
+}
+function ligaPeriodo(raiz) {
+  raiz.addEventListener("click", (e) => { const b = e.target.closest("[data-ano]"); if (b) { FIN.ano += Number(b.dataset.ano); desenharFinanceiro(); } });
+  raiz.addEventListener("change", (e) => { if (e.target.matches("[data-mes]")) { FIN.mes = e.target.value; desenharFinanceiro(); } });
+}
+function montarFinanceiro() {
+  $("#aba-fin_resumo").innerHTML =
+    '<div class="ferramentas">' + filtroPeriodo("r") + '<span class="espaco"></span><span class="mudo pequeno" id="frCambio"></span></div>' +
+    '<div class="numeros" id="frNumeros"></div>' +
+    '<div class="fin__grade">' +
+      '<div class="bloco fin__largo"><div class="bloco__cab"><h2>📊 Receita × Despesa</h2><span class="mudo pequeno">mês a mês, com o lucro</span></div><div id="frRxD"></div></div>' +
+      '<div class="bloco fin__largo"><div class="bloco__cab"><h2>📈 Evolução acumulada</h2><span class="mudo pequeno">lucro somado ao longo do ano</span></div><div id="frAcum"></div></div>' +
+      '<div class="bloco fin__largo"><div class="bloco__cab"><h2>🔮 Previsão de fluxo de caixa</h2><span class="mudo pequeno">próximos 3 meses</span></div><div id="frFluxo"></div></div>' +
+      '<div class="bloco"><div class="bloco__cab"><h2>🗂️ Despesas por categoria</h2></div><div id="frCat"></div></div>' +
+      '<div class="bloco"><div class="bloco__cab"><h2>🎯 Receita por lugar fechado</h2></div><div id="frCanal"></div></div>' +
+      '<div class="bloco"><div class="bloco__cab"><h2>🧴 Faturamento por nicho</h2></div><div id="frNicho"></div></div>' +
+      '<div class="bloco"><div class="bloco__cab"><h2>🏆 Top marcas</h2></div><div id="frMarcas"></div></div>' +
+      '<div class="bloco"><div class="bloco__cab"><h2>🧾 Dedução fiscal</h2><button type="button" class="btn btn--linha" id="frContador">' + ic("baixar") + ' Planilha do contador</button></div><div id="frDed"></div></div>' +
+      '<div class="bloco"><div class="bloco__cab"><h2>⏰ Despesas a vencer</h2><span class="mudo pequeno">próximos 30 dias</span></div><div id="frVencer"></div></div>' +
+    "</div>";
+  ligaPeriodo($("#aba-fin_resumo"));
+  $("#frContador").addEventListener("click", planilhaContador);
+
+  $("#aba-fin_contas").innerHTML =
+    '<div class="numeros" id="fcNumeros"></div>' +
+    '<div class="fin__contas">' +
+      '<div class="bloco"><div class="bloco__cab"><h2>📥 Contas a receber (CR)</h2><button type="button" class="btn btn--linha" id="fcNovoCR">' + ic("mais") + ' Avulso</button></div><div id="fcCR"></div></div>' +
+      '<div class="bloco"><div class="bloco__cab"><h2>📤 Contas a pagar (CP)</h2><button type="button" class="btn btn--linha" id="fcNovoCP">' + ic("mais") + ' Conta a pagar</button></div><div id="fcCP"></div>' +
+        '<div class="rotulo" style="margin-top:16px">💳 Vai cobrar no cartão nos próximos 30 dias</div><p class="mudo pequeno">Só para você saber. Cai sozinho nas despesas no dia da cobrança.</p><div id="fcCartao"></div></div>' +
+    "</div>";
+  $("#fcNovoCR").addEventListener("click", () => editorAReceber());
+  $("#fcNovoCP").addEventListener("click", () => editorDespesa(null, true));
+  $("#fcCR").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-recebi]"); if (b) { janelaRecebi(D.fin_receber.find(r => r.id === b.dataset.recebi)); return; }
+    const l = e.target.closest("[data-cr]"); if (l) editorAReceber(D.fin_receber.find(r => r.id === l.dataset.cr));
+  });
+  $("#fcCP").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-paguei]"); if (b) { janelaPaguei(D.fin_despesas.find(d => d.id === b.dataset.paguei)); return; }
+    const l = e.target.closest("[data-cp]"); if (l) editorDespesa(D.fin_despesas.find(d => d.id === l.dataset.cp));
+  });
+
+  $("#aba-fin_receitas").innerHTML =
+    '<div class="ferramentas">' + filtroPeriodo("rc") + '<input class="entrada" id="fRecBusca" type="search" placeholder="Buscar marca"><span class="espaco"></span>' +
+      '<button class="btn btn--linha" id="fRecCsv">' + ic("baixar") + " CSV</button></div>" +
+    '<div class="numeros" id="fRecNumeros"></div>' +
+    '<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Data</th><th>Marca</th><th>Por onde fechei</th><th class="num">Contrato</th><th class="num">Caiu na conta</th><th class="num">Taxa</th><th class="num">Em CA$</th></tr></thead><tbody id="fRecCorpo"></tbody></table></div>' +
+    '<p class="mudo pequeno" style="margin-top:8px">A receita é o que caiu na conta, já sem a taxa do banco. Clique numa linha para corrigir.</p>';
+  ligaPeriodo($("#aba-fin_receitas"));
+  $("#fRecBusca").addEventListener("input", desenharFinanceiro);
+  $("#fRecCorpo").addEventListener("click", (e) => { const l = e.target.closest("[data-rec]"); if (l) janelaRecebi(D.fin_receber.find(r => r.id === l.dataset.rec)); });
+  $("#fRecCsv").addEventListener("click", () => {
+    const lista = recebidas().filter(r => noPeriodo(r.data_recebido));
+    baixarCSV("receitas", ["Data", "Marca", "Trabalho", "Nicho", "Por onde fechei", "Moeda do contrato", "Valor do contrato", "Conta", "Moeda da conta", "Caiu na conta", "Taxa", "Cotação", "Em CA$"],
+      lista.map(r => [dataBR(r.data_recebido), r.cliente, r.descricao, r.nicho, canalRotulo(r).replace(/^\S+\s/, ""), r.moeda, Number(r.valor) || 0, r.via, r.conta_moeda, Number(r.valor_recebido) || 0, Number(r.taxa) || 0, r.cotacao || "", Math.round(cadReceita(r) * 100) / 100]));
+  });
+
+  $("#aba-fin_despesas").innerHTML =
+    '<div class="ferramentas">' + filtroPeriodo("d") +
+      '<select class="entrada entrada--sel" id="fDesCat"><option value="">Todas as categorias</option>' + CATEGORIAS.map(c => '<option value="' + c[0] + '">' + c[1] + "</option>").join("") + "</select>" +
+      '<input class="entrada" id="fDesBusca" type="search" placeholder="Buscar despesa"><span class="espaco"></span>' +
+      '<button class="btn btn--linha" id="fDesAssin">🔁 Assinaturas</button>' +
+      '<button class="btn btn--linha" id="fDesCsv">' + ic("baixar") + " CSV</button>" +
+      '<button class="btn" id="fDesNova">' + ic("mais") + " Despesa</button></div>" +
+    '<div class="numeros" id="fDesNumeros"></div>' +
+    '<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th class="num">Valor</th><th class="num">Em CA$</th><th>Dedutível</th><th></th></tr></thead><tbody id="fDesCorpo"></tbody></table></div>';
+  ligaPeriodo($("#aba-fin_despesas"));
+  $("#fDesCat").addEventListener("change", (e) => { FIN.cat = e.target.value; desenharFinanceiro(); });
+  $("#fDesBusca").addEventListener("input", desenharFinanceiro);
+  $("#fDesNova").addEventListener("click", () => editorDespesa());
+  $("#fDesAssin").addEventListener("click", janelaAssinaturas);
+  $("#fDesCorpo").addEventListener("click", (e) => { const l = e.target.closest("[data-des]"); if (l && !e.target.closest("a")) editorDespesa(D.fin_despesas.find(d => d.id === l.dataset.des)); });
+  $("#fDesCsv").addEventListener("click", () => {
+    const lista = pagas().filter(d => noPeriodo(d.data));
+    baixarCSV("despesas", ["Data", "Descrição", "Categoria", "Moeda", "Valor", "Cotação", "Em CA$", "Dedutível", "Comprovante"],
+      lista.map(d => [dataBR(d.data), d.descricao, categoriaDe(d.categoria)[1], d.moeda, Number(d.valor) || 0, d.cotacao || "", Math.round(cadDespesa(d) * 100) / 100, (DEDUTIVEL.find(x => x[0] === d.dedutivel) || DEDUTIVEL[0])[1], d.nota_url || ""]));
+  });
+
+  $("#aba-fin_investir").innerHTML =
+    '<div class="ferramentas"><div class="pilulas" id="fInvFiltro"><button type="button" data-f="quero" class="ativo">Quero comprar</button><button type="button" data-f="comprei">Já comprei</button></div><span class="espaco"></span>' +
+      '<button class="btn" id="fInvNovo">' + ic("mais") + " Quero investir</button></div>" +
+    '<div class="numeros" id="fInvNumeros"></div><div class="fin__invest" id="fInvLista"></div>';
+  $("#fInvNovo").addEventListener("click", () => editorInvestir());
+  $("#fInvFiltro").addEventListener("click", (e) => { const b = e.target.closest("[data-f]"); if (!b) return; $$("#fInvFiltro button").forEach(x => x.classList.toggle("ativo", x === b)); desenharFinanceiro(); });
+  $("#fInvLista").addEventListener("click", (e) => {
+    const c = e.target.closest("[data-comprei]"); if (c) { janelaComprei(D.fin_investir.find(i => i.id === c.dataset.comprei)); return; }
+    const l = e.target.closest("[data-inv]"); if (l && !e.target.closest("a")) editorInvestir(D.fin_investir.find(i => i.id === l.dataset.inv));
+  });
+
+  lancaAssinaturas();
+}
+
+/* ============================================================
+   DESENHAR (tudo de uma vez: são poucas linhas)
+   ============================================================ */
+function desenharFinanceiro() {
+  if (!$("#frNumeros")) return;
+  $$(".fin__ano").forEach(el => { el.textContent = FIN.ano; });
+  $$("[data-periodo] [data-mes]").forEach(el => { el.value = FIN.mes; });
+  const periodoTxt = FIN.mes === "" ? String(FIN.ano) : MESES[FIN.mes] + "/" + FIN.ano;
+  const rec = recebidas().filter(r => noPeriodo(r.data_recebido));
+  const des = pagas().filter(d => noPeriodo(d.data));
+  const totRec = soma(rec, cadReceita), totDes = soma(des, cadDespesa);
+  const crs = aReceber(), cps = aPagar();
+  const dizimoAberto = cps.filter(d => d.categoria === "dizimo");
+  $("#frCambio").textContent = cambioData ? "Cotação de hoje (Banco do Canadá, " + dataBR(cambioData) + "): US$ 1 = CA$ " + numBR.format(cambio.USD) + (cambio.BRL ? " · R$ 1 = CA$ " + numBR.format(cambio.BRL) : "") : "Sem cotação agora.";
+
+  /* ----- RESUMO ----- */
+  $("#frNumeros").innerHTML =
+    numero("Lucro " + (FIN.mes === "" ? "no ano" : "do mês"), CA(totRec - totDes), "receita " + CA(totRec) + " · despesas " + CA(totDes)) +
+    numero("Falta receber", CA(soma(crs, cadAReceber)), plural(crs.length, "parcela", "parcelas")) +
+    numero("Falta pagar", CA(soma(cps, cadDespesa)), plural(cps.length, "conta", "contas")) +
+    numero("Dízimo a devolver", CA(soma(dizimoAberto, cadDespesa)), dizimoAberto.length ? plural(dizimoAberto.length, "recebimento", "recebimentos") : "tudo em dia ✓");
+
+  /* receita x despesa por mês do ano */
+  const meses = MESES.map((m, i) => {
+    const r = soma(recebidas().filter(x => doAno(x.data_recebido, FIN.ano) && deISO(x.data_recebido).getMonth() === i), cadReceita);
+    const d = soma(pagas().filter(x => doAno(x.data, FIN.ano) && deISO(x.data).getMonth() === i), cadDespesa);
+    return { m, r, d, l: r - d };
+  });
+  const maiorMes = Math.max(1, ...meses.map(x => Math.max(x.r, x.d)));
+  $("#frRxD").innerHTML = '<div class="fin__colunas">' + meses.map((x, i) =>
+    '<div class="fin__col' + (String(i) === String(FIN.mes) ? " ativo" : "") + '" title="' + esc(x.m + ": receita " + CA(x.r) + " · despesa " + CA(x.d) + " · lucro " + CA(x.l)) + '">' +
+      '<div class="fin__col-barras"><span class="fin__r" style="height:' + (x.r / maiorMes * 100) + '%"></span><span class="fin__d" style="height:' + (x.d / maiorMes * 100) + '%"></span></div>' +
+      '<span class="fin__col-lucro ' + (x.l < 0 ? "neg" : "") + '">' + (x.r || x.d ? (x.l < 0 ? "−" : "") + inteiro(Math.round(Math.abs(x.l))) : "") + "</span>" +
+      '<span class="fin__col-rot">' + x.m + "</span></div>").join("") + "</div>" +
+    '<div class="fin__legenda"><span><i class="fin__r"></i>Receita ' + CA(soma(meses, x => x.r)) + '</span><span><i class="fin__d"></i>Despesa ' + CA(soma(meses, x => x.d)) + "</span><span>Lucro " + FIN.ano + ": <b>" + CA(soma(meses, x => x.l)) + "</b></span></div>";
+
+  /* evolução acumulada */
+  let acc = 0;
+  const ateMes = FIN.ano === new Date().getFullYear() ? new Date().getMonth() : FIN.ano < new Date().getFullYear() ? 11 : -1;
+  const pontos = meses.slice(0, ateMes + 1).map(x => (acc += x.l));
+  if (!pontos.length) pontos.push(0);
+  const mx = Math.max(...pontos, 0), mn = Math.min(...pontos, 0), faixa = (mx - mn) || 1;
+  const W = 600, H = 150, px = (i) => 20 + i * (W - 40) / 11, py = (v) => 10 + (mx - v) / faixa * (H - 30);
+  $("#frAcum").innerHTML = '<svg class="fin__linha" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" role="img" aria-label="Lucro acumulado no ano">' +
+    '<line x1="20" x2="' + (W - 20) + '" y1="' + py(0) + '" y2="' + py(0) + '" class="fin__zero"/>' +
+    '<polyline points="' + pontos.map((v, i) => px(i) + "," + py(v)).join(" ") + '"/>' +
+    pontos.map((v, i) => '<circle cx="' + px(i) + '" cy="' + py(v) + '" r="3"><title>' + MESES[i] + ": " + CA(v) + "</title></circle>").join("") + "</svg>" +
+    '<div class="fin__legenda"><span>Acumulado ' + (ateMes === 11 ? "no fim de " + FIN.ano : "até " + MESES[Math.max(0, ateMes)] + "/" + FIN.ano) + ": <b>" + CA(pontos[pontos.length - 1]) + "</b></span></div>";
+
+  /* previsão: o que vence nos próximos 3 meses (o atrasado entra no mês atual) */
+  const agora = new Date(), chaveMes = (iso) => { const d = deISO(iso); if (!d || d < new Date(agora.getFullYear(), agora.getMonth(), 1)) return agora.getFullYear() * 12 + agora.getMonth(); return d.getFullYear() * 12 + d.getMonth(); };
+  const fluxo = [0, 1, 2].map(k => {
+    const alvo = agora.getFullYear() * 12 + agora.getMonth() + k;
+    const entra = soma(crs.filter(r => chaveMes(r.vencimento) === alvo), cadAReceber);
+    const fimMes = isoLocal(new Date(Math.floor(alvo / 12), alvo % 12 + 1, 0)), iniMes = isoLocal(new Date(Math.floor(alvo / 12), alvo % 12, 1));
+    const assin = soma(D.fin_recorrencias.filter(r => r.ativa !== false).flatMap(r => cobrancasDa(r, fimMes).filter(d => d >= iniMes && d > isoLocal(new Date())).map(() => r)), r => emCAD(r.valor, r.moeda) || 0);
+    const sai = soma(cps.filter(d => chaveMes(d.vencimento || d.data) === alvo), cadDespesa) + assin;
+    return { rot: MESES[alvo % 12] + "/" + Math.floor(alvo / 12), entra, sai };
+  });
+  $("#frFluxo").innerHTML = '<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Mês</th><th class="num">Vai entrar</th><th class="num">Vai sair</th><th class="num">Saldo</th></tr></thead><tbody>' +
+    fluxo.map(x => "<tr><td>" + x.rot + '</td><td class="num" style="color:var(--c-verde)">' + CA(x.entra) + '</td><td class="num" style="color:var(--c-coral)">' + CA(x.sai) + '</td><td class="num"><b>' + CA(x.entra - x.sai) + "</b></td></tr>").join("") +
+    '</tbody></table></div><p class="mudo pequeno" style="margin-top:6px">Entra: as parcelas a receber pelo vencimento (as atrasadas contam no mês atual). Sai: contas a pagar e assinaturas.</p>';
+
+  $("#frCat").innerHTML = barras(agrupa(des, d => d.categoria, cadDespesa).map(i => Object.assign(i, { cor: categoriaDe(i.rot)[2], rot: categoriaDe(i.rot)[1] })));
+  $("#frCanal").innerHTML = barras(agrupa(rec, canalRotulo, cadReceita));
+  $("#frNicho").innerHTML = barras(agrupa(rec, r => r.nicho || "Sem nicho", cadReceita));
+  $("#frMarcas").innerHTML = barras(agrupa(rec, r => r.cliente || "—", cadReceita).slice(0, 8));
+  const ded = (k) => soma(des.filter(d => (d.dedutivel || "sim") === k), cadDespesa);
+  $("#frDed").innerHTML = barras([{ rot: "✅ Pode abater", v: ded("sim"), cor: "var(--c-verde)" }, { rot: "🤔 Talvez (confirmar)", v: ded("talvez"), cor: "var(--c-mostarda)" }, { rot: "Não abate", v: ded("nao"), cor: "var(--c-cinza)" }].filter(i => i.v > 0)) +
+    '<p class="mudo pequeno" style="margin-top:6px">' + periodoTxt + ". A planilha do contador traz as receitas e as despesas do ano, já em CA$.</p>";
+  const vencer = cps.filter(d => (diasAte(d.vencimento || d.data) ?? 0) <= 30).map(d => ({ dia: d.vencimento || d.data, txt: d.descricao, v: cadDespesa(d), tipo: "conta" }))
+    .concat(proximasCobrancas(30).map(x => ({ dia: x.dia, txt: x.regra.descricao, v: emCAD(x.regra.valor, x.regra.moeda) || 0, tipo: "cartão" })))
+    .sort((a, b) => String(a.dia).localeCompare(String(b.dia)));
+  $("#frVencer").innerHTML = vencer.length ? '<div class="fin__lista">' + vencer.map(x =>
+    '<div class="fin__item"><span>' + dataBR(x.dia).slice(0, 5) + (diasAte(x.dia) < 0 ? '<span class="etiqueta c-vermelho">atrasado</span>' : "") + "</span><span>" + esc(x.txt) + ' <span class="mudo pequeno">' + x.tipo + '</span></span><b>' + CA(x.v) + "</b></div>").join("") + "</div>"
+    : '<p class="vazio">Nada vencendo nos próximos 30 dias.</p>';
+
+  /* ----- CONTAS (CR e CP) ----- */
+  const crOrd = crs.slice().sort((a, b) => String(a.vencimento || "9999").localeCompare(String(b.vencimento || "9999")));
+  const cpOrd = cps.slice().sort((a, b) => String(a.vencimento || a.data || "").localeCompare(String(b.vencimento || b.data || "")));
+  const atrasadas = crOrd.filter(r => r.vencimento && diasAte(r.vencimento) < 0);
+  $("#fcNumeros").innerHTML =
+    numero("📥 Falta receber", CA(soma(crs, cadAReceber)), plural(crs.length, "parcela", "parcelas") + (atrasadas.length ? " · " + atrasadas.length + " atrasada" + (atrasadas.length > 1 ? "s" : "") : "")) +
+    numero("📤 Falta pagar", CA(soma(cps, cadDespesa)), plural(cps.length, "conta", "contas")) +
+    numero("🙏 Dízimo a devolver", CA(soma(dizimoAberto, cadDespesa))) +
+    numero("💳 Cartão em 30 dias", CA(soma(proximasCobrancas(30), x => emCAD(x.regra.valor, x.regra.moeda) || 0)), plural(proximasCobrancas(30).length, "cobrança", "cobranças"));
+  const venceTag = (dia) => {
+    const n = diasAte(dia);
+    if (n === null) return '<span class="mudo pequeno">sem data</span>';
+    if (n < 0) return '<span class="etiqueta c-vermelho">atrasado ' + plural(-n, "dia", "dias") + "</span>";
+    if (n === 0) return '<span class="etiqueta c-amarelo">hoje</span>';
+    return '<span class="mudo pequeno">' + dataBR(dia) + "</span>";
+  };
+  $("#fcCR").innerHTML = crOrd.length ? '<div class="fin__lista">' + crOrd.map(r =>
+    '<div class="fin__conta" data-cr="' + esc(r.id) + '"><div><b>' + esc(r.cliente || "—") + "</b>" + (r.descricao ? '<div class="mudo pequeno">' + esc(r.descricao) + (r.quando === "assinatura" ? " · na assinatura" : r.quando === "entrega" ? " · na entrega" : "") + "</div>" : "") + "</div>" +
+      '<div class="fin__conta-dir"><b>' + dinheiroEm(r.valor, r.moeda) + '</b><div>' + venceTag(r.vencimento) + (r.via ? ' <span class="mudo pequeno">· ' + esc(r.via) + "</span>" : "") + "</div></div>" +
+      '<button type="button" class="btn" data-recebi="' + esc(r.id) + '">' + ic("check") + " Recebi</button></div>").join("") + "</div>"
+    : '<p class="vazio">Nada para receber. Quando você registrar um contrato em Campanhas, as parcelas aparecem aqui.</p>';
+  $("#fcCP").innerHTML = cpOrd.length ? '<div class="fin__lista">' + cpOrd.map(d =>
+    '<div class="fin__conta" data-cp="' + esc(d.id) + '"><div><b>' + esc(d.descricao) + '</b><div class="mudo pequeno">' + categoriaDe(d.categoria)[1] + "</div></div>" +
+      '<div class="fin__conta-dir"><b>' + dinheiroEm(d.valor, d.moeda) + "</b><div>" + venceTag(d.vencimento || d.data) + "</div></div>" +
+      '<button type="button" class="btn" data-paguei="' + esc(d.id) + '">' + ic("check") + " Paguei</button></div>").join("") + "</div>"
+    : '<p class="vazio">Nada para pagar agora. 🙌</p>';
+  const cartao = proximasCobrancas(30);
+  $("#fcCartao").innerHTML = cartao.length ? '<div class="fin__lista">' + cartao.map(x =>
+    '<div class="fin__item"><span>' + dataBR(x.dia).slice(0, 5) + "</span><span>" + esc(x.regra.descricao) + "</span><b>" + dinheiroEm(x.regra.valor, x.regra.moeda) + "</b></div>").join("") + "</div>"
+    : '<p class="mudo pequeno">Nenhuma assinatura cobra nos próximos 30 dias.</p>';
+
+  /* ----- RECEITAS ----- */
+  const buscaR = normaliza(($("#fRecBusca") || {}).value || "");
+  const recLista = rec.filter(r => !buscaR || normaliza((r.cliente || "") + " " + (r.descricao || "")).includes(buscaR)).sort((a, b) => String(b.data_recebido).localeCompare(String(a.data_recebido)));
+  $("#fRecNumeros").innerHTML =
+    numero("Receita " + periodoTxt, CA(soma(recLista, cadReceita)), plural(recLista.length, "recebimento", "recebimentos")) +
+    numero("Taxas de banco", CA(soma(recLista, r => (Number(r.taxa) || 0) * (r.cotacao || cambio[r.conta_moeda] || 1))), "já descontadas da receita") +
+    numero("Dízimo gerado", CA(soma(recLista, r => cadReceita(r) * 0.1)), "10% do que caiu") +
+    numero("Marcas que pagaram", inteiro(new Set(recLista.map(r => r.cliente)).size));
+  $("#fRecCorpo").innerHTML = recLista.length ? recLista.map(r =>
+    '<tr class="clica" data-rec="' + esc(r.id) + '"><td style="white-space:nowrap">' + dataBR(r.data_recebido) + "</td>" +
+      "<td><b>" + esc(r.cliente || "—") + "</b>" + (r.descricao ? '<div class="mudo pequeno">' + esc(r.descricao) + (r.nicho ? " · " + esc(r.nicho) : "") + "</div>" : "") + "</td>" +
+      "<td>" + esc(canalRotulo(r)) + "</td>" +
+      '<td class="num">' + dinheiroEm(r.valor, r.moeda) + "</td>" +
+      '<td class="num">' + dinheiroEm(r.valor_recebido != null ? r.valor_recebido : r.valor, r.conta_moeda || r.moeda) + (r.via ? '<div class="mudo pequeno">' + esc(r.via) + "</div>" : "") + "</td>" +
+      '<td class="num">' + (Number(r.taxa) ? dinheiroEm(r.taxa, r.conta_moeda || r.moeda) : '<span class="mudo">·</span>') + "</td>" +
+      '<td class="num"><b>' + CA(cadReceita(r)) + "</b></td></tr>").join("")
+    : '<tr><td colspan="7"><p class="vazio">Nenhuma receita em ' + periodoTxt + ".</p></td></tr>";
+
+  /* ----- DESPESAS ----- */
+  const buscaD = normaliza(($("#fDesBusca") || {}).value || "");
+  const desLista = des.filter(d => (!FIN.cat || d.categoria === FIN.cat) && (!buscaD || normaliza(d.descricao || "").includes(buscaD))).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  $("#fDesNumeros").innerHTML =
+    numero("Despesas " + periodoTxt, CA(soma(desLista, cadDespesa)), plural(desLista.length, "lançamento", "lançamentos")) +
+    numero("Pode abater no imposto", CA(soma(desLista.filter(d => (d.dedutivel || "sim") === "sim"), cadDespesa))) +
+    numero("Assinaturas ativas", inteiro(D.fin_recorrencias.filter(r => r.ativa !== false && (!r.ate || r.ate >= isoLocal(new Date()))).length), CA(soma(D.fin_recorrencias.filter(r => r.ativa !== false && (!r.ate || r.ate >= isoLocal(new Date()))), r => emCAD(r.valor, r.moeda) || 0)) + " por mês") +
+    numero("Sem comprovante", inteiro(desLista.filter(d => !d.nota_url && (d.dedutivel || "sim") !== "nao").length), "das dedutíveis");
+  $("#fDesCorpo").innerHTML = desLista.length ? desLista.map(d => {
+    const cat = categoriaDe(d.categoria);
+    return '<tr class="clica" data-des="' + esc(d.id) + '"><td style="white-space:nowrap">' + dataBR(d.data) + "</td>" +
+      "<td><b>" + esc(d.descricao) + "</b>" + (d.origem === "assinatura" ? ' <span class="mudo pequeno">🔁</span>' : "") + "</td>" +
+      '<td><span class="fin__cat"><i style="background:' + cat[2] + '"></i>' + cat[1] + "</span></td>" +
+      '<td class="num">' + dinheiroEm(d.valor, d.moeda) + "</td>" +
+      '<td class="num"><b>' + CA(cadDespesa(d)) + "</b></td>" +
+      "<td>" + ((d.dedutivel || "sim") === "sim" ? '<span class="pil c-verde">Sim</span>' : d.dedutivel === "talvez" ? '<span class="pil c-mostarda">Talvez</span>' : '<span class="pil c-cinza">Não</span>') + "</td>" +
+      '<td class="curta">' + (d.nota_url ? '<a class="link pequeno" href="' + esc(d.nota_url) + '" target="_blank" rel="noopener">📎 nota</a>' : "") + "</td></tr>";
+  }).join("") : '<tr><td colspan="7"><p class="vazio">Nenhuma despesa em ' + periodoTxt + ".</p></td></tr>";
+
+  /* ----- QUERO INVESTIR ----- */
+  const fInv = ($("#fInvFiltro .ativo") || {}).dataset?.f || "quero";
+  const ordPrio = { alta: 0, media: 1, baixa: 2 };
+  const invLista = D.fin_investir.filter(i => (i.status || "quero") === fInv).sort((a, b) => (ordPrio[a.prioridade] ?? 1) - (ordPrio[b.prioridade] ?? 1) || String(b.data || "").localeCompare(String(a.data || "")));
+  const queros = D.fin_investir.filter(i => (i.status || "quero") === "quero");
+  $("#fInvNumeros").innerHTML =
+    numero("Na lista", inteiro(queros.length), CA(soma(queros, i => emCAD(i.valor, i.moeda) || 0)) + " no total") +
+    numero("Prioridade alta", inteiro(queros.filter(i => i.prioridade === "alta").length), CA(soma(queros.filter(i => i.prioridade === "alta"), i => emCAD(i.valor, i.moeda) || 0))) +
+    numero("Lucro do ano", CA(soma(recebidas().filter(r => doAno(r.data_recebido, new Date().getFullYear())), cadReceita) - soma(pagas().filter(d => doAno(d.data, new Date().getFullYear())), cadDespesa)), "para ajudar a decidir") +
+    numero("Já comprei", inteiro(D.fin_investir.length - queros.length));
+  $("#fInvLista").innerHTML = invLista.length ? invLista.map(i => {
+    const p = PRIORIDADES.find(x => x[0] === i.prioridade) || PRIORIDADES[1], cat = INVEST_CATS.find(x => x[0] === i.categoria) || INVEST_CATS[4];
+    return '<div class="fin__invcard" data-inv="' + esc(i.id) + '"><div class="fin__invtopo"><b>' + esc(i.nome) + '</b><span class="pil ' + p[2] + '">' + p[1] + "</span></div>" +
+      '<div class="mudo pequeno">' + cat[1] + (i.nota ? " · " + esc(i.nota) : "") + "</div>" +
+      '<div class="fin__invpe"><b>' + dinheiroEm(i.valor, i.moeda) + "</b>" + (i.link ? '<a class="link pequeno" href="' + esc(i.link) + '" target="_blank" rel="noopener">abrir link</a>' : "") +
+      (i.status === "comprei" ? '<span class="mudo pequeno">comprei em ' + dataBR(i.data_compra) + "</span>" : '<button type="button" class="btn btn--linha" data-comprei="' + esc(i.id) + '">' + ic("check") + " Comprei</button>") + "</div></div>";
+  }).join("") : '<p class="vazio">' + (fInv === "quero" ? "Sua lista está vazia. Clique em Quero investir para guardar um curso, mentoria ou equipamento." : "Nada comprado ainda.") + "</p>";
+}
+
+/* ============================================================
+   JANELAS
+   ============================================================ */
+/* ✓ Recebi: o dinheiro caiu (ou corrigir um recebimento) */
+function janelaRecebi(r) {
+  if (!r) return;
+  const editando = r.recebido;
+  const via0 = r.via || "PayPal";
+  const moedaConta0 = r.conta_moeda || MOEDA_DA_VIA[via0] || r.moeda || "CAD";
+  const dizimo = D.fin_despesas.find(d => d.receber_id === r.id && d.categoria === "dizimo");
+  const j = abrirJanela({
+    titulo: editando ? "✏️ Recebimento de " + (r.cliente || "") : "✓ Recebi de " + (r.cliente || ""),
+    corpo: '<p class="mudo pequeno" style="margin-bottom:12px">' + esc(r.descricao || "") + " · parcela de <b>" + dinheiroEm(r.valor, r.moeda) + "</b>" + (r.vencimento ? " · prevista para " + dataBR(r.vencimento) : "") + "</p>" +
+      '<form class="grade-form" novalidate>' +
+      '<div class="campo"><label>Data em que caiu</label><input type="date" name="data" value="' + esc(r.data_recebido || isoLocal(new Date())) + '"></div>' +
+      '<div class="campo"><label>Caiu em qual conta?</label><select name="via">' + opcoes(VIAS, via0) + "</select></div>" +
+      '<div class="campo"><label>Moeda da conta</label><select name="conta_moeda">' + opcoes(MOEDAS_DESPESA, moedaConta0) + "</select></div>" +
+      '<div class="campo"><label>Quanto caiu na conta *</label><input type="number" name="valor_recebido" min="0" step="0.01" value="' + esc(r.valor_recebido != null ? r.valor_recebido : (moedaConta0 === r.moeda ? r.valor : "")) + '" placeholder="o valor que aparece no banco"></div>' +
+      '<div class="campo"><label>Taxa que o banco cobrou (opcional)</label><input type="number" name="taxa" min="0" step="0.01" value="' + esc(Number(r.taxa) || "") + '" placeholder="0,00"></div>' +
+      '<div class="campo"><label>Valor da parcela (' + MOEDAS[r.moeda || "CAD"] + ')</label><input type="number" name="valor" min="0" step="0.01" value="' + esc(r.valor) + '"></div>' +
+      '<label class="campo campo--check inteiro"><input type="checkbox" name="dizimo"' + (editando ? (dizimo ? " checked" : "") : " checked") + '> 🙏 Separar o dízimo (10% do que caiu) em Contas a pagar <b id="rDizimo"></b></label>' +
+      '<p class="mudo pequeno inteiro" id="rDica"></p>' +
+      '<div class="faixa inteiro escondido" data-erro></div></form>',
+    rodape: (editando ? '<button class="btn btn--perigo" type="button" data-desfazer>↩️ Ainda não recebi</button>' : "") +
+      '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Cancelar</button><button class="btn" type="button" data-salvar>' + (editando ? "Salvar" : "✓ Confirmar") + "</button>"
+  });
+  const f = $("form", j).elements;
+  const erro = (t) => { const e = $("[data-erro]", j); e.textContent = t; e.classList.remove("escondido"); };
+  const atualiza = () => {
+    const v = Number(f.valor_recebido.value) || 0, m = f.conta_moeda.value;
+    $("#rDizimo", j).textContent = v ? "· " + dinheiroEm(v * 0.1, m) : "";
+    $("#rDica", j).textContent = m !== r.moeda && cambio[r.moeda] && cambio[m]
+      ? "Pela cotação de hoje, " + dinheiroEm(r.valor, r.moeda) + " dariam uns " + dinheiroEm(r.valor * cambio[r.moeda] / cambio[m], m) + ". Coloque o valor exato que aparece no banco." : "";
+  };
+  f.via.addEventListener("change", () => { if (MOEDA_DA_VIA[f.via.value]) f.conta_moeda.value = MOEDA_DA_VIA[f.via.value]; atualiza(); });
+  $("form", j).addEventListener("input", atualiza);
+  atualiza();
+  $("[data-salvar]", j).addEventListener("click", async () => {
+    const v = Number(f.valor_recebido.value) || 0;
+    if (!v) { erro("Coloque quanto caiu na conta."); return; }
+    if (!f.data.value) { erro("Coloque a data em que caiu."); return; }
+    const b = $("[data-salvar]", j); b.disabled = true; b.textContent = "Salvando...";
+    const linha = await comCotacao({ recebido: true, data_recebido: f.data.value, via: f.via.value, conta_moeda: f.conta_moeda.value,
+      valor_recebido: Math.round(v * 100) / 100, taxa: Math.round((Number(f.taxa.value) || 0) * 100) / 100, valor: Math.round((Number(f.valor.value) || 0) * 100) / 100 }, f.conta_moeda.value, v, f.data.value);
+    const salvo = await salvarLinha("fin_receber", linha, r.id);
+    if (!salvo) { b.disabled = false; b.textContent = "Salvar"; return; }
+    troca(D.fin_receber, salvo);
+    /* o dízimo: 10% do que caiu, em Contas a pagar */
+    if (f.dizimo.checked) {
+      const dz = await comCotacao({ descricao: "Dízimo · " + (salvo.cliente || "recebimento"), categoria: "dizimo", moeda: salvo.conta_moeda, valor: Math.round(v * 10) / 100,
+        dedutivel: "talvez", origem: "dizimo", receber_id: salvo.id }, salvo.conta_moeda, v * 0.1, salvo.data_recebido);
+      if (!dizimo) Object.assign(dz, { paga: false, data: salvo.data_recebido, vencimento: salvo.data_recebido });
+      const sd = await salvarLinha("fin_despesas", dz, dizimo && dizimo.id);
+      if (sd) troca(D.fin_despesas, sd);
+    } else if (dizimo && await apagarLinha("fin_despesas", dizimo.id)) D.fin_despesas = D.fin_despesas.filter(d => d.id !== dizimo.id);
+    await atualizaPagamentoDaCampanha(salvo.campanha_id);
+    fecharJanela();
+    desenharFinanceiro();
+    torrada(editando ? "Recebimento salvo ✓" : "💰 Receita registrada" + (f.dizimo.checked ? " e dízimo separado em Contas a pagar." : "."));
+  });
+  if (editando) duploClique($("[data-desfazer]", j), async () => {
+    const salvo = await salvarLinha("fin_receber", { recebido: false, data_recebido: null, valor_recebido: null, taxa: 0, cotacao: null, valor_cad: null, conta_moeda: null }, r.id);
+    if (!salvo) return;
+    troca(D.fin_receber, salvo);
+    if (dizimo && dizimo.paga === false && await apagarLinha("fin_despesas", dizimo.id)) D.fin_despesas = D.fin_despesas.filter(d => d.id !== dizimo.id);
+    await atualizaPagamentoDaCampanha(salvo.campanha_id);
+    fecharJanela(); desenharFinanceiro(); torrada("Voltou para Contas a receber.");
+  }, "Clique de novo para confirmar");
+}
+/* a campanha fica "pago" quando todas as parcelas caíram */
+async function atualizaPagamentoDaCampanha(id) {
+  const c = id && D.campanhas.find(x => x.id === id);
+  if (!c || c.gift) return;
+  const ps = D.fin_receber.filter(r => r.campanha_id === id);
+  const pago = ps.length > 0 && ps.every(r => r.recebido) && soma(ps, r => r.valor) >= (Number(c.valor) || 0) - 0.005 ? "pago" : "pendente";
+  if (c.pagamento !== pago) { const s = await salvarLinha("campanhas", { pagamento: pago }, c.id); if (s) troca(D.campanhas, s); }
+}
+
+/* a receber avulso (ou editar uma parcela que ainda não caiu) */
+function editorAReceber(r) {
+  editor({
+    titulo: r ? "✏️ Parcela a receber" : "➕ A receber (avulso)",
+    topo: r && r.campanha_id ? '<p class="mudo pequeno" style="margin-bottom:10px">Essa parcela é de um contrato. Para mudar o plano de pagamento, abra o contrato em Campanhas.</p>' : '<p class="mudo pequeno" style="margin-bottom:10px">Para algo que não é contrato de campanha. Ex.: uma mentoria que você deu.</p>',
+    campos: [
+      { nome: "cliente", rot: "De quem", obrigatorio: true, lista: nomesDeMarcas() },
+      { nome: "descricao", rot: "O que é" },
+      { nome: "moeda", rot: "Moeda", tipo: "select", opcoes: MOEDAS_CONTRATO },
+      { nome: "valor", rot: "Valor", tipo: "number", passo: "0.01", min: 0, obrigatorio: true },
+      { nome: "vencimento", rot: "Previsão de receber", tipo: "date" },
+      { nome: "via", rot: "Por onde", tipo: "select", opcoes: VIAS },
+      { nome: "nicho", rot: "Nicho", lista: B_NICHOS },
+      { nome: "canal", rot: "Por onde fechei", tipo: "select", opcoes: [["", "—"]].concat(CANAIS.map(c => [c[0], c[1]])) }
+    ],
+    valores: r || { moeda: "CAD", via: "PayPal", vencimento: isoLocal(new Date()) },
+    aoSalvar: async (dados, erro) => {
+      if (!(Number(dados.valor) > 0)) { erro("Coloque o valor."); return false; }
+      const s = await salvarLinha("fin_receber", Object.assign(dados, { quando: "data" }), r && r.id);
+      if (!s) return false;
+      troca(D.fin_receber, s); desenharFinanceiro(); return true;
+    },
+    aoApagar: r ? async () => { if (!(await apagarLinha("fin_receber", r.id))) return false; D.fin_receber = D.fin_receber.filter(x => x.id !== r.id); desenharFinanceiro(); return true; } : null
+  });
+}
+
+/* despesa (paga) ou conta a pagar */
+function editorDespesa(d, contaAPagar) {
+  const aPagarModo = d ? d.paga === false : !!contaAPagar;
+  const campos = [
+    { nome: "descricao", rot: "Descrição", obrigatorio: true, inteiro: true, dica: "Ex.: Mentoria, microfone, Canva..." },
+    { nome: "categoria", rot: "Categoria", tipo: "select", opcoes: CATEGORIAS.map(c => [c[0], c[1]]) },
+    { nome: "dedutivel", rot: "Pode abater no imposto?", tipo: "select", opcoes: DEDUTIVEL },
+    { nome: "moeda", rot: "Moeda", tipo: "select", opcoes: MOEDAS_DESPESA },
+    { nome: "valor", rot: "Valor", tipo: "number", passo: "0.01", min: 0, obrigatorio: true },
+    aPagarModo ? { nome: "vencimento", rot: "Vence em", tipo: "date" } : { nome: "data", rot: "Data", tipo: "date" },
+    { nome: "nota_url", rot: "Link do comprovante / nota (opcional)", inteiro: true, dica: "Cole o link do Drive, do e-mail ou do PDF" }
+  ];
+  editor({
+    titulo: d ? "✏️ " + (aPagarModo ? "Conta a pagar" : "Despesa") : aPagarModo ? "➕ Conta a pagar" : "➕ Despesa",
+    topo: d && d.origem === "assinatura" ? '<p class="mudo pequeno" style="margin-bottom:10px">🔁 Lançada sozinha pela assinatura. Se apagar, esse mês fica marcado como "não cobrou".</p>' : "",
+    campos,
+    valores: d || { categoria: aPagarModo ? "outros" : "assinaturas", dedutivel: "sim", moeda: "CAD", data: isoLocal(new Date()), vencimento: isoLocal(new Date()) },
+    aoSalvar: async (dados, erro) => {
+      if (!(Number(dados.valor) > 0)) { erro("Coloque o valor."); return false; }
+      if (aPagarModo) { dados.paga = false; dados.data = d ? d.data : isoLocal(new Date()); }
+      else if (!dados.data) dados.data = isoLocal(new Date());
+      await comCotacao(dados, dados.moeda, dados.valor, aPagarModo ? (dados.vencimento || dados.data) : dados.data);
+      const s = await salvarLinha("fin_despesas", dados, d && d.id);
+      if (!s) return false;
+      troca(D.fin_despesas, s); desenharFinanceiro(); return true;
+    },
+    aoApagar: d ? async () => {
+      if (!(await apagarLinha("fin_despesas", d.id))) return false;
+      D.fin_despesas = D.fin_despesas.filter(x => x.id !== d.id);
+      const regra = d.recorrencia_id && D.fin_recorrencias.find(r => r.id === d.recorrencia_id);
+      if (regra) { const s = await salvarLinha("fin_recorrencias", { pulos: (regra.pulos || []).concat([String(d.data).slice(0, 10)]) }, regra.id); if (s) troca(D.fin_recorrencias, s); }
+      desenharFinanceiro(); return true;
+    } : null
+  });
+}
+
+/* ✓ Paguei: a conta a pagar vira despesa */
+function janelaPaguei(d) {
+  if (!d) return;
+  editor({
+    titulo: "✓ Paguei: " + d.descricao,
+    campos: [
+      { nome: "data", rot: "Data do pagamento", tipo: "date" },
+      { nome: "moeda", rot: "Moeda", tipo: "select", opcoes: MOEDAS_DESPESA },
+      { nome: "valor", rot: "Valor pago", tipo: "number", passo: "0.01", min: 0, obrigatorio: true }
+    ],
+    valores: { data: isoLocal(new Date()), moeda: d.moeda, valor: d.valor },
+    aoSalvar: async (dados) => {
+      const linha = await comCotacao({ paga: true, data: dados.data || isoLocal(new Date()), moeda: dados.moeda, valor: dados.valor }, dados.moeda, dados.valor, dados.data);
+      const s = await salvarLinha("fin_despesas", linha, d.id);
+      if (!s) return false;
+      troca(D.fin_despesas, s); desenharFinanceiro(); torrada("✓ Pago. Foi para as despesas."); return true;
+    }
+  });
+}
+
+/* 🔁 assinaturas: as regras de cobrança mensal */
+function janelaAssinaturas() {
+  const desenha = () => {
+    const lista = D.fin_recorrencias.slice().sort((a, b) => (b.ativa !== false) - (a.ativa !== false) || String(a.descricao).localeCompare(String(b.descricao)));
+    return lista.length ? '<div class="fin__lista">' + lista.map(r => {
+      const encerrada = r.ativa === false || (r.ate && r.ate < isoLocal(new Date()));
+      return '<div class="fin__conta' + (encerrada ? " fin__apagado" : "") + '" data-regra="' + esc(r.id) + '"><div><b>' + esc(r.descricao) + '</b><div class="mudo pequeno">todo dia ' + deISO(r.inicio).getDate() + " · desde " + dataBR(r.inicio) + (r.ate ? " até " + dataBR(r.ate) : "") + (encerrada ? " · encerrada" : "") + "</div></div>" +
+        '<div class="fin__conta-dir"><b>' + dinheiroEm(r.valor, r.moeda) + '</b><div class="mudo pequeno">' + categoriaDe(r.categoria)[1] + "</div></div></div>";
+    }).join("") + "</div>" : '<p class="vazio">Nenhuma assinatura cadastrada.</p>';
+  };
+  const j = abrirJanela({ titulo: "🔁 Assinaturas (cobram sozinhas no cartão)", larga: true,
+    corpo: '<p class="mudo pequeno" style="margin-bottom:10px">Cada assinatura vira uma despesa sozinha no dia da cobrança, todo mês. Clique numa para editar ou encerrar.</p><div id="fAssLista">' + desenha() + "</div>",
+    rodape: '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Fechar</button><button class="btn" type="button" data-nova>' + ic("mais") + " Nova assinatura</button>" });
+  $("#fAssLista", j).addEventListener("click", (e) => { const l = e.target.closest("[data-regra]"); if (l) editorAssinatura(D.fin_recorrencias.find(r => r.id === l.dataset.regra)); });
+  $("[data-nova]", j).addEventListener("click", () => editorAssinatura());
+}
+function editorAssinatura(r) {
+  editor({
+    titulo: r ? "✏️ " + r.descricao : "➕ Nova assinatura",
+    campos: [
+      { nome: "descricao", rot: "Nome", obrigatorio: true, dica: "Ex.: Claude, Canva, CapCut" },
+      { nome: "categoria", rot: "Categoria", tipo: "select", opcoes: CATEGORIAS.map(c => [c[0], c[1]]) },
+      { nome: "moeda", rot: "Moeda", tipo: "select", opcoes: MOEDAS_DESPESA },
+      { nome: "valor", rot: "Valor por mês", tipo: "number", passo: "0.01", min: 0, obrigatorio: true },
+      { nome: "inicio", rot: "1ª cobrança (repete todo mês nesse dia)", tipo: "date", obrigatorio: true },
+      { nome: "ate", rot: "Última cobrança (vazio = sem fim)", tipo: "date" },
+      { nome: "dedutivel", rot: "Pode abater no imposto?", tipo: "select", opcoes: DEDUTIVEL },
+      { nome: "ativa", rot: "Ativa (desmarque quando cancelar)", tipo: "check" }
+    ],
+    valores: r || { categoria: "assinaturas", moeda: "CAD", inicio: isoLocal(new Date()), dedutivel: "sim", ativa: true },
+    aoSalvar: async (dados) => {
+      const s = await salvarLinha("fin_recorrencias", dados, r && r.id);
+      if (!s) return false;
+      troca(D.fin_recorrencias, s); desenharFinanceiro(); lancaAssinaturas();
+      if ($("#fAssLista")) janelaAssinaturas();
+      return true;
+    },
+    aoApagar: r ? async () => {
+      if (!(await apagarLinha("fin_recorrencias", r.id))) return false;
+      D.fin_recorrencias = D.fin_recorrencias.filter(x => x.id !== r.id); desenharFinanceiro(); return true;
+    } : null
+  });
+}
+
+/* Quero investir */
+function editorInvestir(i) {
+  editor({
+    titulo: i ? "✏️ " + i.nome : "➕ Quero investir",
+    campos: [
+      { nome: "nome", rot: "O que você quer?", obrigatorio: true, inteiro: true, dica: "Ex.: Mentoria de edição, ring light..." },
+      { nome: "categoria", rot: "Tipo", tipo: "select", opcoes: INVEST_CATS.map(c => [c[0], c[1]]) },
+      { nome: "prioridade", rot: "Prioridade", tipo: "select", opcoes: PRIORIDADES.map(p => [p[0], p[1]]) },
+      { nome: "moeda", rot: "Moeda", tipo: "select", opcoes: MOEDAS_DESPESA },
+      { nome: "valor", rot: "Valor estimado", tipo: "number", passo: "0.01", min: 0 },
+      { nome: "link", rot: "Link (opcional)", inteiro: true },
+      { nome: "nota", rot: "Nota (opcional)", inteiro: true }
+    ],
+    valores: i || { categoria: "curso", prioridade: "media", moeda: "CAD" },
+    aoSalvar: async (dados) => {
+      if (!i) dados.data = isoLocal(new Date());
+      const s = await salvarLinha("fin_investir", dados, i && i.id);
+      if (!s) return false;
+      troca(D.fin_investir, s); desenharFinanceiro(); return true;
+    },
+    aoApagar: i ? async () => { if (!(await apagarLinha("fin_investir", i.id))) return false; D.fin_investir = D.fin_investir.filter(x => x.id !== i.id); desenharFinanceiro(); return true; } : null
+  });
+}
+/* ✓ Comprei: vira despesa */
+function janelaComprei(i) {
+  if (!i) return;
+  editor({
+    titulo: "✓ Comprei: " + i.nome,
+    topo: '<p class="mudo pequeno" style="margin-bottom:10px">Vai para as despesas, na categoria ' + categoriaDe((INVEST_CATS.find(c => c[0] === i.categoria) || INVEST_CATS[4])[2])[1] + ".</p>",
+    campos: [
+      { nome: "data", rot: "Data da compra", tipo: "date" },
+      { nome: "moeda", rot: "Moeda", tipo: "select", opcoes: MOEDAS_DESPESA },
+      { nome: "valor", rot: "Quanto pagou", tipo: "number", passo: "0.01", min: 0, obrigatorio: true },
+      { nome: "dedutivel", rot: "Pode abater no imposto?", tipo: "select", opcoes: DEDUTIVEL }
+    ],
+    valores: { data: isoLocal(new Date()), moeda: i.moeda, valor: i.valor, dedutivel: "sim" },
+    aoSalvar: async (dados) => {
+      const linha = await comCotacao({ data: dados.data || isoLocal(new Date()), descricao: i.nome, categoria: (INVEST_CATS.find(c => c[0] === i.categoria) || INVEST_CATS[4])[2],
+        moeda: dados.moeda, valor: dados.valor, dedutivel: dados.dedutivel, paga: true, origem: "investimento", investir_id: i.id }, dados.moeda, dados.valor, dados.data);
+      const d = await salvarLinha("fin_despesas", linha);
+      if (!d) return false;
+      D.fin_despesas.push(d);
+      const s = await salvarLinha("fin_investir", { status: "comprei", data_compra: d.data, despesa_id: d.id, valor: dados.valor, moeda: dados.moeda }, i.id);
+      if (s) troca(D.fin_investir, s);
+      desenharFinanceiro(); torrada("🎉 Comprado! Já está nas despesas."); return true;
+    }
+  });
+}
+
+/* planilha para o contador: receitas e despesas do ano, em CA$ */
+function planilhaContador() {
+  const ano = FIN.ano;
+  const linhas = recebidas().filter(r => doAno(r.data_recebido, ano)).map(r => ["Receita", dataBR(r.data_recebido), (r.cliente || "") + (r.descricao ? " · " + r.descricao : ""), "Receita de UGC", r.conta_moeda || r.moeda, Number(r.valor_recebido) || 0, r.cotacao || "", Math.round(cadReceita(r) * 100) / 100, ""])
+    .concat(pagas().filter(d => doAno(d.data, ano)).map(d => ["Despesa", dataBR(d.data), d.descricao, categoriaDe(d.categoria)[1], d.moeda, Number(d.valor) || 0, d.cotacao || "", Math.round(cadDespesa(d) * 100) / 100, (DEDUTIVEL.find(x => x[0] === d.dedutivel) || DEDUTIVEL[0])[1]]));
+  if (!linhas.length) { torrada("Nada lançado em " + ano + "."); return; }
+  baixarCSV("contador-" + ano, ["Tipo", "Data", "Descrição", "Categoria", "Moeda", "Valor", "Cotação (CA$)", "Em CA$", "Dedutível"], linhas);
+}
+
+/* ============================================================
    10. MENU, GAVETA E SAIR
    ============================================================ */
-const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", abordar: "✍️ Abordagens", prospeccao: "📨 Prospecção", calendario: "Calendário", campanhas: "Campanhas", checklist: "📚 Kit de Roteiro da Lara", roteiros: "🎬 Análise de vídeo", inspiracao: "💡 Inspiração", producao: "🎬 Produção" };
+const TITULOS = { portfolio: "Portfólio", marcas: "📥 Inbound pelo portfólio", base: "🏷️ Marcas", funil: "📊 Prospectado × Fechado", abordar: "✍️ Abordagens", prospeccao: "📨 Prospecção", calendario: "Calendário", campanhas: "Campanhas", checklist: "📚 Kit de Roteiro da Lara", roteiros: "🎬 Análise de vídeo", inspiracao: "💡 Inspiração", producao: "🎬 Produção", fin_resumo: "💰 Resumo financeiro", fin_contas: "⚖️ Contas a receber e a pagar", fin_receitas: "💵 Receitas", fin_despesas: "🧾 Despesas", fin_investir: "🛍️ Quero investir" };
 const lateral = $("#lateral"), cortina = $("#cortina");
 const fechaGaveta = () => { lateral.classList.remove("aberta"); cortina.classList.remove("aberta"); };
 function irPara(aba) {
@@ -5689,6 +6462,7 @@ seguro("Checklist", montarChecklist);
 seguro("Roteiros", montarRoteiros);
 seguro("Inspiração", () => { montarInspiracao(); desenharInspiracao(); });
 seguro("Produção", () => { montarProducao(); desenharProducao(); });
+seguro("Financeiro", () => { montarFinanceiro(); desenharFinanceiro(); });
 /* os que já estavam marcados como Sim antes de existir essa regra também vão para a Produção */
 (async () => {
   if (falhou.producao || falhou.inspiracoes) return;
