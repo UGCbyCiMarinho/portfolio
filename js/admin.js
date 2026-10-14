@@ -5797,7 +5797,7 @@ const recebidas = () => D.fin_receber.filter(r => r.recebido);
 const aReceber = () => D.fin_receber.filter(r => !r.recebido && Number(r.valor) > 0);
 const pagas = () => D.fin_despesas.filter(d => d.paga !== false);
 const aPagar = () => D.fin_despesas.filter(d => d.paga === false);
-const noPeriodo = (iso) => { const d = deISO(iso); return !!d && d.getFullYear() === FIN.ano && (FIN.mes === "" || d.getMonth() === Number(FIN.mes)); };
+const noPeriodo = (iso) => { const d = deISO(iso); return !!d && (FIN.mes === "tudo" || (d.getFullYear() === FIN.ano && (FIN.mes === "" || d.getMonth() === Number(FIN.mes)))); };
 const doAno = (iso, ano) => { const d = deISO(iso); return !!d && d.getFullYear() === ano; };
 const canalRotulo = (r) => {
   const c = canalDe(r.canal);
@@ -5877,7 +5877,7 @@ function agrupa(lista, chave, valor) {
 function filtroPeriodo(id) {
   return '<div class="fin__periodo" data-periodo="' + id + '"><button type="button" class="btn--icone" data-ano="-1" aria-label="Ano anterior">' + ic("esq") + '</button><b class="fin__ano"></b>' +
     '<button type="button" class="btn--icone" data-ano="1" aria-label="Próximo ano">' + ic("dir") + "</button>" +
-    '<select class="entrada entrada--sel" data-mes><option value="">Ano todo</option>' + MESES.map((m, i) => '<option value="' + i + '">' + m + "</option>").join("") + "</select></div>";
+    '<select class="entrada entrada--sel" data-mes><option value="">Ano todo</option>' + MESES.map((m, i) => '<option value="' + i + '">' + m + "</option>").join("") + '<option value="tudo">Desde o início</option></select></div>';
 }
 function ligaPeriodo(raiz) {
   raiz.addEventListener("click", (e) => { const b = e.target.closest("[data-ano]"); if (b) { FIN.ano += Number(b.dataset.ano); desenharFinanceiro(); } });
@@ -5889,7 +5889,7 @@ function montarFinanceiro() {
     '<div class="numeros" id="frNumeros"></div>' +
     '<div class="fin__grade">' +
       '<div class="bloco fin__largo"><div class="bloco__cab"><h2>📊 Receita × Despesa</h2><span class="mudo pequeno">mês a mês, com o lucro</span></div><div id="frRxD"></div></div>' +
-      '<div class="bloco fin__largo"><div class="bloco__cab"><h2>📈 Evolução acumulada</h2><span class="mudo pequeno">lucro somado ao longo do ano</span></div><div id="frAcum"></div></div>' +
+      '<div class="bloco fin__largo"><div class="bloco__cab"><h2>📈 Evolução acumulada</h2><span class="mudo pequeno">receita e despesa somadas ao longo do ano</span></div><div id="frAcum"></div></div>' +
       '<div class="bloco fin__largo"><div class="bloco__cab"><h2>🔮 Previsão de fluxo de caixa</h2><span class="mudo pequeno">próximos 3 meses</span></div><div id="frFluxo"></div></div>' +
       '<div class="bloco"><div class="bloco__cab"><h2>🗂️ Despesas por categoria</h2></div><div id="frCat"></div></div>' +
       '<div class="bloco"><div class="bloco__cab"><h2>🎯 Receita por lugar fechado</h2></div><div id="frCanal"></div></div>' +
@@ -5909,9 +5909,10 @@ function montarFinanceiro() {
         '<div class="rotulo" style="margin-top:16px">💳 Vai cobrar no cartão nos próximos 30 dias</div><p class="mudo pequeno">Só para você saber. Cai sozinho nas despesas no dia da cobrança.</p><div id="fcCartao"></div></div>' +
     "</div>";
   $("#fcNovoCR").addEventListener("click", () => editorAReceber());
+  $("#fcCartao").addEventListener("click", (e) => { const l = e.target.closest("[data-regra]"); if (l) editorAssinatura(D.fin_recorrencias.find(r => r.id === l.dataset.regra)); });
   $("#fcNovoCP").addEventListener("click", () => editorDespesa(null, true));
   $("#fcCR").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-recebi]"); if (b) { janelaRecebi(D.fin_receber.find(r => r.id === b.dataset.recebi)); return; }
+    const b = e.target.closest("[data-recebi]"); if (b) { janelaReceber(D.fin_receber.find(r => r.id === b.dataset.recebi)); return; }
     const l = e.target.closest("[data-cr]"); if (l) editorAReceber(D.fin_receber.find(r => r.id === l.dataset.cr));
   });
   $("#fcCP").addEventListener("click", (e) => {
@@ -5927,7 +5928,7 @@ function montarFinanceiro() {
     '<p class="mudo pequeno" style="margin-top:8px">A receita é o que caiu na conta, já sem a taxa do banco. Clique numa linha para corrigir.</p>';
   ligaPeriodo($("#aba-fin_receitas"));
   $("#fRecBusca").addEventListener("input", desenharFinanceiro);
-  $("#fRecCorpo").addEventListener("click", (e) => { const l = e.target.closest("[data-rec]"); if (l) janelaRecebi(D.fin_receber.find(r => r.id === l.dataset.rec)); });
+  $("#fRecCorpo").addEventListener("click", (e) => { const l = e.target.closest("[data-rec]"); if (l) janelaReceber(D.fin_receber.find(r => r.id === l.dataset.rec)); });
   $("#fRecCsv").addEventListener("click", () => {
     const lista = recebidas().filter(r => noPeriodo(r.data_recebido));
     baixarCSV("receitas", ["Data", "Marca", "Trabalho", "Nicho", "Por onde fechei", "Moeda do contrato", "Valor do contrato", "Conta", "Moeda da conta", "Caiu na conta", "Taxa", "Cotação", "Em CA$"],
@@ -5936,9 +5937,9 @@ function montarFinanceiro() {
 
   $("#aba-fin_despesas").innerHTML =
     '<div class="ferramentas">' + filtroPeriodo("d") +
-      '<select class="entrada entrada--sel" id="fDesCat"><option value="">Todas as categorias</option>' + CATEGORIAS.map(c => '<option value="' + c[0] + '">' + c[1] + "</option>").join("") + "</select>" +
+      '<select class="entrada entrada--sel" id="fDesCat"><option value="">Todas as categorias</option><option value="__assin">🔁 Só assinaturas</option>' + CATEGORIAS.map(c => '<option value="' + c[0] + '">' + c[1] + "</option>").join("") + "</select>" +
       '<input class="entrada" id="fDesBusca" type="search" placeholder="Buscar despesa"><span class="espaco"></span>' +
-      '<button class="btn btn--linha" id="fDesAssin">🔁 Assinaturas</button>' +
+      '<button class="btn btn--linha" id="fDesAssin">🔁 Gerenciar assinaturas</button>' +
       '<button class="btn btn--linha" id="fDesCsv">' + ic("baixar") + " CSV</button>" +
       '<button class="btn" id="fDesNova">' + ic("mais") + " Despesa</button></div>" +
     '<div class="numeros" id="fDesNumeros"></div>' +
@@ -5976,7 +5977,7 @@ function desenharFinanceiro() {
   if (!$("#frNumeros")) return;
   $$(".fin__ano").forEach(el => { el.textContent = FIN.ano; });
   $$("[data-periodo] [data-mes]").forEach(el => { el.value = FIN.mes; });
-  const periodoTxt = FIN.mes === "" ? String(FIN.ano) : MESES[FIN.mes] + "/" + FIN.ano;
+  const periodoTxt = FIN.mes === "tudo" ? "desde o início" : FIN.mes === "" ? String(FIN.ano) : MESES[FIN.mes] + "/" + FIN.ano;
   const rec = recebidas().filter(r => noPeriodo(r.data_recebido));
   const des = pagas().filter(d => noPeriodo(d.data));
   const totRec = soma(rec, cadReceita), totDes = soma(des, cadDespesa);
@@ -5986,7 +5987,7 @@ function desenharFinanceiro() {
 
   /* ----- RESUMO ----- */
   $("#frNumeros").innerHTML =
-    numero("Lucro " + (FIN.mes === "" ? "no ano" : "do mês"), CA(totRec - totDes), "receita " + CA(totRec) + " · despesas " + CA(totDes)) +
+    numero("Lucro " + (FIN.mes === "tudo" ? "desde o início" : FIN.mes === "" ? "em " + FIN.ano : "em " + MESES[FIN.mes] + "/" + FIN.ano), CA(totRec - totDes), "receita " + CA(totRec) + " · despesas " + CA(totDes)) +
     numero("Falta receber", CA(soma(crs, cadAReceber)), plural(crs.length, "parcela", "parcelas")) +
     numero("Falta pagar", CA(soma(cps, cadDespesa)), plural(cps.length, "conta", "contas")) +
     numero("Dízimo a devolver", CA(soma(dizimoAberto, cadDespesa)), dizimoAberto.length ? plural(dizimoAberto.length, "recebimento", "recebimentos") : "tudo em dia ✓");
@@ -6005,18 +6006,19 @@ function desenharFinanceiro() {
       '<span class="fin__col-rot">' + x.m + "</span></div>").join("") + "</div>" +
     '<div class="fin__legenda"><span><i class="fin__r"></i>Receita ' + CA(soma(meses, x => x.r)) + '</span><span><i class="fin__d"></i>Despesa ' + CA(soma(meses, x => x.d)) + "</span><span>Lucro " + FIN.ano + ": <b>" + CA(soma(meses, x => x.l)) + "</b></span></div>";
 
-  /* evolução acumulada */
-  let acc = 0;
+  /* evolução acumulada: receita e despesa somadas mês a mês */
   const ateMes = FIN.ano === new Date().getFullYear() ? new Date().getMonth() : FIN.ano < new Date().getFullYear() ? 11 : -1;
-  const pontos = meses.slice(0, ateMes + 1).map(x => (acc += x.l));
-  if (!pontos.length) pontos.push(0);
-  const mx = Math.max(...pontos, 0), mn = Math.min(...pontos, 0), faixa = (mx - mn) || 1;
-  const W = 600, H = 150, px = (i) => 20 + i * (W - 40) / 11, py = (v) => 10 + (mx - v) / faixa * (H - 30);
-  $("#frAcum").innerHTML = '<svg class="fin__linha" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" role="img" aria-label="Lucro acumulado no ano">' +
-    '<line x1="20" x2="' + (W - 20) + '" y1="' + py(0) + '" y2="' + py(0) + '" class="fin__zero"/>' +
-    '<polyline points="' + pontos.map((v, i) => px(i) + "," + py(v)).join(" ") + '"/>' +
-    pontos.map((v, i) => '<circle cx="' + px(i) + '" cy="' + py(v) + '" r="3"><title>' + MESES[i] + ": " + CA(v) + "</title></circle>").join("") + "</svg>" +
-    '<div class="fin__legenda"><span>Acumulado ' + (ateMes === 11 ? "no fim de " + FIN.ano : "até " + MESES[Math.max(0, ateMes)] + "/" + FIN.ano) + ": <b>" + CA(pontos[pontos.length - 1]) + "</b></span></div>";
+  let ar = 0, ad = 0;
+  const acR = meses.slice(0, ateMes + 1).map(x => (ar += x.r)), acD = meses.slice(0, ateMes + 1).map(x => (ad += x.d));
+  if (!acR.length) { acR.push(0); acD.push(0); }
+  const mxA = Math.max(...acR, ...acD, 1);
+  const W = 600, H = 150, px = (i) => 20 + i * (W - 40) / 11, py = (v) => 10 + (mxA - v) / mxA * (H - 30);
+  const linha = (pts, cls, nome) => '<polyline class="' + cls + '" points="' + pts.map((v, i) => px(i) + "," + py(v)).join(" ") + '"/>' +
+    pts.map((v, i) => '<circle class="' + cls + '" cx="' + px(i) + '" cy="' + py(v) + '" r="3"><title>' + MESES[i] + " · " + nome + ": " + CA(v) + "</title></circle>").join("");
+  $("#frAcum").innerHTML = '<svg class="fin__linha" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" role="img" aria-label="Receita e despesa acumuladas no ano">' +
+    '<line x1="20" x2="' + (W - 20) + '" y1="' + py(0) + '" y2="' + py(0) + '" class="fin__zero"/>' + linha(acR, "fin__lr", "receita") + linha(acD, "fin__ld", "despesa") + "</svg>" +
+    '<div class="fin__legenda"><span><i class="fin__r"></i>Receita acumulada ' + CA(acR[acR.length - 1]) + '</span><span><i class="fin__d"></i>Despesa acumulada ' + CA(acD[acD.length - 1]) + "</span><span>Lucro " +
+    (ateMes === 11 ? FIN.ano : "até " + MESES[Math.max(0, ateMes)] + "/" + FIN.ano) + ": <b>" + CA(acR[acR.length - 1] - acD[acD.length - 1]) + "</b></span></div>";
 
   /* previsão: o que vence nos próximos 3 meses (o atrasado entra no mês atual) */
   const agora = new Date(), chaveMes = (iso) => { const d = deISO(iso); if (!d || d < new Date(agora.getFullYear(), agora.getMonth(), 1)) return agora.getFullYear() * 12 + agora.getMonth(); return d.getFullYear() * 12 + d.getMonth(); };
@@ -6035,7 +6037,12 @@ function desenharFinanceiro() {
   $("#frCat").innerHTML = barras(agrupa(des, d => d.categoria, cadDespesa).map(i => Object.assign(i, { cor: categoriaDe(i.rot)[2], rot: categoriaDe(i.rot)[1] })));
   $("#frCanal").innerHTML = barras(agrupa(rec, canalRotulo, cadReceita));
   $("#frNicho").innerHTML = barras(agrupa(rec, r => r.nicho || "Sem nicho", cadReceita));
-  $("#frMarcas").innerHTML = barras(agrupa(rec, r => r.cliente || "—", cadReceita).slice(0, 8));
+  $("#frMarcas").innerHTML = barras(agrupa(rec, r => r.cliente || "—", cadReceita).slice(0, 8).map(i => {
+    const por = {};
+    rec.filter(r => (r.cliente || "—") === i.rot).forEach(r => { const m = r.conta_moeda || r.moeda || "CAD"; por[m] = (por[m] || 0) + (Number(r.valor_recebido != null ? r.valor_recebido : r.valor) || 0); });
+    const fora = Object.entries(por).filter(([m]) => m !== "CAD");
+    return Object.assign(i, { sub: fora.length ? Object.entries(por).map(([m, v]) => dinheiroEm(v, m)).join(" + ") : "" });
+  }));
   const ded = (k) => soma(des.filter(d => (d.dedutivel || "sim") === k), cadDespesa);
   $("#frDed").innerHTML = barras([{ rot: "✅ Pode abater", v: ded("sim"), cor: "var(--c-verde)" }, { rot: "🤔 Talvez (confirmar)", v: ded("talvez"), cor: "var(--c-mostarda)" }, { rot: "Não abate", v: ded("nao"), cor: "var(--c-cinza)" }].filter(i => i.v > 0)) +
     '<p class="mudo pequeno" style="margin-top:6px">' + periodoTxt + ". A planilha do contador traz as receitas e as despesas do ano, já em CA$.</p>";
@@ -6074,7 +6081,7 @@ function desenharFinanceiro() {
     : '<p class="vazio">Nada para pagar agora. 🙌</p>';
   const cartao = proximasCobrancas(30);
   $("#fcCartao").innerHTML = cartao.length ? '<div class="fin__lista">' + cartao.map(x =>
-    '<div class="fin__item"><span>' + dataBR(x.dia).slice(0, 5) + "</span><span>" + esc(x.regra.descricao) + "</span><b>" + dinheiroEm(x.regra.valor, x.regra.moeda) + "</b></div>").join("") + "</div>"
+    '<div class="fin__item clica" data-regra="' + esc(x.regra.id) + '" title="Clique para editar ou cancelar"><span>' + dataBR(x.dia).slice(0, 5) + "</span><span>" + esc(x.regra.descricao) + ' <span class="mudo pequeno">✏️</span></span><b>' + dinheiroEm(x.regra.valor, x.regra.moeda) + "</b></div>").join("") + "</div>"
     : '<p class="mudo pequeno">Nenhuma assinatura cobra nos próximos 30 dias.</p>';
 
   /* ----- RECEITAS ----- */
@@ -6097,7 +6104,7 @@ function desenharFinanceiro() {
 
   /* ----- DESPESAS ----- */
   const buscaD = normaliza(($("#fDesBusca") || {}).value || "");
-  const desLista = des.filter(d => (!FIN.cat || d.categoria === FIN.cat) && (!buscaD || normaliza(d.descricao || "").includes(buscaD))).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  const desLista = des.filter(d => (!FIN.cat || (FIN.cat === "__assin" ? d.origem === "assinatura" : d.categoria === FIN.cat)) && (!buscaD || normaliza(d.descricao || "").includes(buscaD))).sort((a, b) => String(b.data).localeCompare(String(a.data)));
   $("#fDesNumeros").innerHTML =
     numero("Despesas " + periodoTxt, CA(soma(desLista, cadDespesa)), plural(desLista.length, "lançamento", "lançamentos")) +
     numero("Pode abater no imposto", CA(soma(desLista.filter(d => (d.dedutivel || "sim") === "sim"), cadDespesa))) +
@@ -6136,71 +6143,138 @@ function desenharFinanceiro() {
 /* ============================================================
    JANELAS
    ============================================================ */
-/* ✓ Recebi: o dinheiro caiu (ou corrigir um recebimento) */
-function janelaRecebi(r) {
-  if (!r) return;
-  const editando = r.recebido;
-  const via0 = r.via || "PayPal";
-  const moedaConta0 = r.conta_moeda || MOEDA_DA_VIA[via0] || r.moeda || "CAD";
-  const dizimo = D.fin_despesas.find(d => d.receber_id === r.id && d.categoria === "dizimo");
+/* 💰 Receber: todas as parcelas do contrato, uma linha por pagamento.
+   Linha com "quanto caiu" preenchido = recebida (vira receita).
+   O dízimo soma tudo o que caiu e fica em Contas a pagar. */
+function grupoDoRecebimento(r) {
+  const lista = r.campanha_id ? D.fin_receber.filter(x => x.campanha_id === r.campanha_id) : [r];
+  return lista.slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || String(a.vencimento || "").localeCompare(String(b.vencimento || "")));
+}
+/* o valor de uma despesa em outra moeda (pela cotação guardada nela) */
+const valorNaMoeda = (d, moeda) => d.moeda === moeda ? Number(d.valor) || 0 : cadDespesa(d) / (cambio[moeda] || 1);
+function janelaReceber(r0) {
+  if (!r0) return;
+  const grupo = grupoDoRecebimento(r0).map(x => Object.assign({}, x));
+  const c = r0.campanha_id && D.campanhas.find(x => x.id === r0.campanha_id);
+  const moedaContrato = (c && c.moeda) || r0.moeda || "CAD";
+  const ids = new Set(grupo.map(x => x.id));
+  const dizimos = () => D.fin_despesas.filter(d => d.categoria === "dizimo" && d.receber_id && ids.has(d.receber_id));
+  const quando = (x) => x.quando === "assinatura" ? "na assinatura" : x.quando === "entrega" ? "na entrega" : "";
+  let linhas = grupo;
   const j = abrirJanela({
-    titulo: editando ? "✏️ Recebimento de " + (r.cliente || "") : "✓ Recebi de " + (r.cliente || ""),
-    corpo: '<p class="mudo pequeno" style="margin-bottom:12px">' + esc(r.descricao || "") + " · parcela de <b>" + dinheiroEm(r.valor, r.moeda) + "</b>" + (r.vencimento ? " · prevista para " + dataBR(r.vencimento) : "") + "</p>" +
-      '<form class="grade-form" novalidate>' +
-      '<div class="campo"><label>Data em que caiu</label><input type="date" name="data" value="' + esc(r.data_recebido || isoLocal(new Date())) + '"></div>' +
-      '<div class="campo"><label>Caiu em qual conta?</label><select name="via">' + opcoes(VIAS, via0) + "</select></div>" +
-      '<div class="campo"><label>Moeda da conta</label><select name="conta_moeda">' + opcoes(MOEDAS_DESPESA, moedaConta0) + "</select></div>" +
-      '<div class="campo"><label>Quanto caiu na conta *</label><input type="number" name="valor_recebido" min="0" step="0.01" value="' + esc(r.valor_recebido != null ? r.valor_recebido : (moedaConta0 === r.moeda ? r.valor : "")) + '" placeholder="o valor que aparece no banco"></div>' +
-      '<div class="campo"><label>Taxa que o banco cobrou (opcional)</label><input type="number" name="taxa" min="0" step="0.01" value="' + esc(Number(r.taxa) || "") + '" placeholder="0,00"></div>' +
-      '<div class="campo"><label>Valor da parcela (' + MOEDAS[r.moeda || "CAD"] + ')</label><input type="number" name="valor" min="0" step="0.01" value="' + esc(r.valor) + '"></div>' +
-      '<label class="campo campo--check inteiro"><input type="checkbox" name="dizimo"' + (editando ? (dizimo ? " checked" : "") : " checked") + '> 🙏 Separar o dízimo (10% do que caiu) em Contas a pagar <b id="rDizimo"></b></label>' +
-      '<p class="mudo pequeno inteiro" id="rDica"></p>' +
-      '<div class="faixa inteiro escondido" data-erro></div></form>',
-    rodape: (editando ? '<button class="btn btn--perigo" type="button" data-desfazer>↩️ Ainda não recebi</button>' : "") +
-      '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Cancelar</button><button class="btn" type="button" data-salvar>' + (editando ? "Salvar" : "✓ Confirmar") + "</button>"
+    titulo: "💰 Receber de " + (r0.cliente || ""), larga: true,
+    corpo: '<p class="mudo pequeno" style="margin-bottom:10px">' + esc(r0.descricao || "") + (c && !c.gift ? " · contrato de <b>" + dinheiroEm(c.valor, moedaContrato) + "</b>" : "") +
+        ". Preencha <b>quanto caiu</b> em cada pagamento que já entrou. O que ficar em branco continua em Contas a receber.</p>" +
+      '<div class="receber__cab"><span>Data que caiu</span><span>Conta</span><span>Moeda da conta</span><span>Quanto caiu</span><span>Taxa do banco</span><span></span></div>' +
+      '<div id="rLinhas"></div>' +
+      '<button type="button" class="btn btn--linha" id="rMais" style="margin-top:8px">' + ic("mais") + " Adicionar pagamento</button>" +
+      '<label class="campo campo--check" style="margin-top:14px"><input type="checkbox" id="rDizimo"> <span>🙏 Separar o dízimo: 10% de tudo o que caiu vai para Contas a pagar <b id="rDizVal"></b></span></label>' +
+      '<p class="mudo pequeno" id="rDizInfo"></p>' +
+      '<div class="faixa escondido" data-erro style="margin-top:10px"></div>',
+    rodape: '<span class="espaco"></span><button class="btn btn--linha" type="button" data-fechar>Cancelar</button><button class="btn" type="button" data-salvar>Salvar</button>'
   });
-  const f = $("form", j).elements;
   const erro = (t) => { const e = $("[data-erro]", j); e.textContent = t; e.classList.remove("escondido"); };
-  const atualiza = () => {
-    const v = Number(f.valor_recebido.value) || 0, m = f.conta_moeda.value;
-    $("#rDizimo", j).textContent = v ? "· " + dinheiroEm(v * 0.1, m) : "";
-    $("#rDica", j).textContent = m !== r.moeda && cambio[r.moeda] && cambio[m]
-      ? "Pela cotação de hoje, " + dinheiroEm(r.valor, r.moeda) + " dariam uns " + dinheiroEm(r.valor * cambio[r.moeda] / cambio[m], m) + ". Coloque o valor exato que aparece no banco." : "";
-  };
-  f.via.addEventListener("change", () => { if (MOEDA_DA_VIA[f.via.value]) f.conta_moeda.value = MOEDA_DA_VIA[f.via.value]; atualiza(); });
-  $("form", j).addEventListener("input", atualiza);
-  atualiza();
+
+  function ler() {
+    $$("[data-linha]", j).forEach(l => {
+      const x = linhas[Number(l.dataset.linha)];
+      x._data = $("[data-rd]", l).value; x._via = $("[data-rv]", l).value; x._moeda = $("[data-rm]", l).value;
+      x._caiu = $("[data-rc]", l).value; x._taxa = $("[data-rt]", l).value;
+    });
+  }
+  function desenha() {
+    $("#rLinhas", j).innerHTML = linhas.map((x, i) => {
+      const via = x._via != null ? x._via : (x.via || "PayPal");
+      const moeda = x._moeda != null ? x._moeda : (x.conta_moeda || MOEDA_DA_VIA[via] || moedaContrato);
+      const caiu = x._caiu != null ? x._caiu : (x.recebido && x.valor_recebido != null ? x.valor_recebido : "");
+      const rot = x.id ? '<b>' + dinheiroEm(x.valor, x.moeda || moedaContrato) + "</b>" + '<span class="mudo pequeno">' + [quando(x), x.vencimento && !x.recebido ? "previsto " + dataBR(x.vencimento).slice(0, 5) : ""].filter(Boolean).join(" · ") + "</span>"
+        : '<b>Pagamento ' + (i + 1) + '</b><span class="mudo pequeno">novo</span>';
+      return '<div class="receber__linha' + (caiu !== "" && Number(caiu) > 0 ? " ok" : "") + '" data-linha="' + i + '">' +
+        '<div class="receber__rot">' + rot + "</div>" +
+        '<input type="date" data-rd value="' + esc(x._data != null ? x._data : (x.data_recebido || "")) + '" aria-label="Data que caiu">' +
+        '<select data-rv aria-label="Conta">' + opcoes(VIAS, via) + "</select>" +
+        '<select data-rm aria-label="Moeda da conta">' + opcoes(MOEDAS_DESPESA, moeda) + "</select>" +
+        '<input type="number" min="0" step="0.01" data-rc value="' + esc(caiu) + '" placeholder="0,00" aria-label="Quanto caiu">' +
+        '<input type="number" min="0" step="0.01" data-rt value="' + esc(x._taxa != null ? x._taxa : (Number(x.taxa) || "")) + '" placeholder="0,00" aria-label="Taxa do banco">' +
+        (x.id ? "<span></span>" : '<button type="button" class="btn--icone" data-tirar="' + i + '" aria-label="Tirar este pagamento">' + ic("fechar") + "</button>") + "</div>";
+    }).join("");
+    dizimo();
+  }
+  /* o dízimo: 10% da soma do que caiu (se as contas forem de moedas diferentes, em CA$) */
+  function calcDizimo() {
+    const caidas = linhas.filter(x => Number(x._caiu) > 0);
+    const moedas = new Set(caidas.map(x => x._moeda));
+    const moeda = moedas.size === 1 ? [...moedas][0] : "CAD";
+    const total = soma(caidas, x => moedas.size === 1 ? Number(x._caiu) : (emCAD(Number(x._caiu), x._moeda) || 0));
+    return { moeda, total, dz: Math.round(total * 10) / 100 };
+  }
+  function dizimo() {
+    ler();
+    const k = calcDizimo(), ja = dizimos(), pago = soma(ja.filter(d => d.paga !== false), d => valorNaMoeda(d, k.moeda));
+    $("#rDizVal", j).textContent = k.total ? "· " + dinheiroEm(k.dz, k.moeda) : "";
+    $("#rDizInfo", j).textContent = k.total ? "10% de " + dinheiroEm(k.total, k.moeda) + (pago ? " · você já devolveu " + dinheiroEm(pago, k.moeda) + ", vai para Contas a pagar só a diferença." : ".") : "";
+  }
+  $("#rDizimo", j).checked = !!dizimos().length || !grupo.some(x => x.recebido);
+  desenha();
+  $("#rLinhas", j).addEventListener("input", (e) => {
+    if (e.target.matches("[data-rc]")) {
+      const l = e.target.closest("[data-linha]"), d = $("[data-rd]", l);
+      if (Number(e.target.value) > 0 && !d.value) d.value = isoLocal(new Date());
+      l.classList.toggle("ok", Number(e.target.value) > 0);
+    }
+    dizimo();
+  });
+  $("#rLinhas", j).addEventListener("change", (e) => {
+    if (e.target.matches("[data-rv]")) { const m = MOEDA_DA_VIA[e.target.value]; if (m) e.target.closest("[data-linha]").querySelector("[data-rm]").value = m; dizimo(); }
+  });
+  $("#rLinhas", j).addEventListener("click", (e) => { const b = e.target.closest("[data-tirar]"); if (b) { ler(); linhas.splice(Number(b.dataset.tirar), 1); desenha(); } });
+  $("#rMais", j).addEventListener("click", () => {
+    ler();
+    const ult = linhas[linhas.length - 1] || {};
+    linhas.push({ _data: isoLocal(new Date()), _via: ult._via || "PayPal", _moeda: ult._moeda || MOEDA_DA_VIA[ult._via] || moedaContrato, _caiu: "", _taxa: "" });
+    desenha();
+  });
+
   $("[data-salvar]", j).addEventListener("click", async () => {
-    const v = Number(f.valor_recebido.value) || 0;
-    if (!v) { erro("Coloque quanto caiu na conta."); return; }
-    if (!f.data.value) { erro("Coloque a data em que caiu."); return; }
+    ler();
+    if (linhas.some(x => Number(x._caiu) > 0 && !x._data)) { erro("Coloque a data em que caiu em cada pagamento preenchido."); return; }
     const b = $("[data-salvar]", j); b.disabled = true; b.textContent = "Salvando...";
-    const linha = await comCotacao({ recebido: true, data_recebido: f.data.value, via: f.via.value, conta_moeda: f.conta_moeda.value,
-      valor_recebido: Math.round(v * 100) / 100, taxa: Math.round((Number(f.taxa.value) || 0) * 100) / 100, valor: Math.round((Number(f.valor.value) || 0) * 100) / 100 }, f.conta_moeda.value, v, f.data.value);
-    const salvo = await salvarLinha("fin_receber", linha, r.id);
-    if (!salvo) { b.disabled = false; b.textContent = "Salvar"; return; }
-    troca(D.fin_receber, salvo);
-    /* o dízimo: 10% do que caiu, em Contas a pagar */
-    if (f.dizimo.checked) {
-      const dz = await comCotacao({ descricao: "Dízimo · " + (salvo.cliente || "recebimento"), categoria: "dizimo", moeda: salvo.conta_moeda, valor: Math.round(v * 10) / 100,
-        dedutivel: "talvez", origem: "dizimo", receber_id: salvo.id }, salvo.conta_moeda, v * 0.1, salvo.data_recebido);
-      if (!dizimo) Object.assign(dz, { paga: false, data: salvo.data_recebido, vencimento: salvo.data_recebido });
-      const sd = await salvarLinha("fin_despesas", dz, dizimo && dizimo.id);
+    const base = c ? { campanha_id: c.id, cliente: c.cliente, descricao: c.campanha, nicho: c.nicho, canal: c.canal, canal_detalhe: c.canal_detalhe }
+      : { campanha_id: null, cliente: r0.cliente, descricao: r0.descricao, nicho: r0.nicho, canal: r0.canal, canal_detalhe: r0.canal_detalhe };
+    let ordem = Math.max(0, ...grupo.map(x => x.ordem || 0));
+    for (const x of linhas) {
+      const caiu = Math.round((Number(x._caiu) || 0) * 100) / 100, taxa = Math.round((Number(x._taxa) || 0) * 100) / 100;
+      let linha;
+      if (caiu > 0) {
+        linha = await comCotacao({ recebido: true, data_recebido: x._data, via: x._via, conta_moeda: x._moeda, valor_recebido: caiu, taxa }, x._moeda, caiu, x._data);
+        if (!x.id) {   /* pagamento novo: o valor na moeda do contrato, pela cotação do dia */
+          const tc = await cotacaoNoDia(moedaContrato, x._data);
+          Object.assign(linha, base, { moeda: moedaContrato, quando: "data", vencimento: x._data, ordem: ++ordem,
+            valor: x._moeda === moedaContrato ? caiu : Math.round(((linha.valor_cad || 0) / (tc || 1)) * 100) / 100 });
+        }
+      } else if (x.id && x.recebido) {
+        linha = { recebido: false, data_recebido: null, valor_recebido: null, taxa: 0, cotacao: null, valor_cad: null, conta_moeda: null };
+      } else continue;
+      const s = await salvarLinha("fin_receber", linha, x.id);
+      if (!s) { b.disabled = false; b.textContent = "Salvar"; return; }
+      troca(D.fin_receber, s); ids.add(s.id);
+    }
+    /* acerta o dízimo: o que falta devolver vai para Contas a pagar */
+    const k = calcDizimo(), ja = dizimos();
+    const aberto = ja.find(d => d.paga === false), pago = soma(ja.filter(d => d.paga !== false), d => valorNaMoeda(d, k.moeda));
+    const falta = $("#rDizimo", j).checked ? Math.round((k.dz - pago) * 100) / 100 : 0;
+    const primeira = D.fin_receber.find(x => ids.has(x.id) && x.recebido);
+    if (falta > 0.009 && primeira) {
+      const dz = await comCotacao({ descricao: "Dízimo · " + (base.cliente || "recebimento"), categoria: "dizimo", moeda: k.moeda, valor: falta, dedutivel: "talvez", origem: "dizimo",
+        receber_id: (aberto && aberto.receber_id) || primeira.id, paga: false, data: isoLocal(new Date()), vencimento: isoLocal(new Date()) }, k.moeda, falta, isoLocal(new Date()));
+      const sd = await salvarLinha("fin_despesas", dz, aberto && aberto.id);
       if (sd) troca(D.fin_despesas, sd);
-    } else if (dizimo && await apagarLinha("fin_despesas", dizimo.id)) D.fin_despesas = D.fin_despesas.filter(d => d.id !== dizimo.id);
-    await atualizaPagamentoDaCampanha(salvo.campanha_id);
+    } else if (aberto && await apagarLinha("fin_despesas", aberto.id)) D.fin_despesas = D.fin_despesas.filter(d => d.id !== aberto.id);
+    if (c) await atualizaPagamentoDaCampanha(c.id);
     fecharJanela();
     desenharFinanceiro();
-    torrada(editando ? "Recebimento salvo ✓" : "💰 Receita registrada" + (f.dizimo.checked ? " e dízimo separado em Contas a pagar." : "."));
+    torrada("💰 Recebimentos salvos" + (falta > 0.009 ? " · dízimo de " + dinheiroEm(falta, k.moeda) + " em Contas a pagar." : "."));
   });
-  if (editando) duploClique($("[data-desfazer]", j), async () => {
-    const salvo = await salvarLinha("fin_receber", { recebido: false, data_recebido: null, valor_recebido: null, taxa: 0, cotacao: null, valor_cad: null, conta_moeda: null }, r.id);
-    if (!salvo) return;
-    troca(D.fin_receber, salvo);
-    if (dizimo && dizimo.paga === false && await apagarLinha("fin_despesas", dizimo.id)) D.fin_despesas = D.fin_despesas.filter(d => d.id !== dizimo.id);
-    await atualizaPagamentoDaCampanha(salvo.campanha_id);
-    fecharJanela(); desenharFinanceiro(); torrada("Voltou para Contas a receber.");
-  }, "Clique de novo para confirmar");
 }
 /* a campanha fica "pago" quando todas as parcelas caíram */
 async function atualizaPagamentoDaCampanha(id) {
