@@ -5917,7 +5917,13 @@ function htmlContas() {
       (s.itens.length ? '<details class="fin__saldo-mov"><summary class="mudo pequeno">' + plural(s.itens.length, "movimento", "movimentos") + " desde a conferência</summary>" +
         s.itens.map(i => '<div class="fin__item' + (i.mov ? " clica" : "") + '"' + (i.mov ? ' data-mov="' + esc(i.mov.id) + '"' : "") + "><span>" + dataBR(i.dia).slice(0, 5) + "</span><span>" + esc(i.txt) + '</span><b style="color:var(' + (i.v < 0 ? "--c-coral" : "--c-verde") + ')">' + (i.v < 0 ? "−" : "+") + numBR.format(Math.abs(i.v)) + "</b></div>").join("") + "</details>" : "") +
       '<div class="fin__saldo-acoes"><button type="button" class="btn btn--linha" data-conferir="' + esc(c.id) + '">✓ Conferir saldo</button><button type="button" class="btn btn--linha" data-transferir="' + esc(c.id) + '">↗️ Transferência</button></div></div>';
-  }).join("") + "</div>";
+  }).join("") +
+    /* o total de todas as contas em CA$ (cotação de hoje) */
+    (cs.length > 1 ? '<div class="fin__saldo fin__saldo--total"><div class="fin__saldo-topo"><b>Total em CA$</b></div>' +
+      '<div class="fin__saldo-val">' + CA(soma(cs, c => saldoConta(c).saldo * (cambio[c.moeda] || (c.moeda === "CAD" ? 1 : 0)))) + "</div>" +
+      cs.map(c => { const v = saldoConta(c).saldo; return '<div class="mudo pequeno">' + esc(c.nome) + ": " + dinheiroEm(v, c.moeda) + (c.moeda !== "CAD" && cambio[c.moeda] ? " = " + CA(v * cambio[c.moeda]) : "") + "</div>"; }).join("") +
+      (cs.some(c => c.moeda !== "CAD") && cambioData ? '<div class="mudo pequeno">pela cotação de ' + dataBR(cambioData) + "</div>" : "") + "</div>" : "") +
+    "</div>";
 }
 function ligaContas(raiz) {
   raiz.addEventListener("click", (e) => {
