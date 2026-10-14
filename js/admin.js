@@ -6077,7 +6077,7 @@ function desenharFinanceiro() {
     : '<p class="vazio">Nada para receber. Quando você registrar um contrato em Campanhas, as parcelas aparecem aqui.</p>';
   $("#fcCP").innerHTML = cpOrd.length ? '<div class="fin__lista">' + cpOrd.map(d =>
     '<div class="fin__conta" data-cp="' + esc(d.id) + '"><div><b>' + esc(d.descricao) + '</b><div class="mudo pequeno">' + categoriaDe(d.categoria)[1] + "</div></div>" +
-      '<div class="fin__conta-dir"><b>' + dinheiroEm(d.valor, d.moeda) + "</b><div>" + venceTag(d.vencimento || d.data) + "</div></div>" +
+      '<div class="fin__conta-dir"><b>' + (d.moeda === "CAD" ? CA(d.valor) : CA(cadDespesa(d)) + '</b><div class="mudo pequeno">' + dinheiroEm(d.valor, d.moeda) + "</div><b>") + "</b><div>" + venceTag(d.vencimento || d.data) + "</div></div>" +
       '<button type="button" class="btn" data-paguei="' + esc(d.id) + '">' + ic("check") + " Paguei</button></div>").join("") + "</div>"
     : '<p class="vazio">Nada para pagar agora. 🙌</p>';
   const cartao = proximasCobrancas(30);
@@ -6225,18 +6225,17 @@ function janelaReceber(r0) {
   }
   /* o dízimo: 10% da soma do que caiu (se as contas forem de moedas diferentes, em CA$) */
   function calcDizimo() {
+    /* sempre em CA$: cada pagamento convertido (prévia pela cotação de hoje; ao salvar, a do dia de cada pagamento) */
     const caidas = linhas.filter(x => Number(x._caiu) > 0);
-    const moedas = new Set(caidas.map(x => x._moeda));
-    const moeda = moedas.size === 1 ? [...moedas][0] : "CAD";
     const liq = (x) => Math.max(0, (Number(x._caiu) || 0) - (Number(x._taxa) || 0));
-    const total = soma(caidas, x => moedas.size === 1 ? liq(x) : (emCAD(liq(x), x._moeda) || 0));
-    return { moeda, total, dz: Math.round(total * 10) / 100 };
+    const total = soma(caidas, x => emCAD(liq(x), x._moeda) || 0);
+    return { moeda: "CAD", total, dz: Math.round(total * 10) / 100, misturado: caidas.some(x => x._moeda !== "CAD") };
   }
   function dizimo() {
     ler();
     const k = calcDizimo(), ja = dizimos(), pago = soma(ja.filter(d => d.paga !== false), d => valorNaMoeda(d, k.moeda));
     $("#rDizVal", j).textContent = k.total ? "· " + dinheiroEm(k.dz, k.moeda) : "";
-    $("#rDizInfo", j).textContent = k.total ? "10% do líquido, " + dinheiroEm(k.total, k.moeda) + (pago ? " · você já devolveu " + dinheiroEm(pago, k.moeda) + ", vai para Contas a pagar só a diferença." : ".") : "";
+    $("#rDizInfo", j).textContent = k.total ? "10% do líquido, " + (k.misturado ? "uns " : "") + dinheiroEm(k.total, k.moeda) + (k.misturado ? " (o que não é CAD é convertido pela cotação do dia em que caiu)" : "") + (pago ? " · você já devolveu " + dinheiroEm(pago, k.moeda) + ", vai para Contas a pagar só a diferença." : ".") : "";
   }
   $("#rDizimo", j).checked = !!dizimos().length || !grupo.some(x => x.recebido);
   desenha();
@@ -6288,8 +6287,10 @@ function janelaReceber(r0) {
       troca(D.fin_receber, s); ids.add(s.id);
     }
     /* acerta o dízimo: o que falta devolver vai para Contas a pagar */
-    const k = calcDizimo(), ja = dizimos();
-    const aberto = ja.find(d => d.paga === false), pago = soma(ja.filter(d => d.paga !== false), d => valorNaMoeda(d, k.moeda));
+    const ja = dizimos();
+    const totalCad = soma(D.fin_receber.filter(x => ids.has(x.id) && x.recebido), cadReceita);   /* já com a cotação do dia de cada pagamento */
+    const k = { moeda: "CAD", dz: Math.round(totalCad * 10) / 100 };
+    const aberto = ja.find(d => d.paga === false), pago = soma(ja.filter(d => d.paga !== false), cadDespesa);
     const falta = $("#rDizimo", j).checked ? Math.round((k.dz - pago) * 100) / 100 : 0;
     const primeira = D.fin_receber.find(x => ids.has(x.id) && x.recebido);
     if (falta > 0.009 && primeira) {
@@ -6380,12 +6381,13 @@ function janelaPaguei(d) {
   if (!d) return;
   editor({
     titulo: "✓ Paguei: " + d.descricao,
+    topo: '<p class="mudo pequeno" style="margin-bottom:10px">Coloque a data em que você pagou e o valor que saiu da conta.' + (d.moeda !== "CAD" ? " Era " + dinheiroEm(d.valor, d.moeda) + ", já convertido para CA$." : "") + "</p>",
     campos: [
       { nome: "data", rot: "Data do pagamento", tipo: "date" },
       { nome: "moeda", rot: "Moeda", tipo: "select", opcoes: MOEDAS_DESPESA },
       { nome: "valor", rot: "Valor pago", tipo: "number", passo: "0.01", min: 0, obrigatorio: true }
     ],
-    valores: { data: isoLocal(new Date()), moeda: d.moeda, valor: d.valor },
+    valores: { data: isoLocal(new Date()), moeda: "CAD", valor: Math.round(cadDespesa(d) * 100) / 100 },
     aoSalvar: async (dados) => {
       const linha = await comCotacao({ paga: true, data: dados.data || isoLocal(new Date()), moeda: dados.moeda, valor: dados.valor }, dados.moeda, dados.valor, dados.data);
       const s = await salvarLinha("fin_despesas", linha, d.id);
