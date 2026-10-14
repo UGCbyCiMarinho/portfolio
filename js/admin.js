@@ -102,7 +102,7 @@ function torrada(texto, erro) {
 }
 
 /* ----- traduz os erros do banco para português ----- */
-const ARQUIVO_SQL = { base_marcas: "sql-marcas.sql", roteiros: "sql-roteiros.sql", configuracoes: "sql-roteiros.sql", abordagens: "sql-resultados.sql", email_envios: "disparo.sql", email_optout: "disparo.sql", eventos: "sql-eventos.sql", inspiracoes: "sql-inspiracao.sql", producao: "sql-producao.sql", fin_receber: "sql-financeiro.sql", fin_despesas: "sql-financeiro.sql", fin_recorrencias: "sql-financeiro.sql", fin_investir: "sql-financeiro.sql" };
+const ARQUIVO_SQL = { base_marcas: "sql-marcas.sql", roteiros: "sql-roteiros.sql", configuracoes: "sql-roteiros.sql", abordagens: "sql-resultados.sql", email_envios: "disparo.sql", email_optout: "disparo.sql", eventos: "sql-eventos.sql", inspiracoes: "sql-inspiracao.sql", producao: "sql-producao.sql", fin_receber: "sql-financeiro.sql", fin_despesas: "sql-financeiro.sql", fin_recorrencias: "sql-financeiro.sql", fin_investir: "sql-financeiro.sql", fin_contas: "sql-financeiro-contas.sql", fin_movimentos: "sql-financeiro-contas.sql" };
 function traduzErro(e, tabela) {
   const cod = (e && e.code) || "";
   const msg = (e && e.message) || String(e || "");
@@ -348,10 +348,10 @@ const numero = (rot, val, sub) =>
 /* ============================================================
    4. CARREGAR OS DADOS
    ============================================================ */
-const D = { videos: [], visitas: [], eventos: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], envios: [], optout: [], inspiracoes: [], producao: [], fin_receber: [], fin_despesas: [], fin_recorrencias: [], fin_investir: [], config: {}, marcados: new Set() };
+const D = { videos: [], visitas: [], eventos: [], marcas: [], calendario: [], campanhas: [], roteiros: [], base: [], abordagens: [], envios: [], optout: [], inspiracoes: [], producao: [], fin_receber: [], fin_despesas: [], fin_recorrencias: [], fin_investir: [], fin_contas: [], fin_movimentos: [], config: {}, marcados: new Set() };
 const inicio14 = hoje(); inicio14.setDate(inicio14.getDate() - 13);
 
-const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens, envios, optout, inspiracoes, producao, fin_receber, fin_despesas, fin_recorrencias, fin_investir] = await Promise.all([
+const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteiros, configuracoes, base, abordagens, envios, optout, inspiracoes, producao, fin_receber, fin_despesas, fin_recorrencias, fin_investir, fin_contas, fin_movimentos] = await Promise.all([
   ler("videos", q => q.order("ordem", { ascending: true }).order("criado_em", { ascending: true })),
   ler("visitas", q => q.gte("data", inicio14.toISOString()).order("data", { ascending: true })),
   ler("eventos", q => q.order("data", { ascending: true })),
@@ -370,9 +370,11 @@ const [videos, visitas, eventos, marcas, calendario, campanhas, marcados, roteir
   ler("fin_receber", q => q.order("criado_em", { ascending: true })),
   ler("fin_despesas", q => q.order("data", { ascending: false })),
   ler("fin_recorrencias", q => q.order("criado_em", { ascending: true })),
-  ler("fin_investir", q => q.order("criado_em", { ascending: false }))
+  ler("fin_investir", q => q.order("criado_em", { ascending: false })),
+  ler("fin_contas", q => q.order("ordem", { ascending: true })),
+  ler("fin_movimentos", q => q.order("data", { ascending: true }))
 ]);
-Object.assign(D, { videos, visitas, eventos, marcas, calendario, campanhas, roteiros, base, abordagens, envios, optout, inspiracoes, producao, fin_receber, fin_despesas, fin_recorrencias, fin_investir, marcados: new Set(marcados.map(m => m.chave)) });
+Object.assign(D, { videos, visitas, eventos, marcas, calendario, campanhas, roteiros, base, abordagens, envios, optout, inspiracoes, producao, fin_receber, fin_despesas, fin_recorrencias, fin_investir, fin_contas, fin_movimentos, marcados: new Set(marcados.map(m => m.chave)) });
 configuracoes.forEach(c => { D.config[c.chave] = c.valor; });
 
 const nomesDeMarcas = () => Array.from(new Set(D.marcas.map(m => m.nome).concat(D.base.map(m => m.nome), D.campanhas.map(c => c.cliente), D.videos.map(v => v.marca)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt"));
@@ -5875,6 +5877,137 @@ function agrupa(lista, chave, valor) {
 }
 
 /* ============================================================
+   🏦 SALDO DAS CONTAS (PayPal, Wise...)
+   Parte do último saldo conferido e soma o que entrou / tira o que saiu depois dele:
+   + recebimentos com "Por onde" = nome da conta (o líquido)
+   + entradas avulsas · − despesas pagas com a conta · − transferências
+   ============================================================ */
+const contasAtivas = () => D.fin_contas.filter(c => c.ativa !== false).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+const contaDaVia = (via) => contasAtivas().find(c => normaliza(c.nome) === normaliza(via || ""));
+/* um valor de outra moeda na moeda da conta (pela cotação guardada, senão a de hoje) */
+const naMoedaDaConta = (valor, moeda, cad, conta) => moeda === conta.moeda ? Number(valor) || 0 : (cad != null ? cad : (emCAD(valor, moeda) || 0)) / (cambio[conta.moeda] || 1);
+function saldoConta(c) {
+  const movs = D.fin_movimentos.filter(m => m.conta_id === c.id);
+  const conf = movs.filter(m => m.tipo === "saldo").sort((a, b) => String(a.data).localeCompare(String(b.data)) || String(a.criado_em).localeCompare(String(b.criado_em))).pop();
+  const desde = conf ? String(conf.data).slice(0, 10) : "0000-00-00", marco = conf ? String(conf.criado_em) : "";
+  /* conta se for depois do dia conferido, ou no mesmo dia mas registrado depois da conferência */
+  const depois = (dia, quando) => { dia = String(dia || "").slice(0, 10); return dia > desde || (dia === desde && !!quando && String(quando) > marco); };
+  const itens = [];
+  D.fin_receber.filter(r => r.recebido && contaDaVia(r.via) === c && depois(r.data_recebido, r.recebido_em)).forEach(r =>
+    itens.push({ dia: r.data_recebido, txt: "💰 " + (r.cliente || "Recebimento"), v: naMoedaDaConta(r.valor_recebido != null ? r.valor_recebido : r.valor, r.conta_moeda || r.moeda, r.valor_cad, c) }));
+  D.fin_despesas.filter(d => d.paga !== false && d.conta_id === c.id && depois(d.data, d.criado_em)).forEach(d =>
+    itens.push({ dia: d.data, txt: "🧾 " + d.descricao, v: -naMoedaDaConta(d.valor, d.moeda, d.valor_cad, c) }));
+  movs.filter(m => m.tipo !== "saldo" && depois(m.data, m.criado_em)).forEach(m =>
+    itens.push({ dia: m.data, txt: (m.tipo === "saida" ? "↗️ Transferência" + (m.destino ? " para " + m.destino : "") : "↘️ Entrada" + (m.destino ? " de " + m.destino : "")) + (m.obs ? " · " + m.obs : ""), v: (m.tipo === "saida" ? -1 : 1) * (Number(m.valor) || 0), mov: m }));
+  itens.sort((a, b) => String(b.dia).localeCompare(String(a.dia)));
+  const base = conf ? Number(conf.valor) || 0 : 0;
+  return { conf, base, desde, itens, saldo: base + soma(itens, i => i.v) };
+}
+function htmlContas() {
+  const cs = contasAtivas();
+  if (falhou.fin_contas) return '<p class="mudo pequeno">Para ver o saldo das contas, rode o sql-financeiro-contas.sql no Supabase.</p>';
+  if (!cs.length) return '<p class="vazio">Nenhuma conta ainda. Clique em ➕ Conta.</p>';
+  return '<div class="fin__contas-saldo">' + cs.map(c => {
+    const s = saldoConta(c), ent = soma(s.itens.filter(i => i.v > 0), i => i.v), sai = -soma(s.itens.filter(i => i.v < 0), i => i.v);
+    return '<div class="fin__saldo"><div class="fin__saldo-topo"><b>' + esc(c.nome) + '</b><button type="button" class="btn--icone" data-conta-editar="' + esc(c.id) + '" aria-label="Editar conta">' + ic("editar") + "</button></div>" +
+      '<div class="fin__saldo-val">' + dinheiroEm(s.saldo, c.moeda) + "</div>" +
+      (c.moeda !== "CAD" && cambio[c.moeda] ? '<div class="mudo pequeno">≈ ' + CA(s.saldo * cambio[c.moeda]) + " hoje</div>" : "") +
+      '<div class="mudo pequeno">' + (s.conf ? "conferido em " + dataBR(s.desde) + ": " + dinheiroEm(s.base, c.moeda) : "sem saldo conferido") +
+        (ent ? ' · <span style="color:var(--c-verde)">+' + numBR.format(ent) + "</span>" : "") + (sai ? ' · <span style="color:var(--c-coral)">−' + numBR.format(sai) + "</span>" : "") + "</div>" +
+      (s.itens.length ? '<details class="fin__saldo-mov"><summary class="mudo pequeno">' + plural(s.itens.length, "movimento", "movimentos") + " desde a conferência</summary>" +
+        s.itens.map(i => '<div class="fin__item' + (i.mov ? " clica" : "") + '"' + (i.mov ? ' data-mov="' + esc(i.mov.id) + '"' : "") + "><span>" + dataBR(i.dia).slice(0, 5) + "</span><span>" + esc(i.txt) + '</span><b style="color:var(' + (i.v < 0 ? "--c-coral" : "--c-verde") + ')">' + (i.v < 0 ? "−" : "+") + numBR.format(Math.abs(i.v)) + "</b></div>").join("") + "</details>" : "") +
+      '<div class="fin__saldo-acoes"><button type="button" class="btn btn--linha" data-conferir="' + esc(c.id) + '">✓ Conferir saldo</button><button type="button" class="btn btn--linha" data-transferir="' + esc(c.id) + '">↗️ Transferência</button></div></div>';
+  }).join("") + "</div>";
+}
+function ligaContas(raiz) {
+  raiz.addEventListener("click", (e) => {
+    const conta = (id) => D.fin_contas.find(c => c.id === id);
+    let b;
+    if ((b = e.target.closest("[data-conferir]"))) janelaConferir(conta(b.dataset.conferir));
+    else if ((b = e.target.closest("[data-transferir]"))) janelaMovimento(conta(b.dataset.transferir));
+    else if ((b = e.target.closest("[data-conta-editar]"))) editorConta(conta(b.dataset.contaEditar));
+    else if ((b = e.target.closest("[data-mov]"))) { const m = D.fin_movimentos.find(x => x.id === b.dataset.mov); if (m) janelaMovimento(conta(m.conta_id), m); }
+    else if (e.target.closest("[data-conta-nova]")) editorConta();
+  });
+}
+function janelaConferir(c) {
+  if (!c) return;
+  const s = saldoConta(c);
+  editor({
+    titulo: "✓ Conferir saldo · " + c.nome,
+    topo: '<p class="mudo pequeno" style="margin-bottom:10px">Pelo admin, o saldo está em <b>' + dinheiroEm(s.saldo, c.moeda) + "</b>. Abra o " + esc(c.nome) + " e coloque o saldo de verdade: o cálculo recomeça dele.</p>",
+    campos: [
+      { nome: "data", rot: "Data", tipo: "date" },
+      { nome: "valor", rot: "Saldo real (" + MOEDAS[c.moeda] + ")", tipo: "number", passo: "0.01", obrigatorio: true }
+    ],
+    valores: { data: isoLocal(new Date()), valor: Math.round(s.saldo * 100) / 100 },
+    aoSalvar: async (dados) => {
+      const dif = Math.round(((Number(dados.valor) || 0) - s.saldo) * 100) / 100;
+      const m = await salvarLinha("fin_movimentos", { conta_id: c.id, data: dados.data || isoLocal(new Date()), tipo: "saldo", valor: dados.valor, obs: Math.abs(dif) >= 0.01 ? "diferença de " + dinheiroEm(dif, c.moeda) + " no conferido" : "bateu certinho" });
+      if (!m) return false;
+      D.fin_movimentos.push(m); desenharFinanceiro();
+      torrada(Math.abs(dif) < 0.01 ? "✓ Bateu certinho!" : "Saldo atualizado. Diferença de " + dinheiroEm(dif, c.moeda) + " (talvez uma taxa ou compra que não foi lançada).");
+      return true;
+    }
+  });
+}
+/* transferência (sai da conta) ou entrada avulsa */
+function janelaMovimento(c, m) {
+  if (!c) return;
+  editor({
+    titulo: m ? "✏️ Movimento · " + c.nome : "↗️ Transferência · " + c.nome,
+    topo: '<p class="mudo pequeno" style="margin-bottom:10px">Para dinheiro que sai da conta sem ser despesa (ex.: passar do ' + esc(c.nome) + " para o seu banco). Se o destino for outra conta cadastrada, ela recebe a entrada sozinha.</p>",
+    campos: [
+      { nome: "tipo", rot: "Tipo", tipo: "select", opcoes: [["saida", "↗️ Saiu (transferência)"], ["entrada", "↘️ Entrou (não é receita)"]] },
+      { nome: "data", rot: "Data", tipo: "date" },
+      { nome: "valor", rot: "Valor (" + MOEDAS[c.moeda] + ")", tipo: "number", passo: "0.01", min: 0, obrigatorio: true },
+      { nome: "destino", rot: "Para / de onde", lista: ["Banco"].concat(contasAtivas().filter(x => x.id !== c.id).map(x => x.nome)), dica: "Ex.: Banco, Wise..." },
+      { nome: "obs", rot: "Nota (opcional)", inteiro: true }
+    ],
+    valores: m || { tipo: "saida", data: isoLocal(new Date()), destino: "Banco" },
+    aoSalvar: async (dados, erro) => {
+      if (!(Number(dados.valor) > 0)) { erro("Coloque o valor."); return false; }
+      const s = await salvarLinha("fin_movimentos", Object.assign(dados, { conta_id: c.id }), m && m.id);
+      if (!s) return false;
+      troca(D.fin_movimentos, s);
+      /* transferência entre duas contas cadastradas: a outra recebe a entrada */
+      const outra = !m && contaDaVia(dados.destino);
+      if (outra && outra.id !== c.id) {
+        const t = await cotacaoNoDia(c.moeda, dados.data), to = await cotacaoNoDia(outra.moeda, dados.data);
+        const v = c.moeda === outra.moeda ? dados.valor : Math.round(dados.valor * (t || 1) / (to || 1) * 100) / 100;
+        const e2 = await salvarLinha("fin_movimentos", { conta_id: outra.id, data: dados.data, tipo: dados.tipo === "saida" ? "entrada" : "saida", valor: v, destino: c.nome, obs: c.moeda !== outra.moeda ? "valor convertido, confira no extrato" : null });
+        if (e2) D.fin_movimentos.push(e2);
+      }
+      desenharFinanceiro(); return true;
+    },
+    aoApagar: m ? async () => { if (!(await apagarLinha("fin_movimentos", m.id))) return false; D.fin_movimentos = D.fin_movimentos.filter(x => x.id !== m.id); desenharFinanceiro(); return true; } : null
+  });
+}
+function editorConta(c) {
+  editor({
+    titulo: c ? "✏️ " + c.nome : "➕ Conta",
+    topo: '<p class="mudo pequeno" style="margin-bottom:10px">O nome tem que ser igual ao "Por onde" dos recebimentos (ex.: PayPal, Wise) para os pagamentos entrarem sozinhos no saldo.</p>',
+    campos: [
+      { nome: "nome", rot: "Nome", obrigatorio: true, lista: VIAS },
+      { nome: "moeda", rot: "Moeda do saldo", tipo: "select", opcoes: MOEDAS_DESPESA },
+      { nome: "ativa", rot: "Ativa", tipo: "check" }
+    ],
+    valores: c || { moeda: "CAD", ativa: true },
+    aoSalvar: async (dados) => {
+      if (!c) dados.ordem = D.fin_contas.length + 1;
+      const s = await salvarLinha("fin_contas", dados, c && c.id);
+      if (!s) return false;
+      troca(D.fin_contas, s); desenharFinanceiro();
+      if (!c) janelaConferir(s);
+      return true;
+    },
+    aoApagar: c ? async () => { if (!(await apagarLinha("fin_contas", c.id))) return false; D.fin_contas = D.fin_contas.filter(x => x.id !== c.id); D.fin_movimentos = D.fin_movimentos.filter(x => x.conta_id !== c.id); desenharFinanceiro(); return true; } : null
+  });
+}
+/* "paguei com": as contas cadastradas (vazio = cartão ou outra) */
+const opcoesPagueiCom = () => [["", "💳 Cartão / outra"]].concat(contasAtivas().map(c => [c.id, "🏦 " + c.nome]));
+
+/* ============================================================
    MONTAR AS ABAS
    ============================================================ */
 function filtroPeriodo(id) {
@@ -5891,6 +6024,7 @@ function montarFinanceiro() {
     '<div class="ferramentas">' + filtroPeriodo("r") + '<span class="espaco"></span><span class="mudo pequeno" id="frCambio"></span></div>' +
     '<div class="numeros" id="frNumeros"></div>' +
     '<div class="fin__grade">' +
+      '<div class="bloco fin__largo"><div class="bloco__cab"><h2>🏦 Minhas contas</h2><button type="button" class="btn btn--linha" data-conta-nova>' + ic("mais") + ' Conta</button></div><div id="frContas"></div></div>' +
       '<div class="bloco fin__largo"><div class="bloco__cab"><h2>📊 Receita × Despesa</h2><span class="mudo pequeno">mês a mês, com o lucro</span></div><div id="frRxD"></div></div>' +
       '<div class="bloco fin__largo"><div class="bloco__cab"><h2>📈 Evolução acumulada</h2><span class="mudo pequeno">receita e despesa somadas ao longo do ano</span></div><div id="frAcum"></div></div>' +
       '<div class="bloco fin__largo"><div class="bloco__cab"><h2>🔮 Previsão de fluxo de caixa</h2><span class="mudo pequeno">próximos 3 meses</span></div><div id="frFluxo"></div></div>' +
@@ -5902,16 +6036,19 @@ function montarFinanceiro() {
       '<div class="bloco"><div class="bloco__cab"><h2>⏰ Despesas a vencer</h2><span class="mudo pequeno">próximos 30 dias</span></div><div id="frVencer"></div></div>' +
     "</div>";
   ligaPeriodo($("#aba-fin_resumo"));
+  ligaContas($("#aba-fin_resumo"));
   $("#frContador").addEventListener("click", planilhaContador);
 
   $("#aba-fin_contas").innerHTML =
     '<div class="numeros" id="fcNumeros"></div>' +
+    '<div class="bloco"><div class="bloco__cab"><h2>🏦 Minhas contas</h2><button type="button" class="btn btn--linha" data-conta-nova>' + ic("mais") + ' Conta</button></div><div id="fcContas"></div></div>' +
     '<div class="fin__contas">' +
       '<div class="bloco"><div class="bloco__cab"><h2>📥 Contas a receber (CR)</h2><button type="button" class="btn btn--linha" id="fcNovoCR">' + ic("mais") + ' Avulso</button></div><div id="fcCR"></div></div>' +
       '<div class="bloco"><div class="bloco__cab"><h2>📤 Contas a pagar (CP)</h2><button type="button" class="btn btn--linha" id="fcNovoCP">' + ic("mais") + ' Conta a pagar</button></div><div id="fcCP"></div>' +
         '<div class="rotulo" style="margin-top:16px">💳 Vai cobrar no cartão nos próximos 30 dias</div><p class="mudo pequeno">Só para você saber. Cai sozinho nas despesas no dia da cobrança.</p><div id="fcCartao"></div></div>' +
     "</div>";
   $("#fcNovoCR").addEventListener("click", () => editorAReceber());
+  ligaContas($("#fcContas").closest(".bloco"));
   $("#fcCartao").addEventListener("click", (e) => { const l = e.target.closest("[data-regra]"); if (l) editorAssinatura(D.fin_recorrencias.find(r => r.id === l.dataset.regra)); });
   $("#fcNovoCP").addEventListener("click", () => editorDespesa(null, true));
   $("#fcCR").addEventListener("click", (e) => {
@@ -5989,6 +6126,10 @@ function desenharFinanceiro() {
   const crs = aReceber(), cps = aPagar();
   const dizimoAberto = cps.filter(d => d.categoria === "dizimo");
   $("#frCambio").textContent = cambioData ? "Cotação de hoje (Banco do Canadá, " + dataBR(cambioData) + "): US$ 1 = CA$ " + numBR.format(cambio.USD) + (cambio.BRL ? " · R$ 1 = CA$ " + numBR.format(cambio.BRL) : "") : "Sem cotação agora.";
+
+  /* ----- CONTAS (saldo) ----- */
+  $("#frContas").innerHTML = htmlContas();
+  $("#fcContas").innerHTML = htmlContas();
 
   /* ----- RESUMO ----- */
   $("#frNumeros").innerHTML =
@@ -6296,7 +6437,7 @@ function janelaReceber(r0) {
       const caiu = Math.round((bruto - taxa) * 100) / 100;   /* o líquido: é o que vira receita */
       let linha;
       if (bruto > 0) {
-        linha = await comCotacao({ recebido: true, data_recebido: x._data, via: x._via, conta_moeda: x._moeda, valor_recebido: caiu, taxa }, x._moeda, caiu, x._data);
+        linha = await comCotacao({ recebido: true, data_recebido: x._data, via: x._via, conta_moeda: x._moeda, valor_recebido: caiu, taxa, recebido_em: x.recebido && x.recebido_em ? x.recebido_em : new Date().toISOString() }, x._moeda, caiu, x._data);
         if (!x.id) {   /* pagamento novo: o valor recebido na moeda do contrato, pela cotação do dia */
           const tc = await cotacaoNoDia(moedaContrato, x._data);
           Object.assign(linha, base, { moeda: moedaContrato, quando: "data", vencimento: x._data, ordem: ++ordem,
@@ -6375,7 +6516,7 @@ function editorDespesa(d, contaAPagar) {
     { nome: "valor", rot: "Valor", tipo: "number", passo: "0.01", min: 0, obrigatorio: true },
     aPagarModo ? { nome: "vencimento", rot: "Vence em", tipo: "date" } : { nome: "data", rot: "Data", tipo: "date" },
     { nome: "nota_url", rot: "Link do comprovante / nota (opcional)", inteiro: true, dica: "Cole o link do Drive, do e-mail ou do PDF" }
-  ];
+  ].concat(contasAtivas().length && !aPagarModo ? [{ nome: "conta_id", rot: "Paguei com", tipo: "select", opcoes: opcoesPagueiCom() }] : []);
   editor({
     titulo: d ? "✏️ " + (aPagarModo ? "Conta a pagar" : "Despesa") : aPagarModo ? "➕ Conta a pagar" : "➕ Despesa",
     topo: d && d.origem === "assinatura" ? '<p class="mudo pequeno" style="margin-bottom:10px">🔁 Lançada sozinha pela assinatura. Se apagar, esse mês fica marcado como "não cobrou".</p>' : "",
@@ -6410,10 +6551,10 @@ function janelaPaguei(d) {
       { nome: "data", rot: "Data do pagamento", tipo: "date" },
       { nome: "moeda", rot: "Moeda", tipo: "select", opcoes: MOEDAS_DESPESA },
       { nome: "valor", rot: "Valor pago", tipo: "number", passo: "0.01", min: 0, obrigatorio: true }
-    ],
+    ].concat(contasAtivas().length ? [{ nome: "conta_id", rot: "Paguei com", tipo: "select", opcoes: opcoesPagueiCom() }] : []),
     valores: { data: isoLocal(new Date()), moeda: "CAD", valor: Math.round(cadDespesa(d) * 100) / 100 },
     aoSalvar: async (dados) => {
-      const linha = await comCotacao({ paga: true, data: dados.data || isoLocal(new Date()), moeda: dados.moeda, valor: dados.valor }, dados.moeda, dados.valor, dados.data);
+      const linha = await comCotacao({ paga: true, data: dados.data || isoLocal(new Date()), moeda: dados.moeda, valor: dados.valor, conta_id: dados.conta_id || null }, dados.moeda, dados.valor, dados.data);
       const s = await salvarLinha("fin_despesas", linha, d.id);
       if (!s) return false;
       troca(D.fin_despesas, s); desenharFinanceiro(); torrada("✓ Pago. Foi para as despesas."); return true;

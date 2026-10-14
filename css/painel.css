@@ -745,3 +745,12 @@ a.btn { text-decoration: none; }
   .fin__colunas { gap: 3px; }
   .fin__col-lucro { font-size: 8.5px; }
 }
+
+.fin__contas-saldo { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.fin__saldo { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; background: var(--card-2); }
+.fin__saldo-topo { display: flex; justify-content: space-between; align-items: center; }
+.fin__saldo-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fin__saldo-mov summary { cursor: pointer; margin: 4px 0; }
+.fin__saldo-mov .fin__item { background: var(--card); margin-top: 4px; }
+.fin__saldo-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.fin__saldo-acoes .btn { height: 30px; }
