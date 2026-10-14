@@ -5790,7 +5790,10 @@ const FIN = { ano: new Date().getFullYear(), mes: "", cat: "", buscaD: "" };
 
 /* --- valores em CA$ (usa a cotação guardada; se não tiver, a de hoje) --- */
 const cadDespesa = (d) => d.valor_cad != null ? Number(d.valor_cad) : (emCAD(d.valor, d.moeda) || 0);
-const cadReceita = (r) => r.valor_cad != null ? Number(r.valor_cad) : (emCAD(r.valor_recebido != null ? r.valor_recebido : r.valor, r.conta_moeda || r.moeda) || 0);
+/* líquido (o que ficou na conta) e receita (o valor recebido, antes da taxa: a taxa vira despesa "Taxa bancária") */
+const cadLiquida = (r) => r.valor_cad != null ? Number(r.valor_cad) : (emCAD(r.valor_recebido != null ? r.valor_recebido : r.valor, r.conta_moeda || r.moeda) || 0);
+const cadTaxa = (r) => (Number(r.taxa) || 0) * (r.cotacao || cambio[r.conta_moeda || r.moeda] || 1);
+const cadReceita = (r) => cadLiquida(r) + cadTaxa(r);
 const cadAReceber = (r) => emCAD(r.valor, r.moeda) || 0;
 const CA = (v) => dinheiroEm(v, "CAD");
 const recebidas = () => D.fin_receber.filter(r => r.recebido);
@@ -5924,8 +5927,8 @@ function montarFinanceiro() {
     '<div class="ferramentas">' + filtroPeriodo("rc") + '<input class="entrada" id="fRecBusca" type="search" placeholder="Buscar marca"><span class="espaco"></span>' +
       '<button class="btn btn--linha" id="fRecCsv">' + ic("baixar") + " CSV</button></div>" +
     '<div class="numeros" id="fRecNumeros"></div>' +
-    '<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Último pagamento</th><th>Marca</th><th>Por onde fechei</th><th class="num">Contrato</th><th class="num">Recebido</th><th class="num">Taxa do banco</th><th class="num">Líquido</th><th class="num">Em CA$</th><th class="num">Pendente</th></tr></thead><tbody id="fRecCorpo"></tbody></table></div>' +
-    '<p class="mudo pequeno" style="margin-top:8px">Uma linha por contrato, com os pagamentos que caíram no período. A receita (lucro e dízimo) é o líquido: recebido menos a taxa do banco. Clique numa linha para ver ou corrigir os pagamentos.</p>';
+    '<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Último pagamento</th><th>Marca</th><th>Por onde fechei</th><th class="num">Contrato</th><th class="num">Recebido</th><th class="num">Taxa do banco</th><th class="num">Líquido</th><th class="num">Líquido em CA$</th><th class="num">Pendente</th></tr></thead><tbody id="fRecCorpo"></tbody></table></div>' +
+    '<p class="mudo pequeno" style="margin-top:8px">Uma linha por contrato, com os pagamentos que caíram no período. A receita é o valor recebido; a taxa do banco vai para Despesas como Taxa bancária (dedutível), então o lucro fica certo. O dízimo é 10% do líquido. Clique numa linha para ver ou corrigir os pagamentos.</p>';
   ligaPeriodo($("#aba-fin_receitas"));
   $("#fRecBusca").addEventListener("input", desenharFinanceiro);
   $("#fRecCorpo").addEventListener("click", (e) => { const l = e.target.closest("[data-rec]"); if (l) janelaReceber(D.fin_receber.find(r => r.id === l.dataset.rec)); });
@@ -5969,6 +5972,7 @@ function montarFinanceiro() {
   });
 
   lancaAssinaturas();
+  sincronizaTaxas();
 }
 
 /* ============================================================
@@ -6105,9 +6109,9 @@ function desenharFinanceiro() {
   }).sort((a, b) => b.ult.localeCompare(a.ult));
   const pendTotal = aReceber();
   $("#fRecNumeros").innerHTML =
-    numero("Receita líquida " + periodoTxt, CA(soma(recLista, cadReceita)), plural(recLista.length, "pagamento", "pagamentos") + " · " + plural(linhasRec.length, "contrato", "contratos")) +
-    numero("Taxas de banco", CA(soma(recLista, r => (Number(r.taxa) || 0) * (r.cotacao || cambio[r.conta_moeda] || 1))), "já descontadas do líquido") +
-    numero("Dízimo (10% do líquido)", CA(soma(recLista, r => cadReceita(r) * 0.1))) +
+    numero("Recebido " + periodoTxt, CA(soma(recLista, cadReceita)), plural(recLista.length, "pagamento", "pagamentos") + " · " + plural(linhasRec.length, "contrato", "contratos")) +
+    numero("Taxas de banco", CA(soma(recLista, cadTaxa)), "lançadas em Despesas, dedutíveis") +
+    numero("Dízimo (10% do líquido)", CA(soma(recLista, r => cadLiquida(r) * 0.1)), "líquido " + CA(soma(recLista, cadLiquida))) +
     numero("Ainda pendente", CA(soma(pendTotal, cadAReceber)), plural(pendTotal.length, "parcela", "parcelas") + " em Contas a receber");
   $("#fRecCorpo").innerHTML = linhasRec.length ? linhasRec.map(g => {
     const r = g.pgs[0], moedaConta = (x) => x.conta_moeda || x.moeda;
@@ -6119,7 +6123,7 @@ function desenharFinanceiro() {
         '<div class="mudo pequeno">' + esc(Array.from(new Set(g.pgs.map(x => x.via).filter(Boolean))).join(", ")) + "</div></td>" +
       '<td class="num">' + (porMoeda(g.pgs, x => x.taxa, moedaConta) || '<span class="mudo">·</span>') + "</td>" +
       '<td class="num"><b>' + porMoeda(g.pgs, x => x.valor_recebido != null ? x.valor_recebido : x.valor, moedaConta) + "</b></td>" +
-      '<td class="num">' + CA(soma(g.pgs, cadReceita)) + "</td>" +
+      '<td class="num">' + CA(soma(g.pgs, cadLiquida)) + "</td>" +
       '<td class="num">' + (g.pend.length ? '<span style="color:var(--c-mostarda)"><b>' + porMoeda(g.pend, x => x.valor, x => x.moeda) + "</b></span>" : '<span style="color:var(--c-verde)">✓ quitado</span>') + "</td></tr>";
   }).join("") : '<tr><td colspan="9"><p class="vazio">Nenhuma receita em ' + periodoTxt + ".</p></td></tr>";
 
@@ -6171,6 +6175,25 @@ function grupoDoRecebimento(r) {
   const lista = r.campanha_id ? D.fin_receber.filter(x => x.campanha_id === r.campanha_id) : [r];
   return lista.slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || String(a.vencimento || "").localeCompare(String(b.vencimento || "")));
 }
+/* a taxa do banco de cada recebimento vira uma despesa "Taxa bancária" (dedutível) */
+async function sincronizaTaxa(r) {
+  if (falhou.fin_despesas) return;
+  const ja = D.fin_despesas.find(d => d.origem === "taxa" && d.receber_id === r.id);
+  const taxa = r.recebido ? Number(r.taxa) || 0 : 0;
+  if (taxa > 0) {
+    const linha = { data: r.data_recebido, descricao: "Taxa bancária · " + (r.via || "banco") + " · " + (r.cliente || ""), categoria: "bankfee", moeda: r.conta_moeda || r.moeda,
+      valor: taxa, cotacao: r.cotacao, valor_cad: Math.round(taxa * (r.cotacao || 1) * 100) / 100, dedutivel: ja ? ja.dedutivel : "sim", paga: true, origem: "taxa", receber_id: r.id };
+    if (ja && ja.valor == linha.valor && ja.data === linha.data && ja.moeda === linha.moeda) return;
+    const s = await salvarLinha("fin_despesas", linha, ja && ja.id);
+    if (s) troca(D.fin_despesas, s);
+  } else if (ja && await apagarLinha("fin_despesas", ja.id)) D.fin_despesas = D.fin_despesas.filter(d => d.id !== ja.id);
+}
+/* ao abrir o admin: as taxas já lançadas que ainda não viraram despesa */
+async function sincronizaTaxas() {
+  const faltam = D.fin_receber.filter(r => r.recebido && Number(r.taxa) > 0 && !D.fin_despesas.some(d => d.origem === "taxa" && d.receber_id === r.id));
+  for (const r of faltam) await sincronizaTaxa(r);
+  if (faltam.length) desenharFinanceiro();
+}
 /* o valor de uma despesa em outra moeda (pela cotação guardada nela) */
 const valorNaMoeda = (d, moeda) => d.moeda === moeda ? Number(d.valor) || 0 : cadDespesa(d) / (cambio[moeda] || 1);
 function janelaReceber(r0) {
@@ -6185,7 +6208,7 @@ function janelaReceber(r0) {
   const j = abrirJanela({
     titulo: "💰 Receber de " + (r0.cliente || ""), larga: true,
     corpo: '<p class="mudo pequeno" style="margin-bottom:10px">' + esc(r0.descricao || "") + (c && !c.gift ? " · contrato de <b>" + dinheiroEm(c.valor, moedaContrato) + "</b>" : "") +
-        ". Em cada pagamento que já entrou, coloque o <b>valor recebido</b> e a <b>taxa do banco</b>: o <b>líquido</b> sai sozinho, e é ele que conta no lucro e no dízimo. O que ficar em branco continua em Contas a receber.</p>" +
+        ". Em cada pagamento que já entrou, coloque o <b>valor recebido</b> e a <b>taxa do banco</b>: o <b>líquido</b> sai sozinho e é a base do dízimo. A taxa vai para Despesas como Taxa bancária (dedutível). O que ficar em branco continua em Contas a receber.</p>" +
       '<div class="receber__cab"><span>Data que caiu</span><span>Conta</span><span>Moeda da conta</span><span>Valor recebido</span><span>Taxa do banco</span><span>Líquido</span><span></span></div>' +
       '<div id="rLinhas"></div>' +
       '<button type="button" class="btn btn--linha" id="rMais" style="margin-top:8px">' + ic("mais") + " Adicionar pagamento</button>" +
@@ -6285,10 +6308,11 @@ function janelaReceber(r0) {
       const s = await salvarLinha("fin_receber", linha, x.id);
       if (!s) { b.disabled = false; b.textContent = "Salvar"; return; }
       troca(D.fin_receber, s); ids.add(s.id);
+      await sincronizaTaxa(s);
     }
     /* acerta o dízimo: o que falta devolver vai para Contas a pagar */
     const ja = dizimos();
-    const totalCad = soma(D.fin_receber.filter(x => ids.has(x.id) && x.recebido), cadReceita);   /* já com a cotação do dia de cada pagamento */
+    const totalCad = soma(D.fin_receber.filter(x => ids.has(x.id) && x.recebido), cadLiquida);   /* já com a cotação do dia de cada pagamento */
     const k = { moeda: "CAD", dz: Math.round(totalCad * 10) / 100 };
     const aberto = ja.find(d => d.paga === false), pago = soma(ja.filter(d => d.paga !== false), cadDespesa);
     const falta = $("#rDizimo", j).checked ? Math.round((k.dz - pago) * 100) / 100 : 0;
@@ -6493,7 +6517,7 @@ function janelaComprei(i) {
 /* planilha para o contador: receitas e despesas do ano, em CA$ */
 function planilhaContador() {
   const ano = FIN.ano;
-  const linhas = recebidas().filter(r => doAno(r.data_recebido, ano)).map(r => ["Receita", dataBR(r.data_recebido), (r.cliente || "") + (r.descricao ? " · " + r.descricao : ""), "Receita de UGC", r.conta_moeda || r.moeda, Number(r.valor_recebido) || 0, r.cotacao || "", Math.round(cadReceita(r) * 100) / 100, ""])
+  const linhas = recebidas().filter(r => doAno(r.data_recebido, ano)).map(r => ["Receita", dataBR(r.data_recebido), (r.cliente || "") + (r.descricao ? " · " + r.descricao : ""), "Receita de UGC", r.conta_moeda || r.moeda, Math.round(((Number(r.valor_recebido) || 0) + (Number(r.taxa) || 0)) * 100) / 100, r.cotacao || "", Math.round(cadReceita(r) * 100) / 100, ""])
     .concat(pagas().filter(d => doAno(d.data, ano)).map(d => ["Despesa", dataBR(d.data), d.descricao, categoriaDe(d.categoria)[1], d.moeda, Number(d.valor) || 0, d.cotacao || "", Math.round(cadDespesa(d) * 100) / 100, (DEDUTIVEL.find(x => x[0] === d.dedutivel) || DEDUTIVEL[0])[1]]));
   if (!linhas.length) { torrada("Nada lançado em " + ano + "."); return; }
   baixarCSV("contador-" + ano, ["Tipo", "Data", "Descrição", "Categoria", "Moeda", "Valor", "Cotação (CA$)", "Em CA$", "Dedutível"], linhas);
