@@ -5768,7 +5768,7 @@ async function iaLegenda(insp) {
    9z. 💰 FINANCEIRO
    Resumo · Contas a receber e a pagar · Receitas · Despesas · Quero investir
    - Receita = parcela de contrato que caiu na conta (valor líquido, já sem a taxa do banco).
-   - Dízimo = 10% do que caiu: nasce em Contas a pagar quando ela marca "Recebi".
+   - Receita = líquido (recebido − taxa do banco). Dízimo = 10% do líquido: nasce em Contas a pagar quando ela marca "Recebi".
    - Tudo vira CA$ pela cotação do Banco do Canadá do dia de cada lançamento (guardada na linha).
    ============================================================ */
 const CATEGORIAS = [
@@ -5924,15 +5924,16 @@ function montarFinanceiro() {
     '<div class="ferramentas">' + filtroPeriodo("rc") + '<input class="entrada" id="fRecBusca" type="search" placeholder="Buscar marca"><span class="espaco"></span>' +
       '<button class="btn btn--linha" id="fRecCsv">' + ic("baixar") + " CSV</button></div>" +
     '<div class="numeros" id="fRecNumeros"></div>' +
-    '<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Data</th><th>Marca</th><th>Por onde fechei</th><th class="num">Contrato</th><th class="num">Caiu na conta</th><th class="num">Taxa</th><th class="num">Em CA$</th></tr></thead><tbody id="fRecCorpo"></tbody></table></div>' +
-    '<p class="mudo pequeno" style="margin-top:8px">A receita é o que caiu na conta, já sem a taxa do banco. Clique numa linha para corrigir.</p>';
+    '<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Último pagamento</th><th>Marca</th><th>Por onde fechei</th><th class="num">Contrato</th><th class="num">Recebido</th><th class="num">Taxa do banco</th><th class="num">Líquido</th><th class="num">Em CA$</th><th class="num">Pendente</th></tr></thead><tbody id="fRecCorpo"></tbody></table></div>' +
+    '<p class="mudo pequeno" style="margin-top:8px">Uma linha por contrato, com os pagamentos que caíram no período. A receita (lucro e dízimo) é o líquido: recebido menos a taxa do banco. Clique numa linha para ver ou corrigir os pagamentos.</p>';
   ligaPeriodo($("#aba-fin_receitas"));
   $("#fRecBusca").addEventListener("input", desenharFinanceiro);
   $("#fRecCorpo").addEventListener("click", (e) => { const l = e.target.closest("[data-rec]"); if (l) janelaReceber(D.fin_receber.find(r => r.id === l.dataset.rec)); });
   $("#fRecCsv").addEventListener("click", () => {
     const lista = recebidas().filter(r => noPeriodo(r.data_recebido));
-    baixarCSV("receitas", ["Data", "Marca", "Trabalho", "Nicho", "Por onde fechei", "Moeda do contrato", "Valor do contrato", "Conta", "Moeda da conta", "Caiu na conta", "Taxa", "Cotação", "Em CA$"],
-      lista.map(r => [dataBR(r.data_recebido), r.cliente, r.descricao, r.nicho, canalRotulo(r).replace(/^\S+\s/, ""), r.moeda, Number(r.valor) || 0, r.via, r.conta_moeda, Number(r.valor_recebido) || 0, Number(r.taxa) || 0, r.cotacao || "", Math.round(cadReceita(r) * 100) / 100]));
+    baixarCSV("receitas", ["Data", "Marca", "Trabalho", "Nicho", "Por onde fechei", "Moeda do contrato", "Valor da parcela", "Conta", "Moeda da conta", "Valor recebido", "Taxa do banco", "Líquido", "Cotação", "Líquido em CA$"],
+      lista.map(r => [dataBR(r.data_recebido), r.cliente, r.descricao, r.nicho, canalRotulo(r).replace(/^\S+\s/, ""), r.moeda, Number(r.valor) || 0, r.via, r.conta_moeda,
+        Math.round(((Number(r.valor_recebido) || 0) + (Number(r.taxa) || 0)) * 100) / 100, Number(r.taxa) || 0, Number(r.valor_recebido) || 0, r.cotacao || "", Math.round(cadReceita(r) * 100) / 100]));
   });
 
   $("#aba-fin_despesas").innerHTML =
@@ -6084,23 +6085,43 @@ function desenharFinanceiro() {
     '<div class="fin__item clica" data-regra="' + esc(x.regra.id) + '" title="Clique para editar ou cancelar"><span>' + dataBR(x.dia).slice(0, 5) + "</span><span>" + esc(x.regra.descricao) + ' <span class="mudo pequeno">✏️</span></span><b>' + dinheiroEm(x.regra.valor, x.regra.moeda) + "</b></div>").join("") + "</div>"
     : '<p class="mudo pequeno">Nenhuma assinatura cobra nos próximos 30 dias.</p>';
 
-  /* ----- RECEITAS ----- */
+  /* ----- RECEITAS (uma linha por contrato) ----- */
   const buscaR = normaliza(($("#fRecBusca") || {}).value || "");
-  const recLista = rec.filter(r => !buscaR || normaliza((r.cliente || "") + " " + (r.descricao || "")).includes(buscaR)).sort((a, b) => String(b.data_recebido).localeCompare(String(a.data_recebido)));
+  const recLista = rec.filter(r => !buscaR || normaliza((r.cliente || "") + " " + (r.descricao || "")).includes(buscaR));
+  const porMoeda = (lista, valor, moeda) => {
+    const por = {};
+    lista.forEach(x => { const m = moeda(x) || "CAD"; por[m] = (por[m] || 0) + (Number(valor(x)) || 0); });
+    const partes = Object.entries(por).filter(([, v]) => Math.abs(v) > 0.004).map(([m, v]) => dinheiroEm(v, m));
+    return partes.length ? partes.join(" + ") : "";
+  };
+  const grupos = {};
+  recLista.forEach(r => { const k = r.campanha_id || r.id; (grupos[k] = grupos[k] || []).push(r); });
+  const linhasRec = Object.entries(grupos).map(([k, pgs]) => {
+    const c = D.campanhas.find(x => x.id === pgs[0].campanha_id);
+    const todas = c ? D.fin_receber.filter(x => x.campanha_id === c.id) : pgs;
+    const pend = todas.filter(x => !x.recebido && Number(x.valor) > 0);
+    return { k, pgs, c, ult: pgs.map(p => String(p.data_recebido)).sort().pop(), pend,
+      contrato: c && !c.gift ? dinheiroEm(c.valor, moedaDe(c)) : porMoeda(todas, x => x.valor, x => x.moeda) };
+  }).sort((a, b) => b.ult.localeCompare(a.ult));
+  const pendTotal = aReceber();
   $("#fRecNumeros").innerHTML =
-    numero("Receita " + periodoTxt, CA(soma(recLista, cadReceita)), plural(recLista.length, "recebimento", "recebimentos")) +
-    numero("Taxas de banco", CA(soma(recLista, r => (Number(r.taxa) || 0) * (r.cotacao || cambio[r.conta_moeda] || 1))), "já descontadas da receita") +
-    numero("Dízimo gerado", CA(soma(recLista, r => cadReceita(r) * 0.1)), "10% do que caiu") +
-    numero("Marcas que pagaram", inteiro(new Set(recLista.map(r => r.cliente)).size));
-  $("#fRecCorpo").innerHTML = recLista.length ? recLista.map(r =>
-    '<tr class="clica" data-rec="' + esc(r.id) + '"><td style="white-space:nowrap">' + dataBR(r.data_recebido) + "</td>" +
+    numero("Receita líquida " + periodoTxt, CA(soma(recLista, cadReceita)), plural(recLista.length, "pagamento", "pagamentos") + " · " + plural(linhasRec.length, "contrato", "contratos")) +
+    numero("Taxas de banco", CA(soma(recLista, r => (Number(r.taxa) || 0) * (r.cotacao || cambio[r.conta_moeda] || 1))), "já descontadas do líquido") +
+    numero("Dízimo (10% do líquido)", CA(soma(recLista, r => cadReceita(r) * 0.1))) +
+    numero("Ainda pendente", CA(soma(pendTotal, cadAReceber)), plural(pendTotal.length, "parcela", "parcelas") + " em Contas a receber");
+  $("#fRecCorpo").innerHTML = linhasRec.length ? linhasRec.map(g => {
+    const r = g.pgs[0], moedaConta = (x) => x.conta_moeda || x.moeda;
+    return '<tr class="clica" data-rec="' + esc(r.id) + '"><td style="white-space:nowrap">' + dataBR(g.ult) + (g.pgs.length > 1 ? '<div class="mudo pequeno">' + g.pgs.length + " pagamentos</div>" : "") + "</td>" +
       "<td><b>" + esc(r.cliente || "—") + "</b>" + (r.descricao ? '<div class="mudo pequeno">' + esc(r.descricao) + (r.nicho ? " · " + esc(r.nicho) : "") + "</div>" : "") + "</td>" +
       "<td>" + esc(canalRotulo(r)) + "</td>" +
-      '<td class="num">' + dinheiroEm(r.valor, r.moeda) + "</td>" +
-      '<td class="num">' + dinheiroEm(r.valor_recebido != null ? r.valor_recebido : r.valor, r.conta_moeda || r.moeda) + (r.via ? '<div class="mudo pequeno">' + esc(r.via) + "</div>" : "") + "</td>" +
-      '<td class="num">' + (Number(r.taxa) ? dinheiroEm(r.taxa, r.conta_moeda || r.moeda) : '<span class="mudo">·</span>') + "</td>" +
-      '<td class="num"><b>' + CA(cadReceita(r)) + "</b></td></tr>").join("")
-    : '<tr><td colspan="7"><p class="vazio">Nenhuma receita em ' + periodoTxt + ".</p></td></tr>";
+      '<td class="num">' + g.contrato + "</td>" +
+      '<td class="num">' + porMoeda(g.pgs, x => (Number(x.valor_recebido != null ? x.valor_recebido : x.valor) || 0) + (Number(x.taxa) || 0), moedaConta) +
+        '<div class="mudo pequeno">' + esc(Array.from(new Set(g.pgs.map(x => x.via).filter(Boolean))).join(", ")) + "</div></td>" +
+      '<td class="num">' + (porMoeda(g.pgs, x => x.taxa, moedaConta) || '<span class="mudo">·</span>') + "</td>" +
+      '<td class="num"><b>' + porMoeda(g.pgs, x => x.valor_recebido != null ? x.valor_recebido : x.valor, moedaConta) + "</b></td>" +
+      '<td class="num">' + CA(soma(g.pgs, cadReceita)) + "</td>" +
+      '<td class="num">' + (g.pend.length ? '<span style="color:var(--c-mostarda)"><b>' + porMoeda(g.pend, x => x.valor, x => x.moeda) + "</b></span>" : '<span style="color:var(--c-verde)">✓ quitado</span>') + "</td></tr>";
+  }).join("") : '<tr><td colspan="9"><p class="vazio">Nenhuma receita em ' + periodoTxt + ".</p></td></tr>";
 
   /* ----- DESPESAS ----- */
   const buscaD = normaliza(($("#fDesBusca") || {}).value || "");
@@ -6164,8 +6185,8 @@ function janelaReceber(r0) {
   const j = abrirJanela({
     titulo: "💰 Receber de " + (r0.cliente || ""), larga: true,
     corpo: '<p class="mudo pequeno" style="margin-bottom:10px">' + esc(r0.descricao || "") + (c && !c.gift ? " · contrato de <b>" + dinheiroEm(c.valor, moedaContrato) + "</b>" : "") +
-        ". Preencha <b>quanto caiu</b> em cada pagamento que já entrou. O que ficar em branco continua em Contas a receber.</p>" +
-      '<div class="receber__cab"><span>Data que caiu</span><span>Conta</span><span>Moeda da conta</span><span>Quanto caiu</span><span>Taxa do banco</span><span></span></div>' +
+        ". Em cada pagamento que já entrou, coloque o <b>valor recebido</b> e a <b>taxa do banco</b>: o <b>líquido</b> sai sozinho, e é ele que conta no lucro e no dízimo. O que ficar em branco continua em Contas a receber.</p>" +
+      '<div class="receber__cab"><span>Data que caiu</span><span>Conta</span><span>Moeda da conta</span><span>Valor recebido</span><span>Taxa do banco</span><span>Líquido</span><span></span></div>' +
       '<div id="rLinhas"></div>' +
       '<button type="button" class="btn btn--linha" id="rMais" style="margin-top:8px">' + ic("mais") + " Adicionar pagamento</button>" +
       '<label class="campo campo--check" style="margin-top:14px"><input type="checkbox" id="rDizimo"> <span>🙏 Separar o dízimo: 10% de tudo o que caiu vai para Contas a pagar <b id="rDizVal"></b></span></label>' +
@@ -6186,7 +6207,8 @@ function janelaReceber(r0) {
     $("#rLinhas", j).innerHTML = linhas.map((x, i) => {
       const via = x._via != null ? x._via : (x.via || "PayPal");
       const moeda = x._moeda != null ? x._moeda : (x.conta_moeda || MOEDA_DA_VIA[via] || moedaContrato);
-      const caiu = x._caiu != null ? x._caiu : (x.recebido && x.valor_recebido != null ? x.valor_recebido : "");
+      const caiu = x._caiu != null ? x._caiu : (x.recebido && x.valor_recebido != null ? Math.round(((Number(x.valor_recebido) || 0) + (Number(x.taxa) || 0)) * 100) / 100 : "");
+      const taxaV = x._taxa != null ? x._taxa : (Number(x.taxa) || "");
       const rot = x.id ? '<b>' + dinheiroEm(x.valor, x.moeda || moedaContrato) + "</b>" + '<span class="mudo pequeno">' + [quando(x), x.vencimento && !x.recebido ? "previsto " + dataBR(x.vencimento).slice(0, 5) : ""].filter(Boolean).join(" · ") + "</span>"
         : '<b>Pagamento ' + (i + 1) + '</b><span class="mudo pequeno">novo</span>';
       return '<div class="receber__linha' + (caiu !== "" && Number(caiu) > 0 ? " ok" : "") + '" data-linha="' + i + '">' +
@@ -6194,8 +6216,9 @@ function janelaReceber(r0) {
         '<input type="date" data-rd value="' + esc(x._data != null ? x._data : (x.data_recebido || "")) + '" aria-label="Data que caiu">' +
         '<select data-rv aria-label="Conta">' + opcoes(VIAS, via) + "</select>" +
         '<select data-rm aria-label="Moeda da conta">' + opcoes(MOEDAS_DESPESA, moeda) + "</select>" +
-        '<input type="number" min="0" step="0.01" data-rc value="' + esc(caiu) + '" placeholder="0,00" aria-label="Quanto caiu">' +
-        '<input type="number" min="0" step="0.01" data-rt value="' + esc(x._taxa != null ? x._taxa : (Number(x.taxa) || "")) + '" placeholder="0,00" aria-label="Taxa do banco">' +
+        '<input type="number" min="0" step="0.01" data-rc value="' + esc(caiu) + '" placeholder="0,00" aria-label="Valor recebido">' +
+        '<input type="number" min="0" step="0.01" data-rt value="' + esc(taxaV) + '" placeholder="0,00" aria-label="Taxa do banco">' +
+        '<span class="receber__liq" data-rl>' + (Number(caiu) > 0 ? numBR.format(Number(caiu) - (Number(taxaV) || 0)) : "·") + "</span>" +
         (x.id ? "<span></span>" : '<button type="button" class="btn--icone" data-tirar="' + i + '" aria-label="Tirar este pagamento">' + ic("fechar") + "</button>") + "</div>";
     }).join("");
     dizimo();
@@ -6205,22 +6228,25 @@ function janelaReceber(r0) {
     const caidas = linhas.filter(x => Number(x._caiu) > 0);
     const moedas = new Set(caidas.map(x => x._moeda));
     const moeda = moedas.size === 1 ? [...moedas][0] : "CAD";
-    const total = soma(caidas, x => moedas.size === 1 ? Number(x._caiu) : (emCAD(Number(x._caiu), x._moeda) || 0));
+    const liq = (x) => Math.max(0, (Number(x._caiu) || 0) - (Number(x._taxa) || 0));
+    const total = soma(caidas, x => moedas.size === 1 ? liq(x) : (emCAD(liq(x), x._moeda) || 0));
     return { moeda, total, dz: Math.round(total * 10) / 100 };
   }
   function dizimo() {
     ler();
     const k = calcDizimo(), ja = dizimos(), pago = soma(ja.filter(d => d.paga !== false), d => valorNaMoeda(d, k.moeda));
     $("#rDizVal", j).textContent = k.total ? "· " + dinheiroEm(k.dz, k.moeda) : "";
-    $("#rDizInfo", j).textContent = k.total ? "10% de " + dinheiroEm(k.total, k.moeda) + (pago ? " · você já devolveu " + dinheiroEm(pago, k.moeda) + ", vai para Contas a pagar só a diferença." : ".") : "";
+    $("#rDizInfo", j).textContent = k.total ? "10% do líquido, " + dinheiroEm(k.total, k.moeda) + (pago ? " · você já devolveu " + dinheiroEm(pago, k.moeda) + ", vai para Contas a pagar só a diferença." : ".") : "";
   }
   $("#rDizimo", j).checked = !!dizimos().length || !grupo.some(x => x.recebido);
   desenha();
   $("#rLinhas", j).addEventListener("input", (e) => {
-    if (e.target.matches("[data-rc]")) {
-      const l = e.target.closest("[data-linha]"), d = $("[data-rd]", l);
-      if (Number(e.target.value) > 0 && !d.value) d.value = isoLocal(new Date());
-      l.classList.toggle("ok", Number(e.target.value) > 0);
+    const l = e.target.closest("[data-linha]");
+    if (l && e.target.matches("[data-rc], [data-rt]")) {
+      const bruto = Number($("[data-rc]", l).value) || 0, d = $("[data-rd]", l);
+      if (bruto > 0 && !d.value) d.value = isoLocal(new Date());
+      l.classList.toggle("ok", bruto > 0);
+      $("[data-rl]", l).textContent = bruto > 0 ? numBR.format(bruto - (Number($("[data-rt]", l).value) || 0)) : "·";
     }
     dizimo();
   });
@@ -6238,19 +6264,21 @@ function janelaReceber(r0) {
   $("[data-salvar]", j).addEventListener("click", async () => {
     ler();
     if (linhas.some(x => Number(x._caiu) > 0 && !x._data)) { erro("Coloque a data em que caiu em cada pagamento preenchido."); return; }
+    if (linhas.some(x => Number(x._caiu) > 0 && (Number(x._taxa) || 0) >= Number(x._caiu))) { erro("A taxa do banco não pode ser maior que o valor recebido."); return; }
     const b = $("[data-salvar]", j); b.disabled = true; b.textContent = "Salvando...";
     const base = c ? { campanha_id: c.id, cliente: c.cliente, descricao: c.campanha, nicho: c.nicho, canal: c.canal, canal_detalhe: c.canal_detalhe }
       : { campanha_id: null, cliente: r0.cliente, descricao: r0.descricao, nicho: r0.nicho, canal: r0.canal, canal_detalhe: r0.canal_detalhe };
     let ordem = Math.max(0, ...grupo.map(x => x.ordem || 0));
     for (const x of linhas) {
-      const caiu = Math.round((Number(x._caiu) || 0) * 100) / 100, taxa = Math.round((Number(x._taxa) || 0) * 100) / 100;
+      const bruto = Math.round((Number(x._caiu) || 0) * 100) / 100, taxa = Math.round((Number(x._taxa) || 0) * 100) / 100;
+      const caiu = Math.round((bruto - taxa) * 100) / 100;   /* o líquido: é o que vira receita */
       let linha;
-      if (caiu > 0) {
+      if (bruto > 0) {
         linha = await comCotacao({ recebido: true, data_recebido: x._data, via: x._via, conta_moeda: x._moeda, valor_recebido: caiu, taxa }, x._moeda, caiu, x._data);
-        if (!x.id) {   /* pagamento novo: o valor na moeda do contrato, pela cotação do dia */
+        if (!x.id) {   /* pagamento novo: o valor recebido na moeda do contrato, pela cotação do dia */
           const tc = await cotacaoNoDia(moedaContrato, x._data);
           Object.assign(linha, base, { moeda: moedaContrato, quando: "data", vencimento: x._data, ordem: ++ordem,
-            valor: x._moeda === moedaContrato ? caiu : Math.round(((linha.valor_cad || 0) / (tc || 1)) * 100) / 100 });
+            valor: x._moeda === moedaContrato ? bruto : Math.round((bruto * (linha.cotacao || 1) / (tc || 1)) * 100) / 100 });
         }
       } else if (x.id && x.recebido) {
         linha = { recebido: false, data_recebido: null, valor_recebido: null, taxa: 0, cotacao: null, valor_cad: null, conta_moeda: null };
